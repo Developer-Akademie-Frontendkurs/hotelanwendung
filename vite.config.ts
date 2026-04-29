@@ -4,4 +4,7 @@ import checker from 'vite-plugin-checker';
 
 export default defineConfig({
     plugins: [tailwindcss(), checker({ typescript: true })],
+    server: {
+        open: true,
+    },
 });
