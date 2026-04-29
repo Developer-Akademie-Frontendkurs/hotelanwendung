@@ -8,7 +8,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
-    { ignores: ['dist/**', 'pnpm-lock.yaml'] },
+    { ignores: ['dist/**', 'node_modules/**', 'pnpm-lock.yaml'] },
     {
         files: ['**/*.{js,mjs,cjs,ts,mts,cts}'],
         plugins: { js },
