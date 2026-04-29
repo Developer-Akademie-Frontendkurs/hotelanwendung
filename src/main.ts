@@ -1,6 +1,7 @@
-import './style.css'
+import './style.css';
 
 let text = 5;
-text = 'test';
 
-console.log(text)
+console.log(text);
+
+text = 'Hello, TypeScript!';
