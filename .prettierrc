@@ -16,7 +16,7 @@
     "proseWrap": "preserve",
     "endOfLine": "lf",
     "insertPragma": false,
-    "printWidth": 120,
+    "printWidth": 180,
     "requirePragma": false,
     "tabWidth": 4,
     "useTabs": false,
