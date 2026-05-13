@@ -3,7 +3,12 @@ import { defineConfig } from 'vite';
 import checker from 'vite-plugin-checker';
 
 export default defineConfig({
-    plugins: [tailwindcss(), checker({ typescript: true })],
+    plugins: [tailwindcss()],
+    root: 'src',
+    build: {
+        emptyOutDir: true,
+        outDir: '../dist',
+    },
     server: {
         open: true,
     },
