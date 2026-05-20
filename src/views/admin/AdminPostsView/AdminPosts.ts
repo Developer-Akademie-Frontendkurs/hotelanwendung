@@ -1,14 +1,14 @@
-import AbstractView from '../AbstractView';
+import AbstractView from '../../AbstractView';
 
 export default class extends AbstractView {
     constructor() {
         super();
-        this.setTitle('Posts View');
+        this.setTitle('Admin Posts View');
     }
 
     async getHtml(): Promise<string> {
         return `
-            <h1 class="bg-yellow-500 text-3xl">Posts View</h1>
+            <h1 class="bg-yellow-500 text-3xl">Admin Posts View</h1>
         `;
     }
 }

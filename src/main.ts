@@ -3,8 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 import Home from './views/HomeView/Home';
 import Posts from './views/PostsView/Posts';
 import About from './views/AboutView/About';
+import AdminLayout from './views/LayoutViews/AdminLayout';
+import MainLayout from './views/LayoutViews/MainLayout';
+import AdminDashboard from './views/admin/AdminDashboardView/AdminDashboard';
+import AdminPosts from './views/admin/AdminPostsView/AdminPosts';
 
-// eslint-disable-next-line prettier/prettier
+//eslint-disable-next-line prettier/prettier
 // const supabase = createClient(import.meta.env.VITE_SUPABASE_URL,
 //     import.meta.env.VITE_SUPABASE_API_KEY,
 // );
@@ -30,6 +34,22 @@ const navigateTo: (url: string) => void = (url: string): void => {
 };
 
 const router: () => void = async (): Promise<void> => {
+    const layoutWrapper: HTMLElement | null = document.getElementById('layout-wrapper');
+    const locationPath: string = location.pathname;
+
+    if (!layoutWrapper) {
+        throw new Error('Fehler beim Laden der Seite');
+    } else if (locationPath.endsWith('/')) {
+        const correctedLocationPath = locationPath.slice(0, -1);
+        console.log('corrected path: ', correctedLocationPath);
+        navigateTo(correctedLocationPath);
+        return;
+    } else if (locationPath.startsWith('/admin')) {
+        layoutWrapper.innerHTML = await new AdminLayout().getHtml();
+    } else {
+        layoutWrapper.innerHTML = await new MainLayout().getHtml();
+    }
+
     const routes: Route[] = [
         {
             path: '/',
@@ -43,6 +63,8 @@ const router: () => void = async (): Promise<void> => {
             path: '/about',
             view: About,
         },
+        { path: '/admin', view: AdminDashboard },
+        { path: '/admin/posts', view: AdminPosts },
     ];
 
     const potentialMatches: Match[] = routes.map((route: Route): Match => {
@@ -66,9 +88,9 @@ const router: () => void = async (): Promise<void> => {
     }
 
     const view: ViewInstance = new match.route.view();
-    const appContainer: HTMLElement | null = document.getElementById('app');
-    if (appContainer) {
-        appContainer.innerHTML = await view.getHtml();
+    const contentContainer: HTMLElement | null = document.getElementById('content');
+    if (contentContainer) {
+        contentContainer.innerHTML = await view.getHtml();
     } else {
         throw new Error('Fehler beim Laden der Seite');
     }
