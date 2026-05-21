@@ -3,7 +3,7 @@
 - Branch: spa-struktur
 - Nummer: 0002
 - Erstellt am: 21.05.2026
-- Letzter dokumentierter Stand: 20.05.2026 um 19:57 Uhr
+- Letzter dokumentierter Stand: 21.05.2026 um 06:41 Uhr
 
 ## Ziel des Branches
 
@@ -17,12 +17,14 @@ Aufbau der SPA-Struktur mit Layouts, routingbasierten Views und Supabase-Anbindu
 - 8e1e659: SPA-Grundstruktur mit Router, Views und Konfigurationsanpassungen
 - 6fbf4bc: Layout-Wrapper sowie Admin-Views ergänzt
 - ee8d018: Routing für Posts, SinglePost-View und Supabase-Service integriert
+- 2b3147f: Dynamisches Routing für Parameter präzisiert und Slash-Normalisierung ergänzt
 
 ## Dokumentierte Sessions
 
 - [2026-05-06-18-49](../sessions/0002-spa-struktur/2026-05-06-18-49.md)
 - [2026-05-13-19-00](../sessions/0002-spa-struktur/2026-05-13-19-00.md)
 - [2026-05-20-19-57](../sessions/0002-spa-struktur/2026-05-20-19-57.md)
+- [2026-05-21-06-41](../sessions/0002-spa-struktur/2026-05-21-06-41.md)
 
 ## Einträge
 
@@ -43,3 +45,9 @@ Aufbau der SPA-Struktur mit Layouts, routingbasierten Views und Supabase-Anbindu
 ### Session
 
 - [2026-05-20-19-57](../sessions/0002-spa-struktur/2026-05-20-19-57.md)
+
+## 21.05.2026 um 06:41 Uhr
+
+### Session
+
+- [2026-05-21-06-41](../sessions/0002-spa-struktur/2026-05-21-06-41.md)
