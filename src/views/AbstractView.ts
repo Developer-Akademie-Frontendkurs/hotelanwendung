@@ -1,7 +1,7 @@
 export default class {
     params: Record<string, string>;
 
-    constructor(params: Record<string, string>) {
+    constructor(params: Record<string, string> = {}) {
         this.params = params;
     }
 
