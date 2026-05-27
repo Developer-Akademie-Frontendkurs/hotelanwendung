@@ -1,5 +1,5 @@
 import AbstractView from '../AbstractView';
-import Post from './post.interface';
+import { Post } from './post.interface';
 import { supabase } from '../../shared/services/supabase';
 
 export default class extends AbstractView {
@@ -10,22 +10,24 @@ export default class extends AbstractView {
         this.setTitle('Posts View');
     }
 
-    async onInit() {
+    async onInit(): Promise<void> {
         console.log('init');
         await this.fetchPosts();
         console.log('Posts: ', this.posts);
     }
 
-    async fetchPosts() {
+    async fetchPosts(): Promise<void> {
         const { data, error } = await supabase.from('posts').select();
 
         if (error) {
             console.error('Error fetching posts: ', error);
+            return;
         } else {
-            this.posts = data as post[];
+            this.posts = data as Post[];
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async getHtml(): Promise<string> {
         return `
             <h1 class="bg-yellow-500 text-3xl">Posts View</h1>

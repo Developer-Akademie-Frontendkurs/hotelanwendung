@@ -1,5 +1,5 @@
 import AbstractView from '../../AbstractView';
-import Post from './post.interface';
+import { Post } from './../post.interface';
 import { supabase } from '../../../shared/services/supabase';
 
 export default class extends AbstractView {
@@ -12,11 +12,11 @@ export default class extends AbstractView {
         this.setTitle('Single Post View');
     }
 
-    async onInit() {
+    async onInit(): Promise<void> {
         await this.fetchPost();
     }
 
-    async fetchPost() {
+    async fetchPost(): Promise<void> {
         if (!this.params.id) {
             console.error('Missing route param "id" for single post view');
             return;
@@ -28,9 +28,10 @@ export default class extends AbstractView {
             console.error('Error fetching post: ', error);
             return;
         }
-        this.post = data;
+        this.post = data as Post;
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async getHtml(): Promise<string> {
         return `
             <h1 class="bg-yellow-500 text-3xl">Single Post View</h1>
