@@ -2,7 +2,7 @@ import AbstractView from '../AbstractView';
 import { Post } from './post.interface';
 import { supabase } from '../../shared/services/supabase';
 
-export default class extends AbstractView {
+export class PostsView extends AbstractView {
     posts: Post[] = [];
 
     constructor() {

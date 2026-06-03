@@ -1,10 +1,7 @@
 import AbstractView from '../AbstractView';
 
-export default class extends AbstractView {
-    constructor() {
-        super();
-    }
-
+export class AdminLayout extends AbstractView {
+    // eslint-disable-next-line @typescript-eslint/require-await
     async getHtml(): Promise<string> {
         return /*html*/ `
             <nav>

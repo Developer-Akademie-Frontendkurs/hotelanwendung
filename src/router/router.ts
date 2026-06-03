@@ -1,6 +1,6 @@
 import { Match, Params, Route, ViewInstance } from './router.interface';
-import AdminLayout from '../views/LayoutViews/AdminLayout';
-import MainLayout from '../views/LayoutViews/MainLayout';
+import { AdminLayout } from '../views/LayoutViews/AdminLayout';
+import { MainLayout } from '../views/LayoutViews/MainLayout';
 
 export class Router {
     private readonly routes: Route[];

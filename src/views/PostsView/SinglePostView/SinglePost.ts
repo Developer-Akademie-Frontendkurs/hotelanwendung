@@ -2,7 +2,7 @@ import AbstractView from '../../AbstractView';
 import { Post } from './../post.interface';
 import { supabase } from '../../../shared/services/supabase';
 
-export default class extends AbstractView {
+export class SinglePostView extends AbstractView {
     post: Post | undefined;
 
     constructor(params: Record<string, string>) {
@@ -22,17 +22,23 @@ export default class extends AbstractView {
             return;
         }
 
-        const { data, error } = await supabase.from('posts').select().eq('id', this.params.id).single();
+        const { data, error } = (await supabase.from('posts').select().eq('id', this.params.id).single()) as { data: Post; error: Error | null };
 
         if (error) {
             console.error('Error fetching post: ', error);
             return;
         }
-        this.post = data as Post;
+        this.post = data;
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await
     async getHtml(): Promise<string> {
+        if (!this.post) {
+            return `
+                <h1 class="bg-yellow-500 text-3xl">Single Post View</h1>
+                <p class="mt-4 text-red-500">Post not found.</p>
+            `;
+        }
         return `
             <h1 class="bg-yellow-500 text-3xl">Single Post View</h1>
             <div class="mt-4">

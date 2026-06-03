@@ -9,8 +9,9 @@ export default class {
         document.title = title;
     }
 
-    async onInit() {}
+    async onInit(): Promise<void> {}
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async getHtml(): Promise<string> {
         return ``;
     }

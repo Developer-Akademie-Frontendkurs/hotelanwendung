@@ -1,10 +1,10 @@
 import './style.css';
-import Home from './views/HomeView/Home';
-import Posts from './views/PostsView/Posts';
-import SinglePost from './views/PostsView/SinglePostView/SinglePost';
-import About from './views/AboutView/About';
-import AdminDashboard from './views/admin/AdminDashboardView/AdminDashboard';
-import AdminPosts from './views/admin/AdminPostsView/AdminPosts';
+import { HomeView } from './views/HomeView/Home';
+import { PostsView } from './views/PostsView/Posts';
+import { SinglePostView } from './views/PostsView/SinglePostView/SinglePost';
+import { AboutView } from './views/AboutView/About';
+import { AdminDashboardView } from './views/admin/AdminDashboardView/AdminDashboard';
+import { AdminPostsView } from './views/admin/AdminPostsView/AdminPosts';
 import { Route } from './router/router.interface';
 import { Router } from './router/router';
 
@@ -14,32 +14,32 @@ const routes: Route[] = [
     {
         path: '/',
         kind: 'static',
-        view: Home,
+        view: HomeView,
     },
     {
         path: '/posts',
         kind: 'static',
-        view: Posts,
+        view: PostsView,
     },
     {
         path: '/posts/:id',
         kind: 'dynamic',
-        view: SinglePost,
+        view: SinglePostView,
     },
     {
         path: '/about',
         kind: 'static',
-        view: About,
+        view: AboutView,
     },
     {
         path: '/admin',
         kind: 'static',
-        view: AdminDashboard,
+        view: AdminDashboardView,
     },
     {
         path: '/admin/posts',
         kind: 'static',
-        view: AdminPosts,
+        view: AdminPostsView,
     },
 ];
 
