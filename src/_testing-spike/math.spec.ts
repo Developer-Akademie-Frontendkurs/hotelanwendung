@@ -23,11 +23,11 @@ describe('add()', () => {
 
 describe('subtract()', () => {
     it('should substract a number from another', () => {
-        const a = 10;
+        const a = 120;
         const b = 5;
 
         const result = subtract(a, b);
 
-        expect(result).toBe(5);
+        expect(result).toBe(a - b);
     });
 });
