@@ -1,1 +1,20 @@
 @import 'tailwindcss';
+
+/* eslint-disable-next-line css/no-invalid-at-rules*/
+@theme {
+    --font-lato: 'Lato', sans-serif;
+    --font-playfair-display: 'Playfair Display', serif;
+    --font-antic-didone: 'Antic Didone', serif;
+
+    --color-purple-haze: #642360;
+    --color-purple-haze-dark: #381436;
+    --color-creme: #fffcf6;
+
+    --breakpoint-456: 28.5rem;
+    --breakpoint-576: 36rem;
+    --breakpoint-768: 48rem;
+    --breakpoint-992: 62rem;
+    --breakpoint-1140: 71.25rem;
+    --breakpoint-1440: 90rem;
+    --breakpoint-1920: 120rem;
+}
