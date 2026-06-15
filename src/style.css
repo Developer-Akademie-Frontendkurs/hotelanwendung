@@ -1,11 +1,8 @@
 @import 'tailwindcss';
+@import './css/fonts.css';
 
 /* eslint-disable-next-line css/no-invalid-at-rules*/
 @theme {
-    --font-lato: 'Lato', sans-serif;
-    --font-playfair-display: 'Playfair Display', serif;
-    --font-antic-didone: 'Antic Didone', serif;
-
     --color-purple-haze: #642360;
     --color-purple-haze-dark: #381436;
     --color-creme: #fffcf6;
@@ -17,4 +14,8 @@
     --breakpoint-1140: 71.25rem;
     --breakpoint-1440: 90rem;
     --breakpoint-1920: 120rem;
+
+    --font-lato: 'Lato', sans-serif;
+    --font-playfair-display: 'Playfair Display', serif;
+    --font-antic-didone: 'Antic Didone', serif;
 }
