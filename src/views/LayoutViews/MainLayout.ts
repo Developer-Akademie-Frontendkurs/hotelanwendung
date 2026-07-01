@@ -1,6 +1,6 @@
 import AbstractView from '../AbstractView';
 import logo from '../../assets/img/logo.svg';
-import stars from '../../assets/img/icons/stars.svg';
+import stars from '../../assets/img/icons/stars.png';
 import './layout.css';
 
 export class MainLayout extends AbstractView {
@@ -41,8 +41,8 @@ export class MainLayout extends AbstractView {
                     </div>
                     <div class="flex flex-col gap-y-4 items-center mt-12">
                         <img src="${stars}" alt="Stars">
-                        <h1 class="font-playfair-display font-semibold text-32 text-purple-haze">Luxus in den Alpen</h1>
-                        <p class="font-caveat text-28 text-purple-haze text-center leading-none">
+                        <h1 class="font-playfair-display font-semibold text-32 576:text-48 992:text-64 text-purple-haze">Luxus in den Alpen</h1>
+                        <p class="font-caveat text-28 576:text-32 992:text-48 text-purple-haze text-center leading-none">
                             wo sich Fuchs und Hase <br>gute Nacht sagen
                         </p>
                     </div>
