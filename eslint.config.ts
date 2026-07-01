@@ -60,6 +60,7 @@ export default defineConfig([
         rules: {
             'css/no-unmatchable-selectors': 'off',
             'css/no-duplicate-keyframe-selectors': 'off',
+            'css/use-baseline': ['error', { available: 'newly' }],
         },
     },
     { ...eslintPluginPrettierRecommended, files: ['**/*.{js,mjs,cjs,ts,mts,cts}'] },

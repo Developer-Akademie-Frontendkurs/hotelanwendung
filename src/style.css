@@ -1,11 +1,11 @@
 @import 'tailwindcss';
 @import './css/fonts.css';
 
-/* eslint-disable-next-line css/no-invalid-at-rules*/
+/* eslint-disable-next-line css/no-invalid-at-rules */
 @theme {
     --color-purple-haze: #642360;
     --color-purple-haze-dark: #381436;
-    --color-creme: #fffcf6;
+    --color-eggshell: #fffcf6;
 
     --breakpoint-456: 28.5rem;
     --breakpoint-576: 36rem;
@@ -19,4 +19,7 @@
     --font-playfair-display: 'Playfair Display', serif;
     --font-antic-didone: 'Antic Didone', serif;
     --font-caveat: 'Caveat', cursive;
+
+    --text-28: 1.75rem;
+    --text-32: 2rem;
 }

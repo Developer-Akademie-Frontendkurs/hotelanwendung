@@ -1,3 +1,7 @@
+body:has(.mobile-menu__checkbox:checked) {
+    overflow-y: hidden;
+}
+
 .mobile-menu {
     display: flex;
     align-items: center;
@@ -55,7 +59,7 @@
         /* eslint-disable-next-line css/no-invalid-properties */
         background-color: var(--color-eggshell);
         position: absolute;
-        top: 64px;
+        top: 88px;
         left: 0;
         right: 0;
         display: flex;
@@ -98,7 +102,7 @@
             transition-delay: 0s;
         }
 
-        & :checked ~ .mobile-menu__container {
+        &:checked ~ .mobile-menu__container {
             height: 100%;
             transition-delay: 0s;
         }
