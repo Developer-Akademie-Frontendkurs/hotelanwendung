@@ -8,7 +8,7 @@
 
 ## Worum geht es?
 
-Der finale Commit des Tagebuchs bringt die **Medien-Assets** ins Projekt: Bilder (Zimmer, Kulinarik, Yoga, Header-Hintergrund) sowie zahlreiche **SVG-Icons** (Logo, Social-Media, Ausstattungs-Symbole). Außerdem wird die Tailwind-Theme-Struktur aufgeräumt und die **Vite-Build-Konfiguration** verbessert, damit Ausgabedateien vorhersehbare Namen erhalten.
+Dieser Commit bringt die **Medien-Assets** ins Projekt: Bilder (Zimmer, Kulinarik, Yoga, Header-Hintergrund) sowie zahlreiche **SVG-Icons** (Logo, Social-Media, Ausstattungs-Symbole). Außerdem wird die Tailwind-Theme-Struktur aufgeräumt und die **Vite-Build-Konfiguration** verbessert, damit Ausgabedateien vorhersehbare Namen erhalten.
 
 ## Die Änderungen im Detail
 
@@ -72,8 +72,8 @@ Hinzugefügt wurden u.a.:
 
 ## Was wurde erreicht?
 
-Alle visuellen Bausteine (Schriften, Farben, Bilder, Icons) liegen nun im Projekt bereit, und der Build erzeugt sauber benannte, cache-freundliche Dateien. Damit ist die Grundlage für die vollständige Gestaltung der Startseite geschaffen. Dies ist der aktuell letzte Commit der dokumentierten Historie.
+Alle visuellen Bausteine (Schriften, Farben, Bilder, Icons) liegen nun im Projekt bereit, und der Build erzeugt sauber benannte, cache-freundliche Dateien. Damit ist die Grundlage für die vollständige Gestaltung der Startseite geschaffen. In den folgenden Commits werden diese Bausteine zu einer echten Startseite zusammengesetzt.
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md) · [Nächster Commit →](003_2026-06-16_implement-routing-posts-supabase.md)
