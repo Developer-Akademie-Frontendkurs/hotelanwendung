@@ -4,6 +4,7 @@
 /* eslint-disable-next-line css/no-invalid-at-rules */
 @theme {
     --color-purple-haze: #642360;
+    --color-purple-haze-light: #f1e8e8;
     --color-purple-haze-dark: #381436;
     --color-eggshell: #fffcf6;
 
