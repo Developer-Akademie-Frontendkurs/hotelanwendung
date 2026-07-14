@@ -102,8 +102,8 @@ Die Ausstattungs-Liste wird zudem von einer reinen Spalte in ein umbrechendes Ra
 
 ## Was wurde erreicht?
 
-Der Zimmer-Bereich ist nun deutlich flexibler aufgebaut: Er skaliert sauber vom Handy bis zum Desktop, nutzt Inline-SVGs für die Icons und ist um eine Slider-Bedienung (Pfeil-Buttons) sowie zusätzliche Call-to-Actions erweitert. Gleichzeitig wurde ungenutzter Code (Importe und SVG-Dateien) entfernt. Dies ist der aktuell letzte Commit der Historie.
+Der Zimmer-Bereich ist nun deutlich flexibler aufgebaut: Er skaliert sauber vom Handy bis zum Desktop, nutzt Inline-SVGs für die Icons und ist um eine Slider-Bedienung (Pfeil-Buttons) sowie zusätzliche Call-to-Actions erweitert. Gleichzeitig wurde ungenutzter Code (Importe und SVG-Dateien) entfernt. Im nächsten Commit folgt ein Standort-Bereich mit eingebetteter Karte.
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md) · [Nächster Commit →](011_2026-07-14_find-us-component-project-diary.md)

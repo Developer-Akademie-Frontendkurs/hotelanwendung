@@ -2,7 +2,7 @@
 
 # 004 – Branch `startseite-erstellen`
 
-**Erster Commit:** 2026-06-10 · **Commits:** 10 · **Status:** offen
+**Erster Commit:** 2026-06-10 · **Commits:** 11 · **Status:** offen
 
 ## Ziel des Branches
 
@@ -13,7 +13,7 @@ In diesem (aktuell jüngsten) Branch entsteht die eigentliche **Startseite** –
 - Hinzufügen und **Optimieren der Bild- und Icon-Assets** für das Hotel-Design
 - Verbesserung der **Vite-Build-Konfiguration** für saubere Ausgabe-Dateinamen
 - Aufbau eines **responsiven Headers** mit mobiler (CSS-only) und Desktop-Navigation sowie Hero-Bereich
-- Ausbau der **`HomeView`** mit Willkommenstext, Highlights-Leiste, Familien-Vorstellung und einem **Zimmer-Bereich**
+- Ausbau der **`HomeView`** mit Willkommenstext, Highlights-Leiste, Familien-Vorstellung, einem **Zimmer-Bereich** und einem **Standort-Bereich** mit Karte
 
 ## Commits
 
@@ -29,10 +29,11 @@ In diesem (aktuell jüngsten) Branch entsteht die eigentliche **Startseite** –
 | [008](004_2026-06-10_startseite-erstellen/008_2026-07-08_project-diary.md) | 2026-07-08 | Projekttagebuch ausbauen (reiner Doku-Commit) |
 | [009](004_2026-06-10_startseite-erstellen/009_2026-07-08_room-section.md) | 2026-07-08 | Zimmer-Bereich „Zimmer mit Weitblick" hinzufügen |
 | [010](004_2026-06-10_startseite-erstellen/010_2026-07-14_update-typography-layout-room.md) | 2026-07-14 | Zimmer-Bereich: Typografie, Layout und Slider-Buttons |
+| [011](004_2026-06-10_startseite-erstellen/011_2026-07-14_find-us-component-project-diary.md) | 2026-07-14 | „So finden Sie uns"-Bereich mit Google-Maps-Karte |
 
 ## Zusammenfassung
 
-Der Branch führt von den Design-Grundlagen zu einer weitgehend fertigen Startseite: eigene Webfonts, ein Tailwind-Theme mit Farben, Textgrößen und Breakpoints sowie web-optimierte Bilder. Darauf aufbauend entsteht ein responsiver Header mit einem rein per CSS gesteuerten Burger-Menü und einem Hero-Bereich. Die `HomeView` wächst schrittweise um Willkommenstext, eine Highlights-Leiste, die Vorstellung der Gastgeberfamilie und schließlich einen ausgearbeiteten Zimmer-Bereich mit Slider-Bedienung – alles konsequent mobile-first über mehrere Breakpoints gestaltet. Ein Zwischencommit stellt zudem die Projektdokumentation von einem Session-Log auf das strukturierte Projekttagebuch um.
+Der Branch führt von den Design-Grundlagen zu einer weitgehend fertigen Startseite: eigene Webfonts, ein Tailwind-Theme mit Farben, Textgrößen und Breakpoints sowie web-optimierte Bilder. Darauf aufbauend entsteht ein responsiver Header mit einem rein per CSS gesteuerten Burger-Menü und einem Hero-Bereich. Die `HomeView` wächst schrittweise um Willkommenstext, eine Highlights-Leiste, die Vorstellung der Gastgeberfamilie, einen ausgearbeiteten Zimmer-Bereich mit Slider-Bedienung und schließlich einen Standort-Bereich mit eingebetteter Karte – alles konsequent mobile-first über mehrere Breakpoints gestaltet. Ein Zwischencommit stellt zudem die Projektdokumentation von einem Session-Log auf das strukturierte Projekttagebuch um.
 
 ---
 
