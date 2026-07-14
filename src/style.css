@@ -21,10 +21,13 @@
     --font-antic-didone: 'Antic Didone', serif;
     --font-caveat: 'Caveat', cursive;
 
+    --text-16: 1rem;
+    --text-18: 1.125rem;
     --text-20: 1.25rem;
     --text-24: 1.5rem;
     --text-28: 1.75rem;
     --text-32: 2rem;
+    --text-36: 2.25rem;
     --text-48: 3rem;
     --text-64: 4rem;
 
