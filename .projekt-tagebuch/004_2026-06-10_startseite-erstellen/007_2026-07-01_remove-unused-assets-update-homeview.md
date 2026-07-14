@@ -8,7 +8,7 @@
 
 ## Worum geht es?
 
-Der bislang letzte Commit baut die `HomeView` deutlich aus: Es kommen eine **Highlights-Leiste** (Seezugang, Haubenküche, Wellness) und ein **Vorstellungsbereich der Familie Stroheim** mit Bild hinzu. Außerdem wird das Theme um mehr Textgrößen und einen Schatten-Effekt erweitert, und die Inhalte werden über Breakpoints **responsiv** gestaltet.
+Dieser Commit baut die `HomeView` deutlich aus: Es kommen eine **Highlights-Leiste** (Seezugang, Haubenküche, Wellness) und ein **Vorstellungsbereich der Familie Stroheim** mit Bild hinzu. Außerdem wird das Theme um mehr Textgrößen und einen Schatten-Effekt erweitert, und die Inhalte werden über Breakpoints **responsiv** gestaltet.
 
 ## Die Änderungen im Detail
 
@@ -104,8 +104,8 @@ Das Sterne-Icon wird von SVG auf PNG umgestellt (die zugehörige `stars.svg` wir
 
 ## Was wurde erreicht?
 
-Die Startseite ist jetzt inhaltlich weitgehend fertig: Willkommenstext, Highlights-Leiste und Familien-Vorstellung stehen, alles skaliert sauber über mehrere Breakpoints, und ungenutzte bzw. falsch benannte Assets sind aufgeräumt. Dies ist der aktuell letzte dokumentierte Commit der Historie.
+Die Startseite ist jetzt inhaltlich weitgehend fertig: Willkommenstext, Highlights-Leiste und Familien-Vorstellung stehen, alles skaliert sauber über mehrere Breakpoints, und ungenutzte bzw. falsch benannte Assets sind aufgeräumt. In den folgenden Commits wird die Dokumentation umgestellt und ein Zimmer-Bereich ergänzt.
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md) · [Nächster Commit →](008_2026-07-08_project-diary.md)

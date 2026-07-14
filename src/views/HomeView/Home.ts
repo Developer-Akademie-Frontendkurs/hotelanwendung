@@ -44,6 +44,7 @@ export class HomeView extends AbstractView {
                 </section>
                 <!-- <section></section> -->
             </div>
+
             <section class="flex flex-col gap-y-4 768:gap-y-6 items-center mb-30 px-4">
                 <p class="font-antic-didone text-20 text-purple-haze-dark">
                     seit über 80 Jahren
@@ -62,6 +63,7 @@ export class HomeView extends AbstractView {
                     und bestens aufgehoben fühlen.
                 </p>
             </section>
+
             <section class="bg-purple-haze-light flex flex-col gap-y-6 py-10">
                 <div class="flex flex-col gap-y-3 456:gap-y-0 items-center">
                     <h2 class="font-playfair-display text-24 456:text-32 768:text-48 text-purple-haze-dark font-medium text-center">Zimmer mit Weitblick</h2>
@@ -83,7 +85,7 @@ export class HomeView extends AbstractView {
 
                         <div class="992:w-1/2 flex flex-col gap-y-6 pb-4 px-4 992:p-6">
                             <div class="flex flex-col gap-y-4">
-                                <p class="hidden 992:block font-antic-didone text-24 text-purple-haze-dark">231€ Nacht / p. P.</p>
+                                <p class="hidden 992:block font-antic-didone text-22 text-purple-haze-dark">231€ Nacht / p. P.</p>
                                 <h3 class="font-playfair-display text-20 992:text-36 text-purple-haze-dark">Double Suite</h3>
                                 <p class="font-antic-didone text-16 992:text-20 text-purple-haze-dark">Edles Design, viel Raum und der Blick in die Karawanken machen sie zum idealen Rückzugsort für zwei.</p>
                             </div>
@@ -142,6 +144,11 @@ export class HomeView extends AbstractView {
                 </div>
 
                 <button class="bg-purple-haze self-center py-2 px-3 rounded-md text-white">Buchen</button>
+            </section>
+
+            <section class="flex flex-col gap-y-4 768:gap-y-6 items-center py-16.25 992:py-30 px-4">
+                <h2 class="font-playfair-display text-32 text-purple-haze-dark">So finden sie uns</h2>
+                <iframe class="w-full max-w-300 h-112.5 rounded-2xl shadow-pic" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d685.4927898019566!2d13.82622416971581!3d46.58780751985834!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x477a7f14b8666013%3A0x6df49d50119e63d2!2sHotel%20Karawankenhof!5e0!3m2!1sde!2sde!4v1784009629674!5m2!1sde!2sde" allowfullscreen="" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
             </section>
         `;
     }
