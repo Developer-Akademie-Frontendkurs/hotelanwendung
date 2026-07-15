@@ -59,8 +59,8 @@ Außerdem werden zwischen den bestehenden `<section>`-Blöcken Leerzeilen eingef
 
 ## Was wurde erreicht?
 
-Die Startseite ist um einen **Standort-Bereich** mit interaktiver Karte gewachsen. Damit finden Gäste das Hotel direkt von der Startseite aus. Dies ist der aktuell letzte Commit der Historie.
+Die Startseite ist um einen **Standort-Bereich** mit interaktiver Karte gewachsen. Damit finden Gäste das Hotel direkt von der Startseite aus.
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md) · [Nächster Commit →](012_2026-07-14_update-project-diary-find-us.md)
