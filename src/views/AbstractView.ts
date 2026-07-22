@@ -15,4 +15,6 @@ export default class {
     async getHtml(): Promise<string> {
         return ``;
     }
+
+    async afterRender(): Promise<void> {}
 }

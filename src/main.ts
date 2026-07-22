@@ -3,6 +3,7 @@ import { HomeView } from './views/HomeView/Home';
 import { PostsView } from './views/PostsView/Posts';
 import { SinglePostView } from './views/PostsView/SinglePostView/SinglePost';
 import { AboutView } from './views/AboutView/About';
+import { BookingView } from './views/BookingView/Booking';
 import { AdminDashboardView } from './views/admin/AdminDashboardView/AdminDashboard';
 import { AdminPostsView } from './views/admin/AdminPostsView/AdminPosts';
 import { Route } from './router/router.interface';
@@ -30,6 +31,11 @@ const routes: Route[] = [
         path: '/about',
         kind: 'static',
         view: AboutView,
+    },
+    {
+        path: '/buchung',
+        kind: 'static',
+        view: BookingView,
     },
     {
         path: '/admin',

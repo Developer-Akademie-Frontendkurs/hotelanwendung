@@ -1,0 +1,26 @@
+/* Kalender-Zellen: gleichmäßige Höhe unabhängig vom Zell-Zustand */
+#booking-calendar button[data-date] {
+    min-height: 3.75rem;
+}
+
+@media (min-width: 28.5rem) {
+    #booking-calendar button[data-date] {
+        min-height: 5rem;
+    }
+}
+
+@media (min-width: 48rem) {
+    #booking-calendar button[data-date] {
+        min-height: 6.25rem;
+    }
+}
+
+/* Das "×" zum Zurücksetzen der Anreise soll sich vom Zell-Hintergrund abheben */
+.booking__clear {
+    opacity: 0.75;
+    transition: opacity 0.2s ease;
+}
+
+.booking__clear:hover {
+    opacity: 1;
+}

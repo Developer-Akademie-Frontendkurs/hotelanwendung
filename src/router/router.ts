@@ -72,7 +72,7 @@ export class Router {
         const view: ViewInstance = match.route.kind === 'dynamic' ? new match.route.view(this.getParams(match)) : new match.route.view();
         await view.onInit();
         contentContainer.innerHTML = await view.getHtml();
-        // await view.afterRender();
+        await view.afterRender();
     }
 
     private async getBaseLayout(locationPath: string): Promise<void> {
