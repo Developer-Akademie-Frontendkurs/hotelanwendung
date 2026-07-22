@@ -1,0 +1,58 @@
+.activities__radio {
+    display: none;
+}
+
+@media (max-width: 47.9375rem) {
+    .activities {
+        overflow: hidden;
+    }
+
+    .activities__track {
+        display: grid;
+        grid-template-columns: 1fr;
+        justify-items: center;
+        align-items: center;
+    }
+
+    .activities__card {
+        grid-area: 1 / 1;
+        width: 70%;
+        transition:
+            transform 0.45s ease,
+            opacity 0.45s ease;
+    }
+
+    .activities__link {
+        pointer-events: none;
+    }
+
+    #activity-0:checked ~ .activities__track .activities__card:nth-child(1) .activities__link,
+    #activity-1:checked ~ .activities__track .activities__card:nth-child(2) .activities__link,
+    #activity-2:checked ~ .activities__track .activities__card:nth-child(3) .activities__link {
+        pointer-events: auto;
+    }
+
+    #activity-0:checked ~ .activities__track .activities__card:nth-child(1),
+    #activity-1:checked ~ .activities__track .activities__card:nth-child(2),
+    #activity-2:checked ~ .activities__track .activities__card:nth-child(3) {
+        transform: translateX(0) scale(1);
+        opacity: 1;
+        z-index: 3;
+    }
+
+    #activity-0:checked ~ .activities__track .activities__card:nth-child(3),
+    #activity-1:checked ~ .activities__track .activities__card:nth-child(1),
+    #activity-2:checked ~ .activities__track .activities__card:nth-child(2) {
+        transform: translateX(-27%) scale(0.85);
+        opacity: 0.55;
+        z-index: 1;
+    }
+
+    #activity-0:checked ~ .activities__track .activities__card:nth-child(2),
+    #activity-1:checked ~ .activities__track .activities__card:nth-child(3),
+    #activity-2:checked ~ .activities__track .activities__card:nth-child(1) {
+        transform: translateX(27%) scale(0.85);
+        opacity: 0.55;
+        z-index: 1;
+    }
+}

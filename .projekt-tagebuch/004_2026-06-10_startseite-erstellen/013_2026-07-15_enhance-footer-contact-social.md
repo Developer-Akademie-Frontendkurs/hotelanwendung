@@ -106,8 +106,8 @@ Die einzelnen Bausteine erklärt:
 
 ## Was wurde erreicht?
 
-Der Footer ist jetzt ein informativer, responsiver Seitenfuß mit Kontaktdaten, rechtlichen Links und Social-Media-Verweisen – konsistent auf allen Seiten. Durch semantisches HTML (`<footer>`, `<address>`, `<nav>`) und `aria-label`-Attribute ist er zudem zugänglich gestaltet. Dies ist der aktuell letzte Commit der Historie.
+Der Footer ist jetzt ein informativer, responsiver Seitenfuß mit Kontaktdaten, rechtlichen Links und Social-Media-Verweisen – konsistent auf allen Seiten. Durch semantisches HTML (`<footer>`, `<address>`, `<nav>`) und `aria-label`-Attribute ist er zudem zugänglich gestaltet.
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md) · [Nächster Commit →](014_2026-07-15_add-last-steps-project-diary.md)

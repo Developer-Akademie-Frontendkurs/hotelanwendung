@@ -4,6 +4,10 @@ import haubenkueche from '../../assets/img/icons/kitchen.svg';
 import wellness from '../../assets/img/icons/wellness.svg';
 import fam_stroheim from '../../assets/img/familie-stroheim.jpg';
 import double_suite from '../../assets/img/double-suite.jpg';
+import kulinarik from '../../assets/img/kulinarik.jpg';
+import kuhwanderung from '../../assets/img/kuh-wanderung.jpg';
+import yoga from '../../assets/img/yoga.jpg';
+import './home.css';
 
 export class HomeView extends AbstractView {
     constructor() {
@@ -42,7 +46,35 @@ export class HomeView extends AbstractView {
                         <span class="font-antic-didone text-16 576:text-20 992:text-24 text-purple-haze-dark">Wellness</span>
                     </article>
                 </section>
-                <!-- <section></section> -->
+
+                <section class="activities w-full">
+                    <input type="radio" name="activities" id="activity-0" class="activities__radio">
+                    <input type="radio" name="activities" id="activity-1" class="activities__radio" checked>
+                    <input type="radio" name="activities" id="activity-2" class="activities__radio">
+
+                    <div class="activities__track 768:flex 768:flex-row 768:justify-between 768:gap-x-6 768:max-w-300 768:mx-auto">
+                        <label for="activity-0" class="activities__card relative block cursor-pointer select-none aspect-3/4 rounded-2xl overflow-hidden shadow-pic 768:flex-1 768:max-w-80">
+                            <img src="${kulinarik}" alt="Kulinarik" class="absolute inset-0 w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-linear-to-t from-purple-haze-dark/85 via-purple-haze-dark/25 to-transparent"></div>
+                            <h3 class="absolute bottom-5 left-5 max-w-[70%] font-playfair-display text-24 768:text-28 text-white leading-tight">Kulinarik</h3>
+                            <a href="/aktivitaeten/kulinarik" aria-label="Kulinarik" data-link class="activities__link absolute inset-0 z-10"></a>
+                        </label>
+
+                        <label for="activity-1" class="activities__card relative block cursor-pointer select-none aspect-3/4 rounded-2xl overflow-hidden shadow-pic 768:flex-1 768:max-w-80">
+                            <img src="${kuhwanderung}" alt="Kuhwanderung" class="absolute inset-0 w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-linear-to-t from-purple-haze-dark/85 via-purple-haze-dark/25 to-transparent"></div>
+                            <h3 class="absolute bottom-5 left-5 max-w-[70%] font-playfair-display text-24 768:text-28 text-white leading-tight">Kuhwanderung</h3>
+                            <a href="/aktivitaeten/kuhwanderung" aria-label="Kuh Wanderung" data-link class="activities__link absolute inset-0 z-10"></a>
+                        </label>
+
+                        <label for="activity-2" class="activities__card relative block cursor-pointer select-none aspect-3/4 rounded-2xl overflow-hidden shadow-pic 768:flex-1 768:max-w-80">
+                            <img src="${yoga}" alt="Yoga" class="absolute inset-0 w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-linear-to-t from-purple-haze-dark/85 via-purple-haze-dark/25 to-transparent"></div>
+                            <h3 class="absolute bottom-5 left-5 max-w-[70%] font-playfair-display text-24 768:text-28 text-white leading-tight">Yoga</h3>
+                            <a href="/aktivitaeten/yoga" aria-label="Yoga am See" data-link class="activities__link absolute inset-0 z-10"></a>
+                        </label>
+                    </div>
+                </section>
             </div>
 
             <section class="flex flex-col gap-y-4 768:gap-y-6 items-center mb-30 px-4">
