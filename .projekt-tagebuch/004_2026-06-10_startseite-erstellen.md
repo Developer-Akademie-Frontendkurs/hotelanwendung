@@ -1,12 +1,12 @@
-[← Vorheriger Branch](003_2026-06-03_testing-spike.md) · [📓 Index](000_index.md)
+[← Vorheriger Branch](003_2026-06-03_testing-spike.md) · [📓 Index](000_index.md) · [Nächster Branch →](005_2026-07-22_buchungs-seite.md)
 
 # 004 – Branch `startseite-erstellen`
 
-**Erster Commit:** 2026-06-10 · **Commits:** 15 · **Status:** offen
+**Erster Commit:** 2026-06-10 · **Commits:** 15 · **Status:** gemergt in `main`
 
 ## Ziel des Branches
 
-In diesem (aktuell jüngsten) Branch entsteht die eigentliche **Startseite** – vom Design-Fundament bis zu fertigen Inhaltsbereichen:
+In diesem Branch entsteht die eigentliche **Startseite** – vom Design-Fundament bis zu fertigen Inhaltsbereichen:
 
 - Einbindung eigener **Schriftarten** (Lato, Antic Didone, Playfair Display, Caveat) als lokale Webfonts
 - Aufbau eines **Tailwind-Themes** mit eigenen Farben, Textgrößen, Breakpoints und Font-Variablen
@@ -42,4 +42,4 @@ Der Branch führt von den Design-Grundlagen zu einer weitgehend fertigen Startse
 
 ---
 
-[← Vorheriger Branch](003_2026-06-03_testing-spike.md) · [📓 Index](000_index.md)
+[← Vorheriger Branch](003_2026-06-03_testing-spike.md) · [📓 Index](000_index.md) · [Nächster Branch →](005_2026-07-22_buchungs-seite.md)

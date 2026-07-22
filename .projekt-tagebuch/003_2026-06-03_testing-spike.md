@@ -2,7 +2,7 @@
 
 # 003 – Branch `testing-spike`
 
-**Erster Commit:** 2026-06-03 · **Commits:** 2 · **Status:** offen
+**Erster Commit:** 2026-06-03 · **Commits:** 2 · **Status:** gemergt in `main`
 
 ## Ziel des Branches
 
