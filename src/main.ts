@@ -1,7 +1,47 @@
 import './style.css';
-import { createClient } from '@supabase/supabase-js';
+import { HomeView } from './views/HomeView/Home';
+import { PostsView } from './views/PostsView/Posts';
+import { SinglePostView } from './views/PostsView/SinglePostView/SinglePost';
+import { AboutView } from './views/AboutView/About';
+import { AdminDashboardView } from './views/admin/AdminDashboardView/AdminDashboard';
+import { AdminPostsView } from './views/admin/AdminPostsView/AdminPosts';
+import { Route } from './router/router.interface';
+import { Router } from './router/router';
 
-// eslint-disable-next-line prettier/prettier
-const supabase = createClient(import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_API_KEY,
-);
+const layoutWrapper: HTMLElement | null = document.getElementById('layout-wrapper');
+
+const routes: Route[] = [
+    {
+        path: '/',
+        kind: 'static',
+        view: HomeView,
+    },
+    {
+        path: '/posts',
+        kind: 'static',
+        view: PostsView,
+    },
+    {
+        path: '/posts/:id',
+        kind: 'dynamic',
+        view: SinglePostView,
+    },
+    {
+        path: '/about',
+        kind: 'static',
+        view: AboutView,
+    },
+    {
+        path: '/admin',
+        kind: 'static',
+        view: AdminDashboardView,
+    },
+    {
+        path: '/admin/posts',
+        kind: 'static',
+        view: AdminPostsView,
+    },
+];
+
+const router = new Router(routes, layoutWrapper);
+await router.init();

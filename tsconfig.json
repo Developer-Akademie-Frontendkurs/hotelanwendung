@@ -1,19 +1,18 @@
 {
     "compilerOptions": {
-        "target": "es2023",
+        "target": "es2025",
         "module": "esnext",
-        "lib": ["ES2023", "DOM", "DOM.Iterable"],
+        "lib": ["ES2025", "DOM", "DOM.Iterable"],
         "types": ["vite/client"],
         "strict": true,
         "skipLibCheck": true,
-        "moduleResolution": "bundler",
-        "allowImportingTsExtensions": true,
-        "verbatimModuleSyntax": true,
-        "moduleDetection": "force",
         "noEmit": true,
+        "moduleResolution": "bundler",
+        "noImplicitReturns": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true,
-        "erasableSyntaxOnly": true,
         "noFallthroughCasesInSwitch": true
     },
     "include": ["src"]

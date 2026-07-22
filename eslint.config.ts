@@ -15,7 +15,19 @@ export default defineConfig([
         extends: ['js/recommended'],
         languageOptions: { globals: { ...globals.browser, ...globals.node } },
     },
-    tseslint.configs.recommended,
+    {
+        files: ['src/**/*.{ts,mts,cts}'],
+        extends: tseslint.configs.strictTypeChecked,
+        languageOptions: {
+            parserOptions: {
+                project: true,
+                tsconfigRootDir: new URL('.', import.meta.url).pathname,
+            },
+        },
+        rules: {
+            '@typescript-eslint/explicit-function-return-type': 'error',
+        },
+    },
     {
         files: ['**/*.json'],
         plugins: { json },
@@ -45,6 +57,11 @@ export default defineConfig([
         plugins: { css },
         language: 'css/css',
         extends: ['css/recommended'],
+        rules: {
+            'css/no-unmatchable-selectors': 'off',
+            'css/no-duplicate-keyframe-selectors': 'off',
+            'css/use-baseline': ['error', { available: 'newly' }],
+        },
     },
     { ...eslintPluginPrettierRecommended, files: ['**/*.{js,mjs,cjs,ts,mts,cts}'] },
 ]);
