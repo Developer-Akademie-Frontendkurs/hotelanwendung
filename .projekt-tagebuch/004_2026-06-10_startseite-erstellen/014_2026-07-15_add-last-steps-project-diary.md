@@ -37,8 +37,8 @@ Inhaltlich bedeutet das:
 
 Das Projekttagebuch ist nach diesem Commit wieder auf dem Stand des zuletzt eingecheckten Codes. Wer nur die Programmänderungen nachvollziehen will, kann Doku-Commits wie diesen überspringen.
 
-> **Hinweis zum weiteren Arbeitsstand:** Nach diesem Commit wird auf dem Branch bereits an der nächsten Ausbaustufe der `HomeView` gearbeitet – einer neu strukturierten Startseite mit einem **Aktivitäten-Karussell als reiner CSS-Radio-Button-Slider** (ausgelagert in eine eigene `home.css`). Diese Arbeit liegt derzeit noch **uncommitted** im Arbeitsverzeichnis und ist daher (noch) nicht Teil der Git-Historie. Sobald sie als Commit eingecheckt ist, wird sie hier als eigener Eintrag dokumentiert.
+> **Ausblick:** Der nächste Commit setzt die Arbeit an der `HomeView` fort und ergänzt einen **Aktivitäten-Bereich als reines CSS-Radio-Button-Karussell** (mit eigener `home.css`). Diese Änderungen sind inzwischen eingecheckt und werden in [Commit 015](015_2026-07-22_add-responsive-styles-activities-section.md) ausführlich dokumentiert.
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md) · [Nächster Commit →](015_2026-07-22_add-responsive-styles-activities-section.md)

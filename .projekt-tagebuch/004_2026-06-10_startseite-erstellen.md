@@ -2,7 +2,7 @@
 
 # 004 – Branch `startseite-erstellen`
 
-**Erster Commit:** 2026-06-10 · **Commits:** 14 · **Status:** offen
+**Erster Commit:** 2026-06-10 · **Commits:** 15 · **Status:** offen
 
 ## Ziel des Branches
 
@@ -13,7 +13,7 @@ In diesem (aktuell jüngsten) Branch entsteht die eigentliche **Startseite** –
 - Hinzufügen und **Optimieren der Bild- und Icon-Assets** für das Hotel-Design
 - Verbesserung der **Vite-Build-Konfiguration** für saubere Ausgabe-Dateinamen
 - Aufbau eines **responsiven Headers** mit mobiler (CSS-only) und Desktop-Navigation sowie Hero-Bereich
-- Ausbau der **`HomeView`** mit Willkommenstext, Highlights-Leiste, Familien-Vorstellung, einem **Zimmer-Bereich** und einem **Standort-Bereich** mit Karte
+- Ausbau der **`HomeView`** mit Willkommenstext, Highlights-Leiste, Familien-Vorstellung, einem **Zimmer-Bereich**, einem **Standort-Bereich** mit Karte und einem **Aktivitäten-Bereich** (CSS-only-Karussell)
 - Ausbau des **Footers** im `MainLayout` zu einem vollwertigen Seitenfuß mit Kontaktdaten, rechtlicher Navigation und Social-Media-Links
 
 ## Commits
@@ -34,12 +34,11 @@ In diesem (aktuell jüngsten) Branch entsteht die eigentliche **Startseite** –
 | [012](004_2026-06-10_startseite-erstellen/012_2026-07-14_update-project-diary-find-us.md) | 2026-07-14 | Projekttagebuch nachziehen (reiner Doku-Commit) |
 | [013](004_2026-06-10_startseite-erstellen/013_2026-07-15_enhance-footer-contact-social.md) | 2026-07-15 | Footer mit Kontaktdaten und Social-Media-Links ausbauen |
 | [014](004_2026-06-10_startseite-erstellen/014_2026-07-15_add-last-steps-project-diary.md) | 2026-07-15 | Projekttagebuch abschließen (reiner Doku-Commit) |
+| [015](004_2026-06-10_startseite-erstellen/015_2026-07-22_add-responsive-styles-activities-section.md) | 2026-07-22 | Aktivitäten-Bereich als responsives CSS-only-Karussell |
 
 ## Zusammenfassung
 
-Der Branch führt von den Design-Grundlagen zu einer weitgehend fertigen Startseite: eigene Webfonts, ein Tailwind-Theme mit Farben, Textgrößen und Breakpoints sowie web-optimierte Bilder. Darauf aufbauend entsteht ein responsiver Header mit einem rein per CSS gesteuerten Burger-Menü und einem Hero-Bereich. Die `HomeView` wächst schrittweise um Willkommenstext, eine Highlights-Leiste, die Vorstellung der Gastgeberfamilie, einen ausgearbeiteten Zimmer-Bereich mit Slider-Bedienung und schließlich einen Standort-Bereich mit eingebetteter Karte – alles konsequent mobile-first über mehrere Breakpoints gestaltet. Zum Abschluss wird der gemeinsame Footer im `MainLayout` vom Platzhalter zu einem vollwertigen, semantischen Seitenfuß mit Kontaktdaten, rechtlicher Navigation und Social-Media-Links ausgebaut. Mehrere Zwischencommits stellen zudem die Projektdokumentation auf das strukturierte Projekttagebuch um bzw. ziehen es nach.
-
-> **Aktueller Arbeitsstand:** Über die dokumentierte Historie hinaus wird auf dem Branch bereits an einer neu strukturierten `HomeView`-Startseite gearbeitet – mit einem **Aktivitäten-Karussell als reiner CSS-Radio-Button-Slider** in einer eigenen `home.css`. Diese Änderungen liegen derzeit noch **uncommitted** im Arbeitsverzeichnis (untracked `src/views/HomeView/home.css`, geändertes `Home.ts`) und sind daher noch nicht Teil der Git-Historie. Sie werden dokumentiert, sobald sie als Commit eingecheckt sind.
+Der Branch führt von den Design-Grundlagen zu einer weitgehend fertigen Startseite: eigene Webfonts, ein Tailwind-Theme mit Farben, Textgrößen und Breakpoints sowie web-optimierte Bilder. Darauf aufbauend entsteht ein responsiver Header mit einem rein per CSS gesteuerten Burger-Menü und einem Hero-Bereich. Die `HomeView` wächst schrittweise um Willkommenstext, eine Highlights-Leiste, die Vorstellung der Gastgeberfamilie, einen ausgearbeiteten Zimmer-Bereich mit Slider-Bedienung, einen Standort-Bereich mit eingebetteter Karte und zuletzt einen **Aktivitäten-Bereich**, der auf kleinen Bildschirmen als reines CSS-Radio-Button-Karussell (ohne JavaScript, mit eigener `home.css`) funktioniert – alles konsequent mobile-first über mehrere Breakpoints gestaltet. Der gemeinsame Footer im `MainLayout` wird vom Platzhalter zu einem vollwertigen, semantischen Seitenfuß mit Kontaktdaten, rechtlicher Navigation und Social-Media-Links ausgebaut. Mehrere Zwischencommits stellen zudem die Projektdokumentation auf das strukturierte Projekttagebuch um bzw. ziehen es nach.
 
 ---
 
