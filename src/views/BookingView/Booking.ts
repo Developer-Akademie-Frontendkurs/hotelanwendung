@@ -9,6 +9,7 @@ type DayCell = {
     isStart: boolean;
     isEnd: boolean;
     inRange: boolean;
+    isWeekend: boolean;
     selectable: boolean;
 };
 
@@ -70,7 +71,7 @@ export class BookingView extends AbstractView {
         const prevDisabled = !this.canGoPrev();
 
         return /*html*/ `
-            <div class="flex items-center justify-center gap-6 768:gap-10 mb-6 768:mb-10">
+            <div class="grid grid-cols-[auto_1fr_auto] items-center gap-6 768:gap-10 mb-6 768:mb-10">
                 <button
                     type="button"
                     data-action="prev"
@@ -133,23 +134,32 @@ export class BookingView extends AbstractView {
                 ${clearBtn}
                 <span class="text-[0.625rem] 456:text-14 768:text-16 tracking-wide">${weekday}</span>
                 <span class="font-antic-didone text-18 456:text-24 768:text-28 leading-none">${cell.date.getDate().toString().padStart(2, '0')}</span>
-                <span class="text-[0.5rem] 456:text-[0.625rem] 768:text-14 leading-none">${label}</span>
+                <span class="text-14 leading-none">${label}</span>
             </button>
         `;
     }
 
     private getCellStateClass(cell: DayCell): string {
         if (cell.isStart || cell.isEnd) {
-            return 'bg-purple-haze text-white cursor-pointer';
+            return 'bg-purple-haze/65 text-white cursor-pointer';
         }
         if (cell.inRange) {
-            return 'bg-purple-haze-light text-purple-haze-dark cursor-pointer';
+            return 'bg-purple-haze/35 text-purple-haze-dark cursor-pointer';
         }
         if (cell.isToday) {
-            return 'bg-purple-haze-dark text-eggshell cursor-pointer';
+            return 'bg-purple-haze text-white cursor-pointer';
         }
         if (!cell.selectable) {
             return 'text-purple-haze-dark/30 cursor-not-allowed';
+        }
+        if (cell.isWeekend && !cell.inCurrentMonth) {
+            return 'bg-purple-haze-dark/5 text-purple-haze-dark/50 hover:bg-purple-haze-dark/10 cursor-pointer';
+        }
+        if (cell.isWeekend) {
+            return 'bg-purple-haze-dark/10 text-purple-haze-dark hover:bg-purple-haze-dark/20 cursor-pointer';
+        }
+        if (!cell.inCurrentMonth) {
+            return 'text-purple-haze-dark/50 hover:bg-purple-haze-light cursor-pointer';
         }
         return 'text-purple-haze-dark hover:bg-purple-haze-light cursor-pointer';
     }
@@ -176,8 +186,7 @@ export class BookingView extends AbstractView {
 
         const firstOfMonth = new Date(year, month, 1);
         const leading = (firstOfMonth.getDay() + 6) % 7;
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7;
+        const totalCells = 42;
 
         const cells: DayCell[] = [];
         for (let i = 0; i < totalCells; i++) {
@@ -193,7 +202,8 @@ export class BookingView extends AbstractView {
                 isStart: this.checkIn !== null && isSameDay(date, this.checkIn),
                 isEnd: this.checkOut !== null && isSameDay(date, this.checkOut),
                 inRange: this.checkIn !== null && this.checkOut !== null && date > this.checkIn && date < this.checkOut,
-                selectable: inCurrentMonth && !isPast,
+                isWeekend: date.getDay() === 0 || date.getDay() === 6,
+                selectable: !isPast,
             });
         }
         return cells;
