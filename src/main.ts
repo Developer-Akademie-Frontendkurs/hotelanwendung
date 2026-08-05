@@ -1,6 +1,6 @@
 import './style.css';
 import { HomeView } from './views/HomeView/Home';
-import { homeHeader, postsHeader, aboutHeader } from './views/LayoutViews/MainHeader';
+import { homeHeader, postsHeader, aboutHeader, bookingHeader } from './views/LayoutViews/MainHeader';
 import { PostsView } from './views/PostsView/Posts';
 import { SinglePostView } from './views/PostsView/SinglePostView/SinglePost';
 import { AboutView } from './views/AboutView/About';
@@ -39,6 +39,7 @@ const routes: Route[] = [
     {
         path: '/buchung',
         kind: 'static',
+        header: bookingHeader,
         view: BookingView,
     },
     {

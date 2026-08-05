@@ -31,6 +31,11 @@ export const postsHeader: HeaderConfig = {
     fullHeight: true,
 };
 
+export const bookingHeader: HeaderConfig = {
+    variant: 'booking',
+    activeStep: 1,
+};
+
 export class MainHeader extends AbstractView {
     private readonly config: HeaderConfig;
 
