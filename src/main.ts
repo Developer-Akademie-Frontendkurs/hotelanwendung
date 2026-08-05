@@ -1,5 +1,6 @@
 import './style.css';
 import { HomeView } from './views/HomeView/Home';
+import { homeHeader, postsHeader, aboutHeader } from './views/LayoutViews/MainHeader';
 import { PostsView } from './views/PostsView/Posts';
 import { SinglePostView } from './views/PostsView/SinglePostView/SinglePost';
 import { AboutView } from './views/AboutView/About';
@@ -15,11 +16,13 @@ const routes: Route[] = [
     {
         path: '/',
         kind: 'static',
+        header: homeHeader,
         view: HomeView,
     },
     {
         path: '/posts',
         kind: 'static',
+        header: postsHeader,
         view: PostsView,
     },
     {
@@ -30,6 +33,7 @@ const routes: Route[] = [
     {
         path: '/about',
         kind: 'static',
+        header: aboutHeader,
         view: AboutView,
     },
     {

@@ -1,3 +1,5 @@
+import { HeaderConfig } from '../views/LayoutViews/header.types';
+
 export type Params = Record<string, string>;
 
 export type ViewInstance = {
@@ -10,12 +12,14 @@ export type ViewInstance = {
 export type StaticRoute = {
     path: string;
     kind: 'static';
+    header?: HeaderConfig;
     view: new () => ViewInstance;
 };
 
 export type DynamicRoute = {
     path: string;
     kind: 'dynamic';
+    header?: HeaderConfig;
     view: new (params: Params) => ViewInstance;
 };
 

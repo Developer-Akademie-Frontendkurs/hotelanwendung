@@ -1,6 +1,7 @@
 import { Match, Params, Route, ViewInstance } from './router.interface';
 import { AdminLayout } from '../views/LayoutViews/AdminLayout';
 import { MainLayout } from '../views/LayoutViews/MainLayout';
+import { homeHeader, MainHeader } from '../views/LayoutViews/MainHeader';
 
 export class Router {
     private readonly routes: Route[];
@@ -62,7 +63,7 @@ export class Router {
             };
         }
 
-        await this.getBaseLayout(locationPath);
+        await this.getBaseLayout(locationPath, match.route);
 
         const contentContainer: HTMLElement | null = document.getElementById('content');
         if (!contentContainer) {
@@ -75,7 +76,7 @@ export class Router {
         await view.afterRender();
     }
 
-    private async getBaseLayout(locationPath: string): Promise<void> {
+    private async getBaseLayout(locationPath: string, route: Route): Promise<void> {
         if (!this.layoutWrapper) {
             throw new Error('Fehler beim Laden der Seite');
         } else if (locationPath.length > 1 && locationPath.endsWith('/')) {
@@ -86,7 +87,8 @@ export class Router {
         } else if (locationPath.startsWith('/admin')) {
             this.layoutWrapper.innerHTML = await new AdminLayout().getHtml();
         } else {
-            this.layoutWrapper.innerHTML = await new MainLayout().getHtml();
+            const headerHtml: string = await new MainHeader(route.header ?? homeHeader).getHtml();
+            this.layoutWrapper.innerHTML = await new MainLayout(headerHtml).getHtml();
         }
     }
 
