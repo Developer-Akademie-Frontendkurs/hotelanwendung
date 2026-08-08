@@ -156,4 +156,4 @@ Das grundlegende Zustands-Muster bleibt unangetastet – erweitert wurde ledigli
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](003_2026-08-05_add-header-configurations.md)

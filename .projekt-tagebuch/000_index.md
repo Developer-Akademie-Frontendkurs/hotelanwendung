@@ -23,7 +23,7 @@ Die Branches sind chronologisch nach ihrem ersten Commit sortiert. Inhaltlich ba
 | [002](002_2026-05-06_spa-struktur.md)         | 2026-05-06 | spa-struktur         | 13      | gemergt in `main` |
 | [003](003_2026-06-03_testing-spike.md)        | 2026-06-03 | testing-spike        | 2       | gemergt in `main` |
 | [004](004_2026-06-10_startseite-erstellen.md) | 2026-06-10 | startseite-erstellen | 15      | gemergt in `main` |
-| [005](005_2026-07-22_buchungs-seite.md)       | 2026-07-22 | buchungs-seite       | 2       | offen             |
+| [005](005_2026-07-22_buchungs-seite.md)       | 2026-07-22 | buchungs-seite       | 5       | offen             |
 
 ## Wie lese ich dieses Tagebuch?
 
