@@ -2,7 +2,39 @@ import AbstractView from '../AbstractView';
 import logo from '../../assets/img/logo.svg';
 import stars from '../../assets/img/icons/stars.png';
 import mainHeaderBg from '../../assets/img/main-header-bg.jpg';
-import type { BookingHeaderConfig, PageHeaderConfig, HeaderConfig } from './header.types';
+import { bookingState, type BookingStep } from '../../shared/state/bookingState';
+import type { BookingHeaderConfig, PageHeaderConfig, HeaderConfig, StepState } from './header.types';
+
+type BookingStepDefinition = {
+    step: BookingStep;
+    label: string;
+};
+
+const BOOKING_STEPS: readonly BookingStepDefinition[] = [
+    { step: 1, label: 'Datum & Gäste' },
+    { step: 2, label: 'Zimmerauswahl' },
+    { step: 3, label: 'persönliche Daten' },
+];
+
+const STEP_CIRCLE_CLASSES: Record<StepState, string> = {
+    pending: 'bg-transparent border-purple-haze/40',
+    current: 'bg-transparent border-purple-haze ring-4 ring-purple-haze/45',
+    done: 'bg-purple-haze border-purple-haze',
+};
+
+const STEP_LABEL_CLASSES: Record<StepState, string> = {
+    pending: 'text-purple-haze/80',
+    current: 'text-purple-haze',
+    done: 'text-purple-haze-dark',
+};
+
+function getStepState(step: BookingStep, activeStep: BookingStep): StepState {
+    if (bookingState.isStepComplete(step)) {
+        return 'done';
+    }
+
+    return step === activeStep ? 'current' : 'pending';
+}
 
 export const homeHeader: HeaderConfig = {
     variant: 'page',
@@ -38,6 +70,7 @@ export const bookingHeader: HeaderConfig = {
 
 export class MainHeader extends AbstractView {
     private readonly config: HeaderConfig;
+    private unsubscribe: (() => void) | null = null;
 
     constructor(config: HeaderConfig) {
         super();
@@ -47,6 +80,31 @@ export class MainHeader extends AbstractView {
     // eslint-disable-next-line @typescript-eslint/require-await
     async getHtml(): Promise<string> {
         return this.config.variant === 'booking' ? this.getBookingHeaderHtml(this.config) : this.getPageHeaderHtml(this.config);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async afterRender(): Promise<void> {
+        if (this.config.variant !== 'booking') return;
+
+        this.unsubscribe = bookingState.subscribe((): void => {
+            this.renderSteps();
+        });
+    }
+
+    /**
+     * Räumt den Header ab, bevor der Router das Layout neu aufbaut.
+     * Reihenfolge ist wichtig: erst abmelden, dann zurücksetzen – so erreicht die
+     * Reset-Benachrichtigung diesen Header nicht mehr. Mehrfachaufrufe sind unschädlich.
+     */
+    destroy(): void {
+        if (this.unsubscribe) {
+            this.unsubscribe();
+            this.unsubscribe = null;
+        }
+
+        if (this.config.variant === 'booking') {
+            bookingState.reset();
+        }
     }
 
     private getPageHeaderHtml(config: PageHeaderConfig): string {
@@ -111,29 +169,53 @@ export class MainHeader extends AbstractView {
     }
 
     private getBookingHeaderHtml(config: BookingHeaderConfig): string {
-        const steps: string[] = ['Datum & Gäste', 'Zimmerauswahl', 'persönliche Daten'];
-
         return /*html*/ `
-            <header class="w-full bg-cover bg-center" style="background-image: url('${mainHeaderBg}')">
-                <div class="w-full max-w-360 mx-auto flex flex-col 768:flex-row 768:items-center gap-y-6 768:gap-x-24 px-4 pt-4 pb-6">
-                    <a href="/" data-link><img src="${logo}" alt="Karawanken Hof Logo"></a>
-                    <ol class="flex justify-center gap-x-8 768:gap-x-16">
-                        ${steps.map((label: string, index: number): string => this.getBookingStepHtml(label, index + 1, config.activeStep)).join('')}
-                    </ol>
+            <header class="relative w-full bg-cover bg-center mb-0 456:mb-10" style="background-image: url('${mainHeaderBg}')">
+                <div class="w-full bg-eggshell/65">
+                    <div class="w-full max-w-360 mx-auto flex flex-col 768:flex-row 768:items-center gap-y-6 768:gap-x-24 px-4 pt-4 pb-6">
+                        <a href="/" data-link><img src="${logo}" alt="Karawanken Hof Logo"></a>
+                    </div>
+                    <div class="hidden 456:block absolute -bottom-11 w-full">
+                        <ol id="booking-steps" class="w-full max-w-120 flex mx-auto">
+                            ${this.getBookingStepsHtml(config.activeStep)}
+                        </ol>
+                    </div>
                 </div>
             </header>
         `;
     }
 
-    private getBookingStepHtml(label: string, step: number, activeStep: number): string {
-        const isDone: boolean = step <= activeStep;
-        const circleClass: string = isDone ? 'bg-purple-haze border-purple-haze' : 'bg-transparent border-purple-haze';
-        const labelClass: string = isDone ? 'text-purple-haze-dark' : 'text-purple-haze-light';
+    /** Ersetzt nur die Steps – dieselbe Funktion für Erst-Render und Neu-Render nach einer Zustandsänderung. */
+    private renderSteps(): void {
+        const stepsEl: HTMLElement | null = document.getElementById('booking-steps');
+        if (!stepsEl || this.config.variant !== 'booking') return;
+
+        stepsEl.innerHTML = this.getBookingStepsHtml(this.config.activeStep);
+    }
+
+    private getBookingStepsHtml(activeStep: BookingStep): string {
+        const states: StepState[] = BOOKING_STEPS.map((definition: BookingStepDefinition): StepState => getStepState(definition.step, activeStep));
+        const items: string[] = BOOKING_STEPS.map((definition: BookingStepDefinition, index: number): string => {
+            return this.getBookingStepHtml(definition.label, states[index] ?? 'pending', states[index - 1]);
+        });
+
+        return items.join('');
+    }
+
+    private getBookingStepHtml(label: string, state: StepState, previousState: StepState | undefined): string {
+        // Die Verbinder-Linie zeigt den zurückgelegten Weg, hängt also am Vorgänger-Step.
+        const lineColor: string = previousState === 'done' ? 'bg-purple-haze' : 'bg-purple-haze/45';
+        const connector: string =
+            previousState === undefined
+                ? ''
+                : /*html*/ `<span class="absolute top-3 -translate-y-1/2 right-[calc(50%+0.75rem)] w-[calc(100%-1.5rem)] h-0.5 transition-colors ${lineColor}"></span>`;
+        const currentAttribute: string = state === 'current' ? ' aria-current="step"' : '';
 
         return /*html*/ `
-            <li class="flex flex-col items-center gap-y-2">
-                <span class="w-6 h-6 rounded-full border-2 ${circleClass}"></span>
-                <span class="font-antic-didone text-16 ${labelClass}">${label}</span>
+            <li class="relative flex flex-1 flex-col items-center gap-y-2"${currentAttribute}>
+                ${connector}
+                <span class="w-6 h-6 rounded-full border-2 transition-colors ${STEP_CIRCLE_CLASSES[state]}"></span>
+                <span class="font-lato text-16 transition-colors ${STEP_LABEL_CLASSES[state]}">${label}</span>
             </li>
         `;
     }

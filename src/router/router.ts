@@ -6,6 +6,7 @@ import { homeHeader, MainHeader } from '../views/LayoutViews/MainHeader';
 export class Router {
     private readonly routes: Route[];
     private readonly layoutWrapper: HTMLElement | null;
+    private currentHeader: MainHeader | null = null;
 
     constructor(routes: Route[], layoutWrapper: HTMLElement | null) {
         this.routes = routes;
@@ -79,7 +80,14 @@ export class Router {
     private async getBaseLayout(locationPath: string, route: Route): Promise<void> {
         if (!this.layoutWrapper) {
             throw new Error('Fehler beim Laden der Seite');
-        } else if (locationPath.length > 1 && locationPath.endsWith('/')) {
+        }
+
+        // Vor jedem Layout-Neubau den alten Header abräumen (Abo lösen, Zustand zurücksetzen).
+        // Steht vor allen Zweigen, greift also auch für /admin und den Trailing-Slash-Fall.
+        this.currentHeader?.destroy();
+        this.currentHeader = null;
+
+        if (locationPath.length > 1 && locationPath.endsWith('/')) {
             const correctedLocationPath = locationPath.slice(0, -1);
             console.log('corrected path: ', correctedLocationPath);
             await this.navigateTo(correctedLocationPath);
@@ -87,8 +95,11 @@ export class Router {
         } else if (locationPath.startsWith('/admin')) {
             this.layoutWrapper.innerHTML = await new AdminLayout().getHtml();
         } else {
-            const headerHtml: string = await new MainHeader(route.header ?? homeHeader).getHtml();
+            const header: MainHeader = new MainHeader(route.header ?? homeHeader);
+            const headerHtml: string = await header.getHtml();
             this.layoutWrapper.innerHTML = await new MainLayout(headerHtml).getHtml();
+            this.currentHeader = header;
+            await header.afterRender();
         }
     }
 

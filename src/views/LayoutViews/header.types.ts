@@ -1,3 +1,7 @@
+import type { BookingStep } from '../../shared/state/bookingState';
+
+export type StepState = 'pending' | 'current' | 'done';
+
 export type PageHeaderConfig = {
     variant: 'page';
     title: string;
@@ -9,7 +13,7 @@ export type PageHeaderConfig = {
 
 export type BookingHeaderConfig = {
     variant: 'booking';
-    activeStep: 1 | 2 | 3;
+    activeStep: BookingStep;
 };
 
 export type HeaderConfig = PageHeaderConfig | BookingHeaderConfig;

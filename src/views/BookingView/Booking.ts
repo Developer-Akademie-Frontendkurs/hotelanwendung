@@ -1,4 +1,5 @@
 import AbstractView from '../AbstractView';
+import { bookingState } from '../../shared/state/bookingState';
 import './booking.css';
 
 type DayCell = {
@@ -28,8 +29,6 @@ export class BookingView extends AbstractView {
     private readonly today: Date;
     private displayedYear: number;
     private displayedMonth: number;
-    private checkIn: Date | null = null;
-    private checkOut: Date | null = null;
     private calendarEl: HTMLElement | null = null;
 
     constructor() {
@@ -165,7 +164,8 @@ export class BookingView extends AbstractView {
     }
 
     private getFooterHtml(): string {
-        const canSubmit = this.checkIn !== null && this.checkOut !== null;
+        const { checkIn, checkOut } = bookingState.getDates();
+        const canSubmit = checkIn !== null && checkOut !== null;
         return /*html*/ `
             <div class="flex justify-center mt-8 768:mt-10">
                 <button
@@ -183,6 +183,7 @@ export class BookingView extends AbstractView {
     private buildDays(): DayCell[] {
         const year = this.displayedYear;
         const month = this.displayedMonth;
+        const { checkIn, checkOut } = bookingState.getDates();
 
         const firstOfMonth = new Date(year, month, 1);
         const leading = (firstOfMonth.getDay() + 6) % 7;
@@ -199,9 +200,9 @@ export class BookingView extends AbstractView {
                 inCurrentMonth,
                 isPast,
                 isToday: isSameDay(date, this.today),
-                isStart: this.checkIn !== null && isSameDay(date, this.checkIn),
-                isEnd: this.checkOut !== null && isSameDay(date, this.checkOut),
-                inRange: this.checkIn !== null && this.checkOut !== null && date > this.checkIn && date < this.checkOut,
+                isStart: checkIn !== null && isSameDay(date, checkIn),
+                isEnd: checkOut !== null && isSameDay(date, checkOut),
+                inRange: checkIn !== null && checkOut !== null && date > checkIn && date < checkOut,
                 isWeekend: date.getDay() === 0 || date.getDay() === 6,
                 selectable: !isPast,
             });
@@ -241,18 +242,18 @@ export class BookingView extends AbstractView {
 
     private selectDate(iso: string): void {
         const date = parseISODate(iso);
-        if (this.checkIn === null || this.checkOut !== null || date <= this.checkIn) {
-            this.checkIn = date;
-            this.checkOut = null;
+        const { checkIn, checkOut } = bookingState.getDates();
+
+        if (checkIn === null || checkOut !== null || date <= checkIn) {
+            bookingState.setDates(date, null);
         } else {
-            this.checkOut = date;
+            bookingState.setDates(checkIn, date);
         }
         this.renderCalendar();
     }
 
     private clearSelection(): void {
-        this.checkIn = null;
-        this.checkOut = null;
+        bookingState.setDates(null, null);
         this.renderCalendar();
     }
 
@@ -273,12 +274,13 @@ export class BookingView extends AbstractView {
     }
 
     private submit(): void {
-        if (this.checkIn === null || this.checkOut === null) return;
+        const { checkIn, checkOut } = bookingState.getDates();
+        if (checkIn === null || checkOut === null) return;
 
-        const nights = Math.round((this.checkOut.getTime() - this.checkIn.getTime()) / MS_PER_DAY);
+        const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY);
         const booking: Booking = {
-            checkIn: toISODate(this.checkIn),
-            checkOut: toISODate(this.checkOut),
+            checkIn: toISODate(checkIn),
+            checkOut: toISODate(checkOut),
             nights,
         };
 
