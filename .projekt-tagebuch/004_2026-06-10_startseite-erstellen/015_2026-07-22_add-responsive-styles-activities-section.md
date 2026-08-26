@@ -157,4 +157,4 @@ Die Startseite hat nun einen vollständigen **Aktivitäten-Bereich**: Auf dem De
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../004_2026-06-10_startseite-erstellen.md) · [Nächster Commit →](../005_2026-07-22_buchungs-seite/001_2026-07-22_add-booking-view-calendar.md)
