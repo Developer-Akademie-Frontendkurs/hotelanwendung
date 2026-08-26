@@ -1,4 +1,4 @@
-[← Vorheriger Commit](002_2026-07-29_update-booking-view-weekend-cell-state.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [📓 Index](../000_index.md)
+[← Vorheriger Commit](004_2026-07-29_update-project-diary-booking-view.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [📓 Index](../000_index.md)
 
 # feat: enhance routing and layout by adding header configurations for different views
 
@@ -231,4 +231,4 @@ Für Lernende sind hier vor allem zwei Dinge mitzunehmen: das Muster der **Discr
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](004_2026-08-05_add-booking-header-to-routing.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](006_2026-08-05_add-booking-header-to-routing.md)

@@ -386,4 +386,4 @@ Offen bleibt bewusst die Anbindung an ein Backend – das im Code als `TODO` mar
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](002_2026-07-29_update-booking-view-weekend-cell-state.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](002_2026-07-22_new-project-diary-entry.md)

@@ -1,4 +1,4 @@
-[← Vorheriger Commit](003_2026-08-05_add-header-configurations.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [📓 Index](../000_index.md)
+[← Vorheriger Commit](005_2026-08-05_add-header-configurations.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [📓 Index](../000_index.md)
 
 # feat: add booking header configuration to routing for booking view
 
@@ -68,4 +68,4 @@ Die Buchungsseite hat nun ihren eigenen, schlanken Header mit Fortschrittsanzeig
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](005_2026-08-08_booking-state-management-step-tracking.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](007_2026-08-08_booking-state-management-step-tracking.md)

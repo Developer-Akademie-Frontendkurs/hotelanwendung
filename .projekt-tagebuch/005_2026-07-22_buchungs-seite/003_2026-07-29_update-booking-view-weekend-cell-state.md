@@ -1,4 +1,4 @@
-[← Vorheriger Commit](001_2026-07-22_add-booking-view-calendar.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [📓 Index](../000_index.md)
+[← Vorheriger Commit](002_2026-07-22_new-project-diary-entry.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [📓 Index](../000_index.md)
 
 # feat: update booking view and add weekend cell state handling
 
@@ -8,7 +8,7 @@
 
 ## Worum geht es?
 
-Der Kalender aus dem vorigen Commit funktioniert bereits – jetzt geht es um den **Feinschliff**. Dieser Commit verbessert die Optik und das Verhalten der Buchungsseite in vier Punkten:
+Der Kalender aus [Commit 001](001_2026-07-22_add-booking-view-calendar.md) funktioniert bereits – jetzt geht es um den **Feinschliff**. Dieser Commit verbessert die Optik und das Verhalten der Buchungsseite in vier Punkten:
 
 1. Der Kalender hat ab jetzt **immer gleich viele Zeilen** (feste 42 Zellen), damit die Ansicht beim Monatswechsel nicht mehr springt.
 2. **Wochenenden** (Samstag/Sonntag) werden farblich hervorgehoben – über einen neuen Zustand `isWeekend`.
@@ -40,7 +40,7 @@ Dadurch kann im Markup nun einheitlich `text-14` genutzt werden, statt wie bishe
 
 ## 2. Der neue Zustand `isWeekend`
 
-Der Typ `DayCell` beschreibt (wie im vorigen Commit gezeigt) jedes Kalender-Kästchen über Zustands-Flags. Hier kommt ein weiteres Flag dazu:
+Der Typ `DayCell` beschreibt (wie in [Commit 001](001_2026-07-22_add-booking-view-calendar.md) gezeigt) jedes Kalender-Kästchen über Zustands-Flags. Hier kommt ein weiteres Flag dazu:
 
 ```diff
      isStart: boolean;
@@ -156,4 +156,4 @@ Das grundlegende Zustands-Muster bleibt unangetastet – erweitert wurde ledigli
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](003_2026-08-05_add-header-configurations.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](004_2026-07-29_update-project-diary-booking-view.md)

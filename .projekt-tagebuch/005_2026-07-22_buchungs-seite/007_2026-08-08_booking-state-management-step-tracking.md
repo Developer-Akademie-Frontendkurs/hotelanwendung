@@ -1,4 +1,4 @@
-[← Vorheriger Commit](004_2026-08-05_add-booking-header-to-routing.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [📓 Index](../000_index.md)
+[← Vorheriger Commit](006_2026-08-05_add-booking-header-to-routing.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [📓 Index](../000_index.md)
 
 # feat: implement booking state management and enhance header with step tracking
 
@@ -298,7 +298,7 @@ const STEP_LABEL_CLASSES: Record<StepState, string> = {
 
 `Record<StepState, string>` ist ein sehr nützlicher TypeScript-Hilfstyp: Er verlangt für **jeden** Wert der Union einen Eintrag. Käme später ein vierter Zustand dazu (etwa `'error'`), würde der Compiler beide Tabellen als unvollständig melden – man kann es also nicht vergessen. Der Zugriff ist dann ein simples `STEP_CIRCLE_CLASSES[state]`.
 
-Vergleicht man das mit `getCellStateClass()` im Kalender (Commit 002), sieht man beide Varianten nebeneinander: Dort war eine **Kaskade von `if`-Abfragen** richtig, weil sich mehrere Flags überlagern können und die Reihenfolge über den Vorrang entscheidet. Hier ist es eine **Tabelle**, weil ein Schritt immer genau einen von drei Zuständen hat. Faustregel: sich überlappende Bedingungen → `if`-Kaskade, sich ausschließende Fälle → Nachschlagetabelle.
+Vergleicht man das mit `getCellStateClass()` im Kalender (Commit 003), sieht man beide Varianten nebeneinander: Dort war eine **Kaskade von `if`-Abfragen** richtig, weil sich mehrere Flags überlagern können und die Reihenfolge über den Vorrang entscheidet. Hier ist es eine **Tabelle**, weil ein Schritt immer genau einen von drei Zuständen hat. Faustregel: sich überlappende Bedingungen → `if`-Kaskade, sich ausschließende Fälle → Nachschlagetabelle.
 
 Der Zustand selbst wird aus dem geteilten Zustand abgeleitet:
 
@@ -428,4 +428,4 @@ Offen bleibt weiterhin die Anbindung an Supabase sowie die Schritte 2 und 3 der 
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](008_2026-08-08_update-project-diary-booking-page.md)
