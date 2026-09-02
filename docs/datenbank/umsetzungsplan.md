@@ -101,7 +101,10 @@ geteilt sind — ab dann wird nur noch vorwärts migriert.
 1. `hotels` + eine Seed-Zeile
 2. `room_types` (inkl. `max_occupancy`, `archived_at`)
 3. `rooms`
-4. `room_type_images` + Storage-Bucket `room-images` (öffentlich lesbar, Schreiben nur `is_staff()`)
+4. `room_type_images` + Storage-Bucket `room-images` (öffentlich lesbar, Schreiben nur `is_staff()`).
+   Die Bilddateien selbst kommen über `supabase/scripts/seed-storage.mjs` in den Bucket — SQL kann
+   keine Binärdateien hochladen, und ein Reset leert den Storage mit. Das Skript hängt deshalb an
+   `pnpm db:reset` und ist idempotent (`upsert`).
 5. `room_blocks` inkl. `EXCLUDE`-Constraint
 6. Seed (V4, minimal): 1 Hotel mit `booking_horizon_days = 365`, **3** Kategorien, **8** Zimmer.
    Es existieren genau zwei Zimmerbilder (`double-premium.jpg`, `double-suite.jpg`) — die dritte
