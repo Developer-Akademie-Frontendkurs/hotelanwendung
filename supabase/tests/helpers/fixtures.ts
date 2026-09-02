@@ -17,8 +17,17 @@ export type Fixture = {
     hotelId: string;
     roomTypeId: string;
     roomIds: string[];
+    /** Nur gesetzt, wenn `withRatePlan` angefordert wurde. */
+    ratePlanId?: string;
     cleanup: () => Promise<void>;
 };
+
+/** Datum als ISO-Tag, `offsetDays` Tage nach heute (UTC — wie der Datenbankcontainer). */
+export function isoDay(offsetDays: number): string {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() + offsetDays);
+    return date.toISOString().slice(0, 10);
+}
 
 let counter = 0;
 
@@ -28,7 +37,7 @@ function uniqueSuffix(): string {
 }
 
 /** Legt Hotel + eine Kategorie + `roomCount` Zimmer an. */
-export async function createFixture(options: { roomCount?: number; maxOccupancy?: number } = {}): Promise<Fixture> {
+export async function createFixture(options: { roomCount?: number; maxOccupancy?: number; withRatePlan?: boolean } = {}): Promise<Fixture> {
     const roomCount = options.roomCount ?? 1;
     const suffix = uniqueSuffix();
 
@@ -70,6 +79,17 @@ export async function createFixture(options: { roomCount?: number; maxOccupancy?
         roomIds.push(...(rooms as { id: string }[]).map((room) => room.id));
     }
 
+    let ratePlanId: string | undefined;
+    if (options.withRatePlan) {
+        const { data: ratePlan, error: ratePlanError } = await serviceClient
+            .from('rate_plans')
+            .insert({ hotel_id: hotelId, code: 'STANDARD', name: 'Standardtarif', is_default: true })
+            .select('id')
+            .single();
+        if (ratePlanError) throw new Error(`Fixture: rate_plans — ${ratePlanError.message}`);
+        ratePlanId = ratePlan.id as string;
+    }
+
     // Abbau in umgekehrter Reihenfolge: ON DELETE RESTRICT (E22) laesst nichts
     // anderes zu — und genau das ist der Sinn der Entscheidung.
     const cleanup = async (): Promise<void> => {
@@ -77,11 +97,15 @@ export async function createFixture(options: { roomCount?: number; maxOccupancy?
             .from('room_blocks')
             .delete()
             .in('room_id', roomIds.length > 0 ? roomIds : ['00000000-0000-0000-0000-000000000000']);
+        await serviceClient.from('room_type_rates').delete().eq('room_type_id', roomTypeId);
         await serviceClient.from('rooms').delete().eq('room_type_id', roomTypeId);
         await serviceClient.from('room_type_images').delete().eq('room_type_id', roomTypeId);
         await serviceClient.from('room_types').delete().eq('id', roomTypeId);
+        if (ratePlanId !== undefined) {
+            await serviceClient.from('rate_plans').delete().eq('id', ratePlanId);
+        }
         await serviceClient.from('hotels').delete().eq('id', hotelId);
     };
 
-    return { hotelId, roomTypeId, roomIds, cleanup };
+    return ratePlanId === undefined ? { hotelId, roomTypeId, roomIds, cleanup } : { hotelId, roomTypeId, roomIds, ratePlanId, cleanup };
 }

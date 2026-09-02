@@ -86,3 +86,56 @@ values
         'Doppelzimmer Premium mit Doppelbett und Balkontuer',
         0
     );
+
+-- ---------------------------------------------------------------------------
+-- Tarif und Saisonpreise (E5, V4)
+-- ---------------------------------------------------------------------------
+
+insert into public.rate_plans (id, hotel_id, code, name, description, is_default)
+values (
+    '00000000-0000-4000-8000-000000000201',
+    '00000000-0000-4000-8000-000000000001',
+    'STANDARD',
+    'Standardtarif',
+    'Flexibel stornierbar bis 14 Tage vor Anreise.',
+    true
+);
+
+-- 13 Monatsblöcke ab dem aktuellen Monatsanfang — relativ zu current_date und nicht
+-- mit festen Datumsangaben, damit ein Reset in sechs Monaten immer noch 12 Monate
+-- abdeckt und der Kalender nicht in die Vergangenheit zeigt.
+--
+-- 13 statt 12: booking_horizon_days = 365 reicht vom heutigen Tag aus in den
+-- 13. Monat hinein. Ein Block zu wenig wäre eine Preislücke am Horizontrand — also
+-- genau der Fall, der laut E25 wie ein Bug aussieht, ohne einer zu sein.
+insert into public.room_type_rates (room_type_id, rate_plan_id, valid_from, valid_to, amount_cents)
+select
+    basis.room_type_id,
+    '00000000-0000-4000-8000-000000000201',
+    monat::date,
+    (monat + interval '1 month')::date,
+    -- Saisonfaktor über den Kalendermonat. Ganzzahlige Cent, nie float (E8).
+    round(
+        basis.grundpreis_cents
+        * case extract(month from monat)
+            when 7 then 1.35   -- Juli
+            when 8 then 1.35   -- August
+            when 12 then 1.30  -- Weihnachten/Silvester
+            when 2 then 1.20   -- Semesterferien / Ski
+            when 5 then 1.10
+            when 6 then 1.10
+            when 9 then 1.10
+            else 1.0
+          end
+    )::int
+from generate_series(
+        date_trunc('month', current_date),
+        date_trunc('month', current_date) + interval '12 months',
+        interval '1 month'
+     ) as monat
+cross join (
+    values
+        ('00000000-0000-4000-8000-000000000101'::uuid, 24000),  -- Double Suite
+        ('00000000-0000-4000-8000-000000000102'::uuid, 16500),  -- Double Premium
+        ('00000000-0000-4000-8000-000000000103'::uuid, 9500)    -- Einzelzimmer Alpin
+) as basis (room_type_id, grundpreis_cents);
