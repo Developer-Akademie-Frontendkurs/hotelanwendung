@@ -815,12 +815,102 @@ später ein `git rm` plus eine Drop-Migration.
 
 ---
 
+## 4g. Entschieden (Runde 7) — bei der Umsetzung
+
+Diese Runde entstand **während** der Phasen 1–7. Jeder Punkt hier ist eine Stelle, an der die
+Umsetzung etwas gezeigt hat, das man am Reißbrett nicht sehen konnte.
+
+### E37 — Verfügbarkeit in **drei** Funktionen, und die Zahlen werden mitmaskiert
+
+**Entscheidung:** Ein interner Kern `availability_nights()` liefert rohe Zahlen und feine Gründe;
+`availability_calendar()` und `search_availability()` sind maskierte Sichten darauf. Zusätzlich
+werden für Gäste **auch `rooms_free` und `total_amount_cents`** unterdrückt, wenn eine Nacht bzw.
+Kategorie nicht buchbar ist.
+
+**Begründung, Teil 1 — warum drei statt zwei:** `create_booking` braucht den **genauen** Grund einer
+Ablehnung, um den strukturierten Fehler aus E31 zu erzeugen. Es läuft zwar als `SECURITY DEFINER`,
+aber `is_staff()` gibt trotzdem `false` zurück — E13 ist rollenbasiert, nicht kontextbasiert. Über
+die maskierte Funktion wäre E31 nicht erfüllbar gewesen. Die Forderung des Umsetzungsplans („zwei
+Implementierungen derselben Regel wären die eigentliche Fehlerquelle") bleibt erfüllt: alle drei
+Aufrufer lesen aus **einer** Quelle.
+
+**Begründung, Teil 2 — warum auch die Zahlen:** E28 verlangt nur die Maskierung des _Grundes_. Aber
+`ausgebucht` bedeutet `rooms_free = 0` und `kein_preis` bedeutet `rooms_free > 0`. Wer die Zahl
+zeigt und den Grund verbirgt, hat nichts verborgen. Das war eine Lücke in E28, keine Auslegung.
+
+**Nicht maskiert bleiben `vergangenheit` und `ausserhalb_horizont`:** Sie verraten nichts über den
+Betrieb, und „so weit im Voraus nehmen wir noch keine Buchungen an" ist eine Auskunft, die dem Gast
+hilft, statt ihn raten zu lassen (E30).
+
+### E38 — Admin-Zugang über **EXECUTE-Rechte**, nicht über einen `is_staff()`-Wachposten
+
+**Entscheidung:** `find_rate_gaps()`, `availability_nights()` und `rls_audit()` prüfen intern
+**nicht** `is_staff()`. Den Zugang regelt allein das `EXECUTE`-Recht: `service_role` darf, `anon`
+und `authenticated` dürfen nicht.
+
+**Begründung:** Ein `if not is_staff() then raise`-Wachposten hätte in v1 **auch den
+Service-Role-Key** abgewiesen, denn `is_staff()` gibt für _jede_ Rolle `false` zurück. Die
+Funktionen wären damit für niemanden aufrufbar gewesen — eine Prüffunktion, die niemand ausführen
+kann, ist keine.
+
+**Bekannte Folge, ausdrücklich benannt:** Damit ist der Staff-Zweig von E28 in v1 **toter Code**.
+Die feinen Gründe `ausgebucht`, `kein_preis` und `zu_klein` erreichen niemanden, auch nicht über den
+Service-Role-Key, und sind deshalb ungetestet. Der billigste Ausweg wäre eine Zeile in `is_staff()`:
+`select auth.role() = 'service_role'`. Das ist eine Änderung am Seam aus E13 und steht bewusst offen.
+
+### E39 — Der Nebenläufigkeitstest braucht **mehr als zwei** gleichzeitige Anfragen
+
+**Entscheidung:** Der Test zu E10 feuert **sechs** gleichzeitige Buchungen auf **drei** Zimmer, nicht
+zwei auf eines.
+
+**Begründung — gemessen, nicht vermutet:** Mit probeweise entferntem `pg_advisory_xact_lock` blieb
+die Zwei-Anfragen-Variante aus dem Umsetzungsplan **grün**. Zwei HTTP-Anfragen überschneiden sich
+nicht zuverlässig genug, um die Lücke zu treffen. Die Sechs-Anfragen-Variante fiel im selben Versuch
+sofort um: **alle sechs** Buchungen gingen durch, das Hotel war doppelt überbucht.
+
+**Warum das hier steht und nicht nur im Testkommentar:** Ein Test, der eine Entscheidung belegen
+soll, es aber nicht tut, ist schlimmer als kein Test — er täuscht Sicherheit vor. Beide Varianten
+stehen jetzt im Code, jede mit dem Vermerk, welche davon trägt.
+
+### E40 — Die Abnahme aus Phase 7 ist eine **Funktion**, keine Checkliste
+
+**Entscheidung:** `rls_audit()` prüft im Katalog: Tabellen ohne RLS, Tabellen ohne jede Policy,
+Policies mit direktem `auth.uid()`, `SECURITY DEFINER` ohne fixiertes `search_path`, interne
+Funktionen mit `EXECUTE` für `anon`, entzogene Rechte auf `booking_events`, Schreib-Policies auf
+`bookings`. Keine Zeilen = bestanden.
+
+**Begründung:** Eine von Hand durchgegangene Checkliste ist genau einmal richtig — an dem Tag, an
+dem jemand sie durchgegangen ist. Die nächste Tabelle entsteht in einer späteren Migration, und eine
+fehlende Policy erzeugt **keine Fehlermeldung**, sondern nur zu viel Sichtbarkeit. Die Funktion
+prüft auch Tabellen, die es heute noch nicht gibt.
+
+**Gegenprobe durchgeführt:** Alle sieben Prüfungen wurden mit absichtlich eingebauten Verstößen
+ausgelöst und melden korrekt. Eine Prüffunktion, die nie etwas findet, ist nicht von einer kaputten
+zu unterscheiden.
+
+### E41 — `create_booking` überschreibt keine Kundenstammdaten
+
+**Entscheidung:** Findet die Funktion einen Kunden über `email_normalized`, verwendet sie ihn — sie
+aktualisiert aber **nicht** Name und Telefonnummer aus der aktuellen Eingabe.
+
+**Begründung:** Wer zum zweiten Mal bucht und den Vornamen anders tippt, soll seinen Datensatz nicht
+überschreiben. Stammdatenpflege ist ein eigener Vorgang mit eigener Absicht; eine Buchung ist keine
+Gelegenheit, sie beiläufig mitzuerledigen.
+
+**Ebenfalls hier festgehalten:** Mehrere **Kategorien** in einem Vorgang sind noch nicht möglich —
+`p_rooms` bucht _n_ Zimmer **derselben** Kategorie und erzeugt dann die `booking_groups`-Zeile aus
+E27. Mehrere Kategorien verlangten einen `jsonb`-Parameter mit Positionen; die Struktur ist darauf
+vorbereitet (Gruppe + Schleife), aber eine Schnittstelle, die die Oberfläche heute nicht bedienen
+kann, wäre Ballast (E15).
+
+---
+
 ## 5. Offene Punkte
 
 | #   | Frage | hängt an |
 | --- | ----- | -------- |
 
-**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E36).
+**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E41).
 
 Der zuvor offene Punkt ist erledigt: Die **Umsetzungsinterpretation in E28** (feine Sperrgründe nur
 für `is_staff()`) wurde in der Grilling-Runde vom 2026-09-02 ausdrücklich bestätigt. Ebenfalls dort
@@ -870,3 +960,4 @@ Für den Call als Zusammenfassung auf einer Folie:
 | 2026-08-17 | **Freigabe erteilt.** `schema.md` (ERD + Tabellen + Funktionen + RLS) und `umsetzungsplan.md` (Phasen 1–10) erstellt                                                                                                                |
 | 2026-08-17 | Artifact-Seite und FigJam-Board veröffentlicht; FigJam nach Domänen eingefärbt (Stammdaten / Preise / Buchungsvorgang / Fremdsystem)                                                                                                |
 | 2026-09-02 | Grilling-Runde zur **Umsetzung**: Runde 6 (E32–E36) entschieden und begründet; E28 bestätigt; Cloud-Instanz als Wegwerf-Spike freigegeben; `schema.md` um E32/E33 korrigiert; Umsetzungsplan um die Vorgehensentscheidungen ergänzt |
+| 2026-09-02 | Phasen 1–7 umgesetzt und getestet (91 Tests). Runde 7 (E37–E41) aus der Umsetzung heraus entschieden; `schema.md` um Trigger, Teilindizes, `is_blocking_status` im Prädikat und die internen Funktionen nachgeführt                 |

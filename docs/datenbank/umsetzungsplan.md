@@ -204,13 +204,17 @@ Mit **V3** ist RLS bereits seit Phase 2 aktiv, und jede Tabelle hat ihre Policie
 Migration bekommen, in der sie entstand. Phase 7 aktiviert also nichts mehr — sie **prüft** und
 schließt die Lücken, die beim schrittweisen Bauen entstanden sind.
 
-1. Vollständigkeitsprüfung: hat **jede** Tabelle `ENABLE ROW LEVEL SECURITY`, und ist für jede
-   Zeile in `schema.md`, Abschnitt 4, eine Policy vorhanden?
-2. Prüfen, dass keine Policy `auth.uid()` direkt verwendet — ausschließlich `is_staff()` und
-   `current_customer_id()` (E13). Ein verstreutes `auth.uid()` ist der Anfang des Driftens.
-3. `booking_events`: `UPDATE`/`DELETE`-Rechte entziehen (append-only durchsetzen, nicht vereinbaren)
-4. `EXECUTE`-Rechte auf die RPCs gezielt vergeben, `search_path` bei jeder `SECURITY
-   DEFINER`-Funktion fixiert
+Die Prüfung ist als Funktion umgesetzt und nicht als Checkliste (E40): `rls_audit()` meldet
+Tabellen ohne RLS, Tabellen ohne jede Policy, Policies mit direktem `auth.uid()`,
+`SECURITY DEFINER` ohne fixiertes `search_path`, interne Funktionen mit `EXECUTE` für `anon`, nicht
+entzogene Rechte auf `booking_events` und Schreib-Policies auf `bookings`. **Keine Zeilen =
+bestanden** — und die Prüfung gilt auch für Tabellen, die es heute noch nicht gibt.
+
+1. `rls_audit()` anlegen und gegen absichtliche Verstöße gegenprüfen (eine Prüffunktion, die nie
+   etwas findet, ist nicht von einer kaputten zu unterscheiden)
+2. Befunde abarbeiten, bis die Funktion null Zeilen liefert
+3. Verhaltensprobe zusätzlich zur Katalogprüfung: die Katalogabfrage sagt, dass die Regeln **da**
+   sind, die Verhaltensprobe sagt, dass sie **wirken**
 
 **Fertig, wenn:** ein anonymer Client `select * from bookings` mit **0 Zeilen** (nicht mit einem
 Fehler) beantwortet bekommt und ein direktes `insert into bookings` abgelehnt wird — Buchen geht nur

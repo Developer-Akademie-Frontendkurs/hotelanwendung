@@ -158,6 +158,11 @@ Konventionen durchgehend (E8): englisch/`snake_case`/Plural, `uuid`-PK per `gen_
 Geld als `integer` Cent, Zeiträume **halb-offen** `[von, bis)`, `created_at`/`updated_at` als
 `timestamptz`.
 
+`updated_at` wird nicht von der Anwendung gesetzt, sondern von einem Trigger
+(`set_updated_at()`, eine Funktion für alle Tabellen). Ein Zeitstempel, den der Aufrufer pflegen
+muss, ist irgendwann falsch. In den Spaltentabellen unten sind `created_at`/`updated_at` deshalb
+nicht einzeln aufgeführt — sie sind überall vorhanden.
+
 ### `hotels` — genau eine Zeile (E14)
 
 | Spalte | Typ | Regeln |
@@ -245,8 +250,14 @@ verhindert (E18).
 | `is_default` | `boolean` | `NOT NULL DEFAULT false` |
 | `archived_at` | `timestamptz` | |
 
+```sql
+CREATE UNIQUE INDEX rate_plans_one_default_idx ON rate_plans (hotel_id)
+    WHERE is_default AND archived_at IS NULL;
+```
+
 Der Seam, der „Flex / Nicht erstattbar / Frühbucher" später zu **Datenzeilen** macht statt zu einer
-Schemaänderung.
+Schemaänderung. Der Teilindex erzwingt **höchstens einen** aktiven Standardtarif pro Hotel — ohne ihn
+wäre „der Standard" eine Frage der Sortierreihenfolge und damit zufällig.
 
 ### `room_type_rates` — Saisonpreise (E5)
 
@@ -325,11 +336,18 @@ CHECK ((status = 'cancelled') = (cancelled_at IS NOT NULL))
 
 -- Sobald ein Zimmer zugewiesen ist, garantiert die DB die Eindeutigkeit:
 EXCLUDE USING gist (room_id WITH =, stay WITH &&)
-    WHERE (room_id IS NOT NULL AND status <> 'cancelled')
+    WHERE (room_id IS NOT NULL AND is_blocking_status(status))
 ```
 
-Der zweite `CHECK` verhindert den klassischen Zwei-Felder-Widerspruch („storniert, aber kein
-Stornozeitpunkt"). Das Teil-Exclusion-Constraint ist ein **Geschenk**: Für die Kategorie-Zählung
+Das Prädikat ruft `is_blocking_status(status)` auf und wiederholt nicht `status <> 'cancelled'` —
+die Regel steht sonst im Constraint, im Teilindex, in der Verfügbarkeitsrechnung und in jeder
+Admin-Abfrage, und vier Kopien driften (E11). **Der Preis:** Weil Index und Constraint die Funktion
+im Prädikat verwenden, verlangt jede Änderung an ihr ein `REINDEX TABLE bookings` — sonst
+entscheidet der Index weiter nach der alten Regel, ohne dass etwas auffällt.
+
+Der zweite `CHECK` ist als **Gleichheit zweier Wahrheitswerte** geschrieben und deckt damit beide
+Richtungen ab: „storniert ohne Stornozeitpunkt" **und** „Stornozeitpunkt ohne Storno". Zwei getrennte
+`CHECK`s wären leichter zu übersehen. Das Teil-Exclusion-Constraint ist ein **Geschenk**: Für die Kategorie-Zählung
 hilft es nicht (E10 löst das per Advisory-Lock), aber ab dem Moment der Zimmerzuweisung ist
 Doppelbelegung physisch unmöglich.
 
@@ -358,7 +376,10 @@ beantwortbar.
 | `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` |
 
 Append-only wird **durchgesetzt**, nicht vereinbart: keine `UPDATE`- und keine `DELETE`-Policy, und
-die Rechte werden entzogen. Eine Historie, die man ändern kann, ist keine.
+die Rechte werden entzogen — **auch dem `service_role`**. Der Service-Role-Key umgeht RLS
+vollständig; ohne diesen Schritt könnte das Seed-Skript die Historie umschreiben. `INSERT` bleibt
+ihm erlaubt, damit Ereignisse überhaupt entstehen können. Eine Historie, die man ändern kann, ist
+keine.
 
 ---
 
@@ -372,10 +393,17 @@ Ohne Backend ist die Datenbank die letzte Verteidigungslinie (Leitsatz 1). Alle 
 | `is_staff()` | einziger Ort, an dem Mitarbeitendenrechte geprüft werden. v1: `false` | E13 |
 | `current_customer_id()` | mappt `auth.uid()` → `customers.id`. Einziger Ort. | E13 |
 | `is_blocking_status(text)` | `IMMUTABLE`; „belegt Kapazität" = alles außer `cancelled`. Einziger Ort. | E11 |
-| `availability_calendar(von, bis, erwachsene, kinder, kategorie?)` | **eine Zeile pro Nacht**: `rooms_free`, `unavailable_reason`. Füttert den Kalender. | E24, E28 |
-| `search_availability(anreise, abreise, erwachsene, kinder)` | **eine Zeile pro Kategorie**: Minimum über den Zeitraum, Gesamtpreis. Füttert Ergebnisliste; wird von `create_booking` intern genutzt. | E17, E28 |
-| `create_booking(...)` | Hotelweiter Advisory-Lock → Prüfung → `customers`-Upsert → `bookings` + `booking_nights` + `booking_events`, alles in **einer** Transaktion. Strukturierter Fehler bei Ablehnung. | E10, E26, E31, E32, E33 |
+| `availability_nights(hotel, von, bis, erwachsene, kinder, kategorie?)` | **interner Kern** (E37): rohe Kapazitäts- und Preiszahlen pro Nacht und Kategorie, **ohne** Maskierung. Nicht für den Browser. | E17, E37 |
+| `mask_reason(grund)` | Zweistufigkeit an einer Stelle: `ausgebucht`/`kein_preis`/`zu_klein` → `nicht_buchbar`, sofern nicht `is_staff()` | E28 |
+| `availability_calendar(von, bis, erwachsene, kinder, kategorie?, hotel?)` | **eine Zeile pro Nacht**: `rooms_free`, `unavailable_reason`. Füttert den Kalender. | E24, E28 |
+| `search_availability(anreise, abreise, erwachsene, kinder, hotel?)` | **eine Zeile pro Kategorie**: Minimum über den Zeitraum, Gesamtpreis. Füttert die Ergebnisliste. | E17, E28 |
+| `reject_booking(code, datum)` | erzeugt die strukturierte Ablehnung; Code durch `mask_reason`, maschinenlesbare Fassung im `DETAIL` | E31 |
+| `create_booking(...)` | Hotelweiter Advisory-Lock → Prüfung über `availability_nights` → `customers`-Upsert → `bookings` + `booking_nights` + `booking_events`, alles in **einer** Transaktion. Strukturierter Fehler bei Ablehnung. | E10, E26, E31, E32, E33 |
 | `find_rate_gaps(tage)` | Admin: Nächte ohne Preiszeile | E25 |
+| `rls_audit()` | Admin: Abnahme des Schutzes als Dauerprüfung. Keine Zeilen = in Ordnung. | E40 |
+
+**Alle drei Verfügbarkeitsaufrufer lesen aus `availability_nights`** — Kalender,
+Ergebnisliste und `create_booking`. Warum es drei Funktionen sind und nicht zwei: E37.
 
 ### Kapazität pro Nacht — die vollständige Formel
 
@@ -459,14 +487,22 @@ Kennung. RLS *ist* der Schutz — es gibt keinen zweiten.
 
 | Index | Zweck |
 | --- | --- |
-| GiST auf `bookings(stay)`, kombiniert mit `room_type_id` | Überlappungssuche der Verfügbarkeit |
-| Teil-Index `bookings(room_type_id, stay)` `WHERE is_blocking_status(status)` | zählt nur, was zählt |
+| Teil-GiST `bookings(room_type_id, stay)` `WHERE is_blocking_status(status)` | Überlappungssuche der Verfügbarkeit; zählt nur, was zählt |
 | GiST auf `room_blocks(period)` | Sperrungen pro Nacht |
 | GiST via Exclusion auf `room_type_rates(validity)` | Preissuche + Überlappungsschutz |
-| `bookings(booking_reference)` | Suche am Telefon |
 | `bookings(customer_id)` | „meine Buchungen" im Kundenkonto |
 | `bookings(check_in)`, `bookings(status)` | Admin-Listen |
+| Teil-Index `bookings(booking_group_id)` `WHERE NOT NULL` | Zusammenhalt eines Vorgangs (E27) |
+| Teil-Index `rooms(room_type_id)` `WHERE archived_at IS NULL` | Kapazitätszählung |
+| `booking_events(booking_id, created_at)` | Historie einer Buchung in Reihenfolge |
 | `room_type_images(room_type_id, sort_order, id)` | stabile Bildreihenfolge |
+
+Zwei frühere Einträge sind hier bewusst **weggefallen**:
+
+- Ein **zusätzlicher vollständiger** GiST-Index auf `bookings(room_type_id, stay)` neben dem
+  Teil-Index. Die Verfügbarkeitsrechnung fragt ausschließlich nach blockierenden Buchungen; ein
+  zweiter Index über alle Zeilen wäre Schreibaufwand bei jedem `INSERT`, den nie jemand liest.
+- Ein eigener Index auf `bookings(booking_reference)`. Das `UNIQUE` legt ihn bereits an.
 
 ---
 
