@@ -19,6 +19,9 @@ export type Fixture = {
     roomIds: string[];
     /** Nur gesetzt, wenn `withRatePlan` angefordert wurde. */
     ratePlanId?: string;
+    /** Nur gesetzt, wenn `withCustomer` angefordert wurde. */
+    customerId?: string;
+    customerEmail?: string;
     cleanup: () => Promise<void>;
 };
 
@@ -37,7 +40,7 @@ function uniqueSuffix(): string {
 }
 
 /** Legt Hotel + eine Kategorie + `roomCount` Zimmer an. */
-export async function createFixture(options: { roomCount?: number; maxOccupancy?: number; withRatePlan?: boolean } = {}): Promise<Fixture> {
+export async function createFixture(options: { roomCount?: number; maxOccupancy?: number; withRatePlan?: boolean; withCustomer?: boolean } = {}): Promise<Fixture> {
     const roomCount = options.roomCount ?? 1;
     const suffix = uniqueSuffix();
 
@@ -90,6 +93,21 @@ export async function createFixture(options: { roomCount?: number; maxOccupancy?
         ratePlanId = ratePlan.id as string;
     }
 
+    let customerId: string | undefined;
+    let customerEmail: string | undefined;
+    if (options.withCustomer) {
+        // Absichtlich mit Grossbuchstaben: So belegt jeder Test, der diese Fixture
+        // benutzt, beilaeufig mit, dass email_normalized greift (E32).
+        customerEmail = `Gast.${suffix}@Beispiel.TEST`;
+        const { data: customer, error: customerError } = await serviceClient
+            .from('customers')
+            .insert({ email: customerEmail, first_name: 'Test', last_name: `Gast ${suffix}` })
+            .select('id')
+            .single();
+        if (customerError) throw new Error(`Fixture: customers — ${customerError.message}`);
+        customerId = customer.id as string;
+    }
+
     // Abbau in umgekehrter Reihenfolge: ON DELETE RESTRICT (E22) laesst nichts
     // anderes zu — und genau das ist der Sinn der Entscheidung.
     const cleanup = async (): Promise<void> => {
@@ -97,6 +115,14 @@ export async function createFixture(options: { roomCount?: number; maxOccupancy?
             .from('room_blocks')
             .delete()
             .in('room_id', roomIds.length > 0 ? roomIds : ['00000000-0000-0000-0000-000000000000']);
+        if (customerId !== undefined) {
+            const { data: ownBookings } = await serviceClient.from('bookings').select('id').eq('customer_id', customerId);
+            const bookingIds = (ownBookings ?? []).map((row) => row.id as string);
+            if (bookingIds.length > 0) {
+                await serviceClient.from('booking_nights').delete().in('booking_id', bookingIds);
+                await serviceClient.from('bookings').delete().in('id', bookingIds);
+            }
+        }
         await serviceClient.from('room_type_rates').delete().eq('room_type_id', roomTypeId);
         await serviceClient.from('rooms').delete().eq('room_type_id', roomTypeId);
         await serviceClient.from('room_type_images').delete().eq('room_type_id', roomTypeId);
@@ -104,8 +130,15 @@ export async function createFixture(options: { roomCount?: number; maxOccupancy?
         if (ratePlanId !== undefined) {
             await serviceClient.from('rate_plans').delete().eq('id', ratePlanId);
         }
+        if (customerId !== undefined) {
+            await serviceClient.from('customers').delete().eq('id', customerId);
+        }
         await serviceClient.from('hotels').delete().eq('id', hotelId);
     };
 
-    return ratePlanId === undefined ? { hotelId, roomTypeId, roomIds, cleanup } : { hotelId, roomTypeId, roomIds, ratePlanId, cleanup };
+    const fixture: Fixture = { hotelId, roomTypeId, roomIds, cleanup };
+    if (ratePlanId !== undefined) fixture.ratePlanId = ratePlanId;
+    if (customerId !== undefined) fixture.customerId = customerId;
+    if (customerEmail !== undefined) fixture.customerEmail = customerEmail;
+    return fixture;
 }
