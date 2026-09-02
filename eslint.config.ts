@@ -29,6 +29,14 @@ export default defineConfig([
         },
     },
     {
+        // Datenbanktests und Konfigurationsdateien liegen ausserhalb von `src` und damit
+        // ausserhalb der `include`-Liste in tsconfig.json. Sie werden deshalb ohne
+        // Typinformation gelintet — geparst werden muessen sie trotzdem als TypeScript,
+        // sonst scheitert ESLint schon an `import type`.
+        files: ['supabase/tests/**/*.{ts,mts,cts}', '*.config.{ts,mts,cts}'],
+        extends: tseslint.configs.recommended,
+    },
+    {
         files: ['**/*.json'],
         plugins: { json },
         language: 'json/json',

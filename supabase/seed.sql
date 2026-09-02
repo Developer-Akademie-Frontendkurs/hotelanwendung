@@ -1,0 +1,8 @@
+-- Seed der lokalen Entwicklungsdatenbank (V4, Minimalseed).
+--
+-- Laeuft bei jedem `pnpm db:reset` nach allen Migrationen. Inhalt kommt in Phase 2/3:
+-- 1 Hotel (booking_horizon_days = 365), 3 Kategorien, 8 Zimmer, Rate-Plan STANDARD,
+-- 12 Monate Preise, NULL Buchungen.
+--
+-- Absichtlich klein: Buchungen entstehen beim Durchklicken und beweisen damit, dass
+-- create_booking laeuft. Tests legen ihre Fixtures selbst an (E34), nicht der Seed.
