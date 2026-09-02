@@ -585,9 +585,11 @@ man irgendetwas ändern darf.
 
 ### E26 — Kundenidentität über die E-Mail-Adresse
 
-**Entscheidung:** `customers.email` ist eindeutig und groß-/kleinschreibungsunabhängig (`citext`
-oder Unique-Index auf `lower(email)`). Eine Buchung ohne Konto verwendet einen bestehenden
-Kundendatensatz wieder, wenn die E-Mail bekannt ist.
+**Entscheidung:** `customers.email` ist eindeutig und groß-/kleinschreibungsunabhängig. Eine Buchung
+ohne Konto verwendet einen bestehenden Kundendatensatz wieder, wenn die E-Mail bekannt ist.
+
+> **Mechanismus in Runde 6 festgelegt (E32):** generierte Spalte `email_normalized`, nicht `citext`
+> und nicht der ursprünglich notierte funktionale Index.
 
 **Begründung:** Damit erfüllt sich die Anforderung „später Kundenkonten, in denen Kunden ihre
 Buchungen sehen" **von selbst**: Konto anlegen → `user_id` an den bestehenden Kunden hängen → alle
@@ -660,7 +662,7 @@ Vertrauensgrenze gar nicht erst — konsequent zu E17.
 **Begründung — das ist die Auszahlung von E8:** Ein als Nacht ausgebuchter Tag ist als Abreisetag
 völlig legitim.
 
-```
+```text
 Nacht:        3.   4.   5.   6.
 frei?         ✓    ✓    ✓    VOLL
 Buchung 3.→6. (3 Nächte, Abreise am 6.)  ← korrekt und buchbar
@@ -698,16 +700,134 @@ ist die Regel — und die Regel muss erklären können, warum sie abgewiesen hat
 
 ---
 
+## 4f. Entschieden (Runde 6) — Umsetzung
+
+Diese Runde entstand vor Beginn der Implementierung. Sie ändert an E1–E31 nichts, legt aber fünf
+Punkte fest, die dort offen blieben oder erst bei der Umsetzung sichtbar wurden.
+
+### E32 — Case-Insensitivität der E-Mail als **generierte Spalte**
+
+**Entscheidung:** `customers.email` bleibt `text` mit der Originalschreibweise; daneben
+`email_normalized text GENERATED ALWAYS AS (lower(email)) STORED NOT NULL UNIQUE`. Gesucht wird
+ausschließlich über `email_normalized`.
+
+**Begründung:** E26 erklärt die Case-Insensitivität für nicht verhandelbar, ließ den Mechanismus aber
+offen (`citext` oder Unique-Index auf `lower(email)`). Ein funktionaler Index garantiert zwar
+Eindeutigkeit, aber `where email = 'Max@Muster.de'` findet die Zeile trotzdem nicht — die Regel
+verlagert sich damit in die Disziplin jedes Aufrufers. Als generierte Spalte ist der Vergleich
+sichtbar, indiziert und nicht umgehbar. Das ist Leitsatz 7 („by construction statt by
+Aufmerksamkeit") auf einen Fall angewendet, in dem E26 ihn selbst schon einfordert.
+
+**Verworfen:**
+
+- **`citext`:** löst dasselbe eleganter, ist aber eine Extension, und die Case-Insensitivität wäre
+  eine Eigenschaft des Typs statt eine sichtbare Spalte. Vertretbar, nur nicht gewählt.
+- **Normalisierender Trigger** (`email` beim Schreiben kleinschreiben): zerstört die
+  Originalschreibweise unwiederbringlich — sie steht in jeder Bestätigungsmail.
+- **Funktionaler Index + Disziplin:** E26 bündelt die Kundensuche zwar auf genau eine Stelle
+  (`create_booking`), aber „ist ja nur eine Stelle" ist der Satz, nach dem es zwei werden.
+
+### E33 — Advisory-Lock ist **hotelweit**, nicht pro Kategorie
+
+**Entscheidung:** `create_booking` nimmt genau einen Lock:
+`pg_advisory_xact_lock(hashtext('booking:' || hotel_id))`.
+
+**Begründung:** Ein Lock pro Kategorie sähe nach mehr Durchsatz aus, verlangt aber, dass eine
+Mehrzimmerbuchung über mehrere Kategorien (E20/E27) mehrere Locks hält — und zwar in garantiert
+sortierter Reihenfolge, sonst verklemmen sich zwei gleichzeitige Gruppenbuchungen gegenseitig. Das
+ist ein Fehler, der nur unter Last auftritt und deshalb im Betrieb entdeckt wird, nicht in der
+Entwicklung. Bei einem Hotel mit ~15 Zimmern ist der Durchsatz belanglos (E10 sagt das bereits:
+„Buchungen pro Sekunde ≈ 0"), der Deadlock aber real.
+
+**Wichtig für später:** Wer feiner sperren will, löst das falsche Problem. Der benannte Upgrade-Pfad
+für Durchsatz ist die Inventartabelle aus E10, nicht eine feinere Lock-Granularität.
+
+### E34 — Sechs Tests, Vitest, eigener Lauf
+
+**Entscheidung:** Die Datenbankschicht bekommt echte Tests: Vitest gegen die lokale Instanz über
+`supabase-js`, hinter einem eigenen Skript `pnpm test:db` — **nicht** in `pnpm test`. Zwei Clients:
+Service-Role für Fixtures, anon für RLS. Getestet werden sechs Kriterien:
+
+| #   | Kriterium                                                             | beweist  |
+| --- | --------------------------------------------------------------------- | -------- |
+| 1   | überlappende Sperrung desselben Zimmers wird abgelehnt                | E18      |
+| 2   | überlappender Preiszeitraum derselben Kategorie wird abgelehnt        | E5       |
+| 3   | **Abreise = Anreise der nächsten Buchung wird akzeptiert**            | E8, E29  |
+| 4   | Nacht ohne Preiszeile → `kein_preis`, nicht Preis 0                   | E25      |
+| 5   | zwei gleichzeitige Buchungen aufs letzte Zimmer → genau eine gewinnt  | E10, E33 |
+| 6   | eingefrorener Preis bleibt nach Änderung der Saisonpreise unverändert | E5, E21  |
+
+**Begründung:** Auswahlkriterium ist nicht „wichtig", sondern **„fällt lautlos aus"**. Ein fehlender
+`CHECK` meldet sich nie — es wird irgendwann doppelt gebucht. Test 3 ist der teuerste
+Off-by-one-Fehler in Buchungssystemen, Test 5 ist laut E10 der einzige Beleg dafür, dass die
+Entscheidung mehr ist als eine Behauptung. Weitere Kriterien des Umsetzungsplans (z. B. `cancelled`
+ohne `cancelled_at`, anonymes `select` liefert 0 Zeilen) kommen mit, wenn sie beim Schreiben nichts
+kosten — sie sind aber nicht das Versprechen.
+
+**Warum nicht pgTAP:** Test 5 braucht zwei gleichzeitige Sessions. In TypeScript ist das
+`Promise.allSettled([rpc(), rpc()])`, in pgTAP eine Übung in `dblink`.
+
+**Warum nicht in `pnpm test`:** Der Standardlauf muss ohne Docker durchlaufen, sonst schlägt er bei
+jedem fehl, der nur das Frontend ansieht.
+
+**Bewusst ungeprüft:** die Wirksamkeit des Locks unter realem Lastprofil. Test 5 zeigt, dass
+Serialisierung greift, nicht wie sie sich bei hundert Anfragen verhält.
+
+### E35 — Umgebungstrennung: lokal ist die Wahrheit, `VITE_` ist eine Sicherheitsregel
+
+**Entscheidung:**
+
+1. Entwicklung läuft ausschließlich gegen die lokale Instanz (`http://127.0.0.1:54321`). Docker wird
+   damit Projektvoraussetzung.
+2. `.env` wird aus der Versionskontrolle genommen (`git rm --cached`) und in `.gitignore`
+   aufgenommen; committet wird `.env.example` mit den lokalen Standardwerten.
+3. Der Service-Role-Key heißt `SUPABASE_SERVICE_ROLE_KEY` — **ohne** `VITE_`-Präfix.
+
+**Begründung:** Zu 3 ist die Regel keine Konvention, sondern ein Schutzmechanismus: Vite bündelt
+_alles_ mit `VITE_`-Präfix in den Browser. Ein `VITE_SUPABASE_SERVICE_ROLE_KEY` wäre ein Key, der
+RLS umgeht, ausgeliefert an jeden Besucher. Die Namensregel verhindert das, bevor ein Review es
+bemerken müsste.
+
+Zu 1: Da die Cloud-Instanz ein Wegwerf-Spike ist, hieße Weiterentwickeln gegen sie, gegen ein Schema
+zu arbeiten, das es bald nicht mehr gibt. Nebeneffekt: die lokalen Zugangsdaten sind bei Supabase auf
+jeder Maschine identisch und können wörtlich in `.env.example` stehen —
+`pnpm install && pnpm db:start && pnpm dev` funktioniert damit ohne Geheimnisse.
+
+**Ausdrücklich benannt:** Der bisherige publishable key bleibt in der Git-Historie. Das ist folgenlos
+— er ist öffentlich (siehe E13) — soll aber nicht später für ein Versäumnis gehalten werden.
+
+**Und der Satz, der zu E13/E7 gehört:** In v1 gibt `is_staff()` hart `false` zurück; alles
+Administrative läuft über den Service-Role-Key. Der Tag, an dem jemand diesen Key ins Frontend legt,
+weil „der Admin-Bereich sonst nicht geht", ist der Tag, an dem RLS wertlos wird. Der Ausweg ist dann
+nicht der Key, sondern der in E13 benannte Seam: `is_staff()` an genau einer Stelle ändern.
+
+### E36 — `posts` bleibt, aber als eigene, benannte Spike-Migration
+
+**Entscheidung:** Die Tutorial-Tabelle `posts` bekommt eine eigene, **letzte** Migration mit
+Kommentarkopf „Kurs-Spike, nicht Teil der Domäne" plus Seed-Zeilen.
+
+**Begründung:** An ihr hängen drei Views (`PostsView`, `SinglePostView`, `AdminPostsView`) und zwei
+Routen. Da die Migrationshistorie bei `hotels` beginnt und nicht die Cloud einfängt, wäre `posts`
+lokal sonst nicht vorhanden — die drei Views liefen ab dem ersten `pnpm db:reset` ins Leere. Ein
+Kursprojekt, in dem die Hälfte der Routen bricht, ist als Lehrmaterial wertlos. Als eigene, klar
+gekennzeichnete Migration bleibt sichtbar, dass sie nicht zur Domäne gehört, und ihr Entfernen ist
+später ein `git rm` plus eine Drop-Migration.
+
+---
+
 ## 5. Offene Punkte
 
 | #   | Frage | hängt an |
 | --- | ----- | -------- |
 
-**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E31).
+**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E36).
 
-Ein Punkt wartet auf Bestätigung im Call: die **Umsetzungsinterpretation in E28** (feine Sperrgründe
-nur für `is_staff()`), weil sie eine Auslegung der Anforderung „der Kunde soll nur ‚Buchung nicht
-möglich' sehen" ist und keine ausdrückliche Entscheidung.
+Der zuvor offene Punkt ist erledigt: Die **Umsetzungsinterpretation in E28** (feine Sperrgründe nur
+für `is_staff()`) wurde in der Grilling-Runde vom 2026-09-02 ausdrücklich bestätigt. Ebenfalls dort
+entschieden: die Behandlung der bestehenden Cloud-Instanz (Wegwerf-Spike, Migrationshistorie beginnt
+bei `hotels`, **kein** `db pull`) — mit Datenverlust-Potenzial und deshalb ausdrücklich freigegeben.
+Der Zeitpunkt für RLS (früh, direkt nach Phase 2) und der Seed-Umfang (minimal) stehen im
+Umsetzungsplan, weil sie Vorgehen sind und nicht Domäne.
 
 Bewusst hinter dem Zaun (E15) und damit **kein** Teil dieses Schemas: Ausstattungsmerkmale,
 Zusatzleistungen, Zahlungen, Stornobedingungen, Gutscheine, Mehrsprachigkeit, OTA-Anbindung,
@@ -740,12 +860,13 @@ Für den Call als Zusammenfassung auf einer Folie:
 
 ## 7. Änderungshistorie
 
-| Datum      | Änderung                                                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-08-17 | Ausgangslage erhoben, Runde 1 (E1–E9) entschieden und begründet, Realtime-Rückfrage geklärt, Runde 2 aufgesetzt                      |
-| 2026-08-17 | Runde 2 (E10–E16) entschieden und begründet, Runde 3 aufgesetzt                                                                      |
-| 2026-08-17 | Runde 3 (E17–E23) entschieden und begründet, Runde 4 aufgesetzt                                                                      |
-| 2026-08-17 | Runde 4 (E24–E27): Q24 revidiert die Empfehlung — Verfügbarkeit pro Tag statt Minimum. Runde 5 aufgesetzt                            |
-| 2026-08-17 | Runde 5 (E28–E31) entschieden. Entscheidungsbaum vollständig, Frontier leer                                                          |
-| 2026-08-17 | **Freigabe erteilt.** `schema.md` (ERD + Tabellen + Funktionen + RLS) und `umsetzungsplan.md` (Phasen 1–10) erstellt                 |
-| 2026-08-17 | Artifact-Seite und FigJam-Board veröffentlicht; FigJam nach Domänen eingefärbt (Stammdaten / Preise / Buchungsvorgang / Fremdsystem) |
+| Datum      | Änderung                                                                                                                                                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-17 | Ausgangslage erhoben, Runde 1 (E1–E9) entschieden und begründet, Realtime-Rückfrage geklärt, Runde 2 aufgesetzt                                                                                                                     |
+| 2026-08-17 | Runde 2 (E10–E16) entschieden und begründet, Runde 3 aufgesetzt                                                                                                                                                                     |
+| 2026-08-17 | Runde 3 (E17–E23) entschieden und begründet, Runde 4 aufgesetzt                                                                                                                                                                     |
+| 2026-08-17 | Runde 4 (E24–E27): Q24 revidiert die Empfehlung — Verfügbarkeit pro Tag statt Minimum. Runde 5 aufgesetzt                                                                                                                           |
+| 2026-08-17 | Runde 5 (E28–E31) entschieden. Entscheidungsbaum vollständig, Frontier leer                                                                                                                                                         |
+| 2026-08-17 | **Freigabe erteilt.** `schema.md` (ERD + Tabellen + Funktionen + RLS) und `umsetzungsplan.md` (Phasen 1–10) erstellt                                                                                                                |
+| 2026-08-17 | Artifact-Seite und FigJam-Board veröffentlicht; FigJam nach Domänen eingefärbt (Stammdaten / Preise / Buchungsvorgang / Fremdsystem)                                                                                                |
+| 2026-09-02 | Grilling-Runde zur **Umsetzung**: Runde 6 (E32–E36) entschieden und begründet; E28 bestätigt; Cloud-Instanz als Wegwerf-Spike freigegeben; `schema.md` um E32/E33 korrigiert; Umsetzungsplan um die Vorgehensentscheidungen ergänzt |

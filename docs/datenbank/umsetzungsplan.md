@@ -3,7 +3,7 @@
 > **Zweck:** Diese Datei ist so geschrieben, dass die Umsetzung in einer **späteren Session**
 > aufgesetzt werden kann, ohne die Grilling-Unterhaltung wiederholen zu müssen.
 >
-> **Vorher lesen:** [README.md](./README.md) (Entscheidungen E1–E31 mit Begründung) und
+> **Vorher lesen:** [README.md](./README.md) (Entscheidungen E1–E36 mit Begründung) und
 > [schema.md](./schema.md) (normatives Schema).
 >
 > **Regel für die Umsetzung:** `schema.md` ist die Quelle der Wahrheit. Weicht der Plan davon ab,
@@ -17,24 +17,47 @@ Kopiervorlage für den ersten Prompt:
 
 > Lies `docs/datenbank/README.md`, `docs/datenbank/schema.md` und
 > `docs/datenbank/umsetzungsplan.md`. Wir setzen Phase **N** um. Halte dich an die Entscheidungen
-> E1–E31; wenn dir etwas widersprüchlich vorkommt, frag nach, statt zu raten.
+> E1–E36; wenn dir etwas widersprüchlich vorkommt, frag nach, statt zu raten.
 
-Vor jeder Phase: **Branch anlegen** (dieses Repo arbeitet mit Themenbranches, siehe
-`FORK-WORKFLOW.md`).
+**Branch- und Commit-Schnitt (V6):** Phasen 1–7 laufen auf **einem** Themenbranch
+(`datenbank-anbindung`), **ein Commit pro Phase**. Kein Branch und kein PR pro Phase — die Phasen
+bauen aufeinander auf und sind einzeln nie lauffähig, sieben PRs wären Zeremonie ohne Nutzen.
+(Der frühere Verweis auf `FORK-WORKFLOW.md` ist entfernt: diese Datei existiert im Repo nicht.)
 
-**Zustand der Umgebung (geprüft am 2026-08-17):**
+**Zustand der Umgebung (nachgeprüft am 2026-09-02):**
 
 | | Stand |
 | --- | --- |
-| Docker | vorhanden (Server 29.7.1) — Voraussetzung für die lokale Supabase-Instanz |
-| Supabase CLI | **nicht installiert** → Phase 1, Schritt 1 |
+| Docker | vorhanden (Server 29.7.2, containerized) — Voraussetzung für die lokale Supabase-Instanz |
+| Supabase CLI | **nicht installiert**; `supabase@2.116.0` per npm erreichbar → Phase 1, Schritt 1 |
+| Container-Registry | erreichbar (kein Firewall-Block) |
 | `supabase/`-Verzeichnis | existiert nicht |
 | Supabase-Client im Code | `src/shared/services/supabase.ts`, URL + publishable key **hart im Code** |
-| `.env` | existiert, Inhalt per Policy nicht lesbar — Werte muss Oliver selbst prüfen |
+| `.env` | existiert und ist **in Git getrackt**; Variablen heißen `VITE_SUPABASE_URL`, `VITE_SUPABASE_API_KEY` |
+| Tests | genau eine Datei (`src/_testing-spike/math.spec.ts`), keine `vitest.config.ts` |
+| Zimmerbilder | genau zwei: `double-premium.jpg`, `double-suite.jpg` — der Seed richtet sich danach (V4) |
+| `FORK-WORKFLOW.md` | **existiert nicht** (der frühere Verweis in diesem Plan war tot) |
 
 ---
 
-## Phase 1 — Werkzeuge und Projektgerüst (E7)
+## 0b. Vorgehensentscheidungen (Grilling-Runde 2026-09-02)
+
+Domänenentscheidungen stehen als E1–E36 in `README.md`. Was hier steht, ist **Vorgehen** — es ändert
+das Schema nicht, aber es bestimmt, wie diese Umsetzung abläuft.
+
+| # | Entscheidung | Begründung in Kurzform |
+| --- | --- | --- |
+| **V1** | Diese Umsetzung umfasst **Phase 1–7**. Phase 8–9 (Typen, Service-Schicht, Kalender-UI) und Phase 10 (Cloud) sind vertagt. | Phase 8 hängt an Typen, die es erst nach Phase 7 gibt; Phase 9 ist UI-Arbeit mit eigenem Rhythmus. |
+| **V2** | Die bestehende Cloud-Instanz ist ein **Wegwerf-Spike**. Die Migrationshistorie beginnt bei `hotels`; **kein** `supabase db pull`. | Ein `db pull` würde die Spike-Tabelle `posts` für immer als Migration 0 zementieren. Freigegeben trotz Datenverlust-Potenzial — die Instanz enthält nur Tutorial-Daten. |
+| **V3** | **RLS geht direkt nach Phase 2 an**, nicht erst in Phase 7. Seeds laufen über den Service-Role-Key. | Sonst baut man fünf Phasen gegen eine offene Datenbank und weiß beim Anschalten nicht mehr, welche Abfrage aus welchem Grund leer ist. |
+| **V4** | **Minimalseed:** 1 Hotel, 3 Kategorien, 8 Zimmer, Rate-Plan `STANDARD`, 12 Monate Preise, **null Buchungen**. `hotels.booking_horizon_days` im Seed auf **365**. | Der Horizont-Default 540 würde bei 12 Monaten Preisen ~5 Monate „nicht buchbar" erzeugen — korrekt laut E25, sieht aber aus wie ein Bug. Horizont und Preisabdeckung müssen sich decken. |
+| **V5** | Testumfang und -werkzeug: siehe **E34**. | Steht in der E-Reihe, weil die Auswahl der sechs Kriterien direkt an Domänenentscheidungen hängt. |
+| **V6** | Ein Themenbranch, **ein Commit pro Phase**. | Sieben PRs für sieben aufeinander aufbauende Migrationen sind Zeremonie ohne Nutzen. |
+| **V7** | Dokumentation wird **vor** der ersten Migration fortgeschrieben, nicht danach. | Migrationen kann man später lesen, Begründungen nicht rekonstruieren. Genau deshalb existiert `README.md`. |
+
+---
+
+## Phase 1 — Werkzeuge und Projektgerüst (E7, E35)
 
 **Ziel:** Schema als Code, lokal reproduzierbar, ohne die Cloud-Instanz anzufassen.
 
@@ -45,15 +68,28 @@ Vor jeder Phase: **Branch anlegen** (dieses Repo arbeitet mit Themenbranches, si
 4. Skripte in `package.json` ergänzen:
    `db:start`, `db:stop`, `db:reset` (`supabase db reset` — spielt alle Migrationen + Seed neu ein),
    `db:diff`, `db:types` (`supabase gen types typescript --local`)
-5. Verbindungsdaten aus dem Code in `.env` verschieben (`VITE_SUPABASE_URL`,
-   `VITE_SUPABASE_PUBLISHABLE_KEY`) und `src/shared/services/supabase.ts` auf `import.meta.env`
-   umstellen.
+5. Umgebung trennen (E35):
+   - `git rm --cached .env`, `.env` in `.gitignore` aufnehmen
+   - `.env.example` committen — mit den **lokalen** Werten (`http://127.0.0.1:54321` + der lokale
+     anon key; beide sind bei Supabase auf jeder Maschine identisch und kein Geheimnis)
+   - `.env` lokal auf die Werte der lokalen Instanz setzen; `pnpm dev` zeigt ab jetzt **nicht** mehr
+     auf die Cloud (V2)
+   - `src/shared/services/supabase.ts` auf `import.meta.env` umstellen
+   - Der Service-Role-Key heißt `SUPABASE_SERVICE_ROLE_KEY` — **ohne** `VITE_`-Präfix
+6. Testgerüst anlegen (E34): `pnpm test:db` als eigenes Skript, eigene Vitest-Config, zwei Clients
+   (Service-Role für Fixtures, anon für RLS). `pnpm test` bleibt unverändert und darf **nie** Docker
+   voraussetzen.
 
-**Zu Schritt 5, damit im Call keine Verwirrung entsteht:** Der publishable key ist **kein Geheimnis**
+**Zu Schritt 5, damit keine Verwirrung entsteht:** Der publishable/anon key ist **kein Geheimnis**
 und darf im Browser stehen — das Verschieben in `.env` dient der *Umgebungstrennung* (lokal / Cloud),
-nicht der Geheimhaltung. Der Schutz ist RLS (E13), nicht die Verborgenheit des Keys.
+nicht der Geheimhaltung. Der Schutz ist RLS (E13), nicht die Verborgenheit des Keys. Die
+`VITE_`-Regel schützt dagegen sehr wohl etwas: Vite bündelt jede `VITE_`-Variable in den Browser,
+und der Service-Role-Key umgeht RLS vollständig.
 
-**Fertig, wenn:** `pnpm db:reset` fehlerfrei durchläuft und `pnpm dev` weiter funktioniert.
+**Ab hier ist Docker Projektvoraussetzung** — das gehört ins README des Repos, nicht nur hierher.
+
+**Fertig, wenn:** `pnpm db:reset` fehlerfrei durchläuft, `pnpm dev` gegen die lokale Instanz
+funktioniert und `pnpm test` ohne laufendes Docker grün ist.
 
 ---
 
@@ -67,10 +103,17 @@ geteilt sind — ab dann wird nur noch vorwärts migriert.
 3. `rooms`
 4. `room_type_images` + Storage-Bucket `room-images` (öffentlich lesbar, Schreiben nur `is_staff()`)
 5. `room_blocks` inkl. `EXCLUDE`-Constraint
-6. Seed: 4–5 Kategorien, ~15 Zimmer, Bilder aus `src/assets/img/` in den Bucket
+6. Seed (V4, minimal): 1 Hotel mit `booking_horizon_days = 365`, **3** Kategorien, **8** Zimmer.
+   Es existieren genau zwei Zimmerbilder (`double-premium.jpg`, `double-suite.jpg`) — die dritte
+   Kategorie bleibt bewusst ohne Bild, denn „Kategorie ohne Bild" ist ein Fall, den die UI später
+   ohnehin aushalten muss.
+7. **RLS jetzt aktivieren (V3)**, nicht erst in Phase 7: `is_staff()` (v1 `false`),
+   `current_customer_id()`, `ENABLE ROW LEVEL SECURITY` auf den bereits existierenden Tabellen samt
+   Policies. Jede spätere Tabelle bekommt ihre Policies in derselben Migration, in der sie entsteht.
+   Phase 7 prüft danach nur noch das Gesamtbild.
 
 **Fertig, wenn:** überlappende Sperrungen für dasselbe Zimmer von der Datenbank **abgelehnt** werden
-(negativer Test — der Fehler ist das erwartete Ergebnis).
+(Test 1 aus E34 — der Fehler ist das erwartete Ergebnis).
 
 ---
 
@@ -79,16 +122,19 @@ geteilt sind — ab dann wird nur noch vorwärts migriert.
 1. `rate_plans` + Seed-Zeile `STANDARD`
 2. `room_type_rates` inkl. `daterange`-Generierung und `EXCLUDE`-Constraint
 3. `find_rate_gaps(tage int)`
-4. Seed: Saisonpreise für die nächsten 12 Monate
+4. Seed: Saisonpreise für die nächsten 12 Monate — deckungsgleich mit
+   `booking_horizon_days = 365` (V4), damit keine Lücke entsteht, die nur nach einem Fehler aussieht
 
 **Fertig, wenn:** zwei überlappende Preiszeiträume für dieselbe Kategorie und denselben Rate-Plan
-abgelehnt werden **und** `find_rate_gaps(365)` eine absichtlich gerissene Lücke findet.
+abgelehnt werden (Test 2 aus E34) **und** `find_rate_gaps(365)` eine absichtlich gerissene Lücke
+findet.
 
 ---
 
-## Phase 4 — Kunden und Buchungen (E4, E11, E16, E20–E23, E26, E27)
+## Phase 4 — Kunden und Buchungen (E4, E11, E16, E20–E23, E26, E27, E32)
 
-1. `citext`-Extension (oder Verzicht darauf → `UNIQUE (lower(email))`, siehe `schema.md`)
+1. ~~`citext`-Extension~~ — **entfällt (E32).** Stattdessen: `customers.email_normalized` als
+   `GENERATED ALWAYS AS (lower(email)) STORED NOT NULL UNIQUE`
 2. `customers`
 3. `booking_groups`
 4. `bookings` inkl. aller `CHECK`s, generierter `stay`-Spalte und Teil-`EXCLUDE`
@@ -100,8 +146,8 @@ abgelehnt werden **und** `find_rate_gaps(365)` eine absichtlich gerissene Lücke
 
 **Fertig, wenn:** zwei Buchungen mit **demselben zugewiesenen Zimmer** und überlappendem Zeitraum
 abgelehnt werden, eine Buchung mit `status = 'cancelled'` ohne `cancelled_at` abgelehnt wird, und
-eine Buchung mit Abreise = Anreise der nächsten **akzeptiert** wird (das ist der halb-offene Test aus
-E8/E29 — er ist der wichtigste in diesem Satz).
+eine Buchung mit Abreise = Anreise der nächsten **akzeptiert** wird (Test 3 aus E34, der halb-offene
+Fall aus E8/E29 — er ist der wichtigste in diesem Satz).
 
 ---
 
@@ -122,45 +168,56 @@ E8/E29 — er ist der wichtigste in diesem Satz).
 | Kategorie mit 3 Zimmern, 3 blockierende Buchungen in einer Nacht | `rooms_free = 0`, Grund `ausgebucht` |
 | dieselbe Nacht, eine Buchung storniert | `rooms_free = 1` |
 | ein Zimmer der Kategorie an dieser Nacht gesperrt | `rooms_free` um 1 kleiner (E18) |
-| Nacht ohne Preiszeile | nicht buchbar, Grund `kein_preis` — **nicht** Preis 0 (E25) |
+| Nacht ohne Preiszeile | nicht buchbar, Grund `kein_preis` — **nicht** Preis 0 (E25). Test 4 aus E34 |
 
 Zusätzlich: anonyme Aufrufe erhalten **niemals** `kein_preis`/`zu_klein`, sondern den generischen
 Grund (E28), und Anfragen jenseits `booking_horizon_days` liefern `ausserhalb_horizont` (E30).
 
 ---
 
-## Phase 6 — Buchen (E6, E10, E21, E26, E31)
+## Phase 6 — Buchen (E6, E10, E21, E26, E31, E32, E33)
 
-1. `create_booking(...)` nach dem Ablauf in `schema.md`, Abschnitt 3
+1. `create_booking(...)` nach dem Ablauf in `schema.md`, Abschnitt 3 — der Advisory-Lock ist
+   **hotelweit** (`hashtext('booking:' || hotel_id)`), nicht pro Kategorie (E33)
 2. Strukturierter Fehler: Code + Datum + Grund (E31)
 3. Mehrere Zimmer: `booking_groups`-Zeile + *n* `bookings` in **einer** Transaktion
 4. `booking_nights` aus den Saisonpreisen einfrieren
 5. `booking_events`-Eintrag `created`
 
 **Fertig, wenn:** ein Nebenläufigkeitstest zwei gleichzeitige Buchungen auf das **letzte** Zimmer
-abfeuert und **genau eine** gewinnt, während die andere einen strukturierten Fehler bekommt. Dieser
-Test ist der Kern von E10 — ohne ihn ist die Entscheidung nur behauptet.
+abfeuert und **genau eine** gewinnt, während die andere einen strukturierten Fehler bekommt
+(Test 5 aus E34). Dieser Test ist der Kern von E10 — ohne ihn ist die Entscheidung nur behauptet.
 
-Zusätzlich: eine zweite Buchung mit derselben E-Mail erzeugt **keinen** zweiten Kundendatensatz
-(E26), und der eingefrorene Preis bleibt unverändert, nachdem die Saisonpreise anschließend geändert
-wurden (E5 — der Test, der beweist, dass eine Buchung ein Vertrag ist).
+Zusätzlich: eine zweite Buchung mit derselben E-Mail in **anderer Schreibweise** erzeugt **keinen**
+zweiten Kundendatensatz (E26/E32), und der eingefrorene Preis bleibt unverändert, nachdem die
+Saisonpreise anschließend geändert wurden (Test 6 aus E34 — der Test, der beweist, dass eine Buchung
+ein Vertrag ist).
 
 ---
 
-## Phase 7 — RLS (E13)
+## Phase 7 — RLS: Abnahme des Gesamtbilds (E13)
 
-1. `is_staff()` (v1: `false`) und `current_customer_id()`
-2. `ENABLE ROW LEVEL SECURITY` auf **allen** Tabellen
-3. Policies gemäß `schema.md`, Abschnitt 4 — ausschließlich über die zwei Funktionen
-4. `booking_events`: `UPDATE`/`DELETE`-Rechte entziehen (append-only durchsetzen, nicht vereinbaren)
+Mit **V3** ist RLS bereits seit Phase 2 aktiv, und jede Tabelle hat ihre Policies in derselben
+Migration bekommen, in der sie entstand. Phase 7 aktiviert also nichts mehr — sie **prüft** und
+schließt die Lücken, die beim schrittweisen Bauen entstanden sind.
+
+1. Vollständigkeitsprüfung: hat **jede** Tabelle `ENABLE ROW LEVEL SECURITY`, und ist für jede
+   Zeile in `schema.md`, Abschnitt 4, eine Policy vorhanden?
+2. Prüfen, dass keine Policy `auth.uid()` direkt verwendet — ausschließlich `is_staff()` und
+   `current_customer_id()` (E13). Ein verstreutes `auth.uid()` ist der Anfang des Driftens.
+3. `booking_events`: `UPDATE`/`DELETE`-Rechte entziehen (append-only durchsetzen, nicht vereinbaren)
+4. `EXECUTE`-Rechte auf die RPCs gezielt vergeben, `search_path` bei jeder `SECURITY
+   DEFINER`-Funktion fixiert
 
 **Fertig, wenn:** ein anonymer Client `select * from bookings` mit **0 Zeilen** (nicht mit einem
 Fehler) beantwortet bekommt und ein direktes `insert into bookings` abgelehnt wird — Buchen geht nur
 über die RPC.
 
-**Reihenfolgehinweis:** RLS kann auch schon nach Phase 2 aktiviert werden. Der Vorteil: man baut nie
-gegen eine offene Datenbank und merkt fehlende Policies sofort. Der Nachteil: mehr Reibung beim
-Seeden. Empfehlung: **RLS früh an**, Seeds über den Service-Role-Key.
+**Der Satz, der hierher gehört (E35):** In v1 gibt `is_staff()` hart `false` zurück. Damit läuft
+alles Administrative über den Service-Role-Key, der **nie** in den Browser darf. Der Tag, an dem
+jemand ihn ins Frontend legt, weil „der Admin-Bereich sonst nicht geht", ist der Tag, an dem RLS
+wertlos wird. Der Ausweg ist dann nicht der Key, sondern der Seam aus E13: `is_staff()` an genau
+einer Stelle ändern.
 
 ---
 
@@ -195,17 +252,15 @@ die Seite Anschlussnächte nicht.
 
 ## Phase 10 — Erst danach: Cloud
 
-1. `pnpm supabase link` gegen das bestehende Projekt
-2. `supabase db push`
-3. `posts`-Spike-Tabelle bewerten: behalten (Tutorial-Referenz) oder in einer eigenen Migration
-   entfernen
+**Entschieden (V2):** Die bestehende Instanz ist ein Wegwerf-Spike. **Kein** `supabase db pull` — die
+Migrationshistorie beginnt bei `hotels`. Das war die Entscheidung mit Datenverlust-Potenzial, und sie
+ist am 2026-09-02 ausdrücklich freigegeben worden; die Instanz enthält ausschließlich Daten aus dem
+`posts`-Tutorial.
 
-**Vorher klären, weil es Daten betrifft:** Was passiert mit der bestehenden Cloud-Instanz? Sie
-enthält bereits `posts` und wurde per Dashboard gebaut, also existiert für sie **keine**
-Migrationshistorie. Optionen: (a) Cloud-Schema per `supabase db pull` als Ausgangsmigration
-einfangen, dann darauf aufbauen; (b) Instanz als Wegwerf-Spike behandeln und neu aufsetzen.
-**Das ist eine Entscheidung mit Datenverlust-Potenzial und gehört in den Call, nicht in eine
-Agenten-Session.**
+1. `pnpm supabase link` gegen das bestehende Projekt (oder ein frisches anlegen)
+2. `supabase db push` — die Cloud erhält damit erstmals eine echte Migrationshistorie
+3. `posts` kommt per E36 als eigene, letzte Migration mit — nichts weiter zu entscheiden
+4. `.env` für die Cloud **nicht** committen (E35); nur `.env.example` ist im Repo
 
 ---
 
@@ -227,13 +282,20 @@ Reihenfolge nach Nutzen, jeweils mit der Entscheidung, die den Weg offen gehalte
 
 ---
 
-## Offene Punkte für den Call
+## Vormals offene Punkte — Stand 2026-09-02
 
-1. **E28-Interpretation:** feine Sperrgründe nur für `is_staff()` — bestätigt am 2026-08-17,
-   im Code noch zu belegen.
-2. **Cloud-Instanz** (Phase 10): `db pull` oder neu aufsetzen?
-3. **`citext`** oder `UNIQUE (lower(email))`?
-4. **RLS-Zeitpunkt:** nach Phase 2 (empfohlen) oder erst Phase 7?
-5. **Seed-Umfang:** reicht ein Minimalseed, oder soll ein realistischer Datenbestand
-   (12 Monate Preise, ~50 Buchungen) entstehen, damit die Verfügbarkeitslogik sichtbar arbeitet?
-   Empfehlung: realistisch — bei drei Buchungen sieht jede Kapazitätsrechnung richtig aus.
+Alle fünf sind entschieden. Sie bleiben hier stehen, damit nachvollziehbar ist, *dass* sie eine Frage
+waren, und nicht rückblickend als selbstverständlich gelten.
+
+| # | Frage | Entschieden |
+| --- | --- | --- |
+| 1 | E28-Interpretation: feine Sperrgründe nur für `is_staff()` | **bestätigt.** Konsequenz benannt: da `is_staff()` in v1 `false` ist, sieht sie zunächst niemand — `find_rate_gaps()` ist der einzige Weg, eine Preislücke zu bemerken (E35) |
+| 2 | Cloud-Instanz: `db pull` oder neu? | **neu** — Wegwerf-Spike, Historie beginnt bei `hotels` (V2) |
+| 3 | `citext` oder `UNIQUE (lower(email))`? | **keins von beiden:** generierte Spalte `email_normalized` (E32) |
+| 4 | RLS-Zeitpunkt | **früh**, direkt nach Phase 2 (V3) |
+| 5 | Seed-Umfang | **minimal** (V4). Damit sind die „Fertig, wenn"-Kriterien nicht aus dem Seed heraus prüfbar — deshalb legt jeder Test seine Fixtures selbst an (E34) |
+
+**Was bewusst ungeprüft bleibt:** die Wirksamkeit des Advisory-Locks unter realem Lastprofil. Test 5
+aus E34 zeigt, dass Serialisierung greift — nicht, wie sie sich bei hundert gleichzeitigen Anfragen
+verhält. Bei einem Hotel dieser Größe ist das die richtige Lücke; sie soll nur keine Überraschung
+sein.

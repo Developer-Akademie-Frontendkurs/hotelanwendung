@@ -3,7 +3,7 @@
 > **Dies ist das normative Dokument.** Artifact-Seite und FigJam-Board sind **Ableitungen** (E9).
 > Geändert wird immer erst hier.
 >
-> Begründung jeder Entscheidung: [README.md](./README.md) (E1–E31).
+> Begründung jeder Entscheidung: [README.md](./README.md) (E1–E36).
 > Umsetzung: [umsetzungsplan.md](./umsetzungsplan.md).
 
 ---
@@ -98,7 +98,8 @@ erDiagram
     CUSTOMERS {
         uuid id PK
         uuid user_id FK "nullable - E4"
-        citext email UK "case-insensitive - E26"
+        text email "Originalschreibweise - E26"
+        text email_normalized UK "generiert lower(email) - E32"
         text first_name
         text last_name
         text phone
@@ -267,20 +268,26 @@ Zwei widersprüchliche Preise für dieselbe Nacht sind damit **unmöglich** — 
 Doku", sondern von der Datenbank abgelehnt. Lücken bleiben erlaubt und bedeuten „nicht buchbar"
 (E25).
 
-### `customers` (E4, E26)
+### `customers` (E4, E26, E32)
 
 | Spalte | Typ | Regeln |
 | --- | --- | --- |
 | `id` | `uuid` | PK |
 | `user_id` | `uuid` | `UNIQUE NULL REFERENCES auth.users(id) ON DELETE SET NULL` |
-| `email` | `citext` | `NOT NULL UNIQUE` |
+| `email` | `text` | `NOT NULL` — Originalschreibweise, so wie der Gast sie eingegeben hat |
+| `email_normalized` | `text` | `GENERATED ALWAYS AS (lower(email)) STORED`, `NOT NULL UNIQUE` (E32) |
 | `first_name`, `last_name` | `text` | `NOT NULL` |
 | `phone` | `text` | |
 
 `ON DELETE SET NULL` ist hier — und **nur** hier — richtig, obwohl E22 `SET NULL` verwirft: Wird das
 Supabase-Konto gelöscht, darf der Kunde samt Buchungen bestehen bleiben. Genau das ist der Sinn der
-Trennung von `auth.users`. Alternativ `citext` durch `text` + `UNIQUE (lower(email))` ersetzen, falls
-die Extension nicht gewünscht ist — die Case-Insensitivität selbst ist nicht verhandelbar (E26).
+Trennung von `auth.users`.
+
+**Zur Case-Insensitivität (E32):** Kein `citext`, kein funktionaler Index — eine **generierte
+Spalte**. Der Vergleich ist damit eine Spalte und keine Konvention: gesucht wird immer über
+`email_normalized = lower($1)`, und die Eindeutigkeit hängt an einem gewöhnlichen `UNIQUE`. Die
+Originalschreibweise bleibt in `email` erhalten, weil sie in der Bestätigungsmail sichtbar ist. Die
+Case-Insensitivität selbst ist nicht verhandelbar (E26) — nur ihr Mechanismus war offen.
 
 ### `booking_groups` (E27)
 
@@ -367,12 +374,12 @@ Ohne Backend ist die Datenbank die letzte Verteidigungslinie (Leitsatz 1). Alle 
 | `is_blocking_status(text)` | `IMMUTABLE`; „belegt Kapazität" = alles außer `cancelled`. Einziger Ort. | E11 |
 | `availability_calendar(von, bis, erwachsene, kinder, kategorie?)` | **eine Zeile pro Nacht**: `rooms_free`, `unavailable_reason`. Füttert den Kalender. | E24, E28 |
 | `search_availability(anreise, abreise, erwachsene, kinder)` | **eine Zeile pro Kategorie**: Minimum über den Zeitraum, Gesamtpreis. Füttert Ergebnisliste; wird von `create_booking` intern genutzt. | E17, E28 |
-| `create_booking(...)` | Advisory-Lock → Prüfung → `customers`-Upsert → `bookings` + `booking_nights` + `booking_events`, alles in **einer** Transaktion. Strukturierter Fehler bei Ablehnung. | E10, E26, E31 |
+| `create_booking(...)` | Hotelweiter Advisory-Lock → Prüfung → `customers`-Upsert → `bookings` + `booking_nights` + `booking_events`, alles in **einer** Transaktion. Strukturierter Fehler bei Ablehnung. | E10, E26, E31, E32, E33 |
 | `find_rate_gaps(tage)` | Admin: Nächte ohne Preiszeile | E25 |
 
 ### Kapazität pro Nacht — die vollständige Formel
 
-```
+```text
 kapazitaet(kategorie, nacht) =
       Anzahl aktive Zimmer der Kategorie
     − Anzahl an dieser Nacht gesperrte Zimmer der Kategorie      (E18)
@@ -402,14 +409,14 @@ aus, für den Betrieb sind es entgegengesetzte Signale.
 
 ### `create_booking` — Ablauf
 
-```
-1. pg_advisory_xact_lock(...)                      -- serialisiert Buchungen (E10)
-2. Horizont, Vergangenheit, Belegung prüfen        -- E30, E15
-3. search_availability() für den Zeitraum          -- eine Wahrheit, kein Copy-Paste
+```text
+1. pg_advisory_xact_lock(hashtext('booking:' || hotel_id))  -- EIN Lock fuers Hotel (E10, E33)
+2. Horizont, Vergangenheit, Belegung pruefen        -- E30, E15
+3. search_availability() fuer den Zeitraum          -- eine Wahrheit, kein Copy-Paste
 4. bei Ablehnung: strukturierter Fehler
    { code, datum, grund }                          -- E31
-5. customers: per lower(email) finden oder anlegen  -- E26
-6. bookings einfügen (Referenz erzeugen)            -- E23
+5. customers: per email_normalized finden oder anlegen -- E26, E32
+6. bookings einfuegen (Referenz erzeugen)           -- E23
 7. booking_nights aus den Saisonpreisen einfrieren  -- E21
 8. booking_events: 'created'                        -- E12
    -- bei mehreren Zimmern: booking_groups-Zeile + n bookings, alles in DIESER Transaktion (E20/E27)
@@ -417,6 +424,13 @@ aus, für den Betrieb sind es entgegengesetzte Signale.
 
 Schritt 3 ruft dieselbe Funktion auf, die auch die Ergebnisliste füttert. Zwei Implementierungen
 derselben Regel wären die eigentliche Fehlerquelle.
+
+**Zu Schritt 1 (E33):** Der Lock ist **hotelweit**, nicht pro Kategorie. Eine feinere Granularität
+sähe nach mehr Durchsatz aus, würde aber verlangen, dass eine Buchung über mehrere Kategorien
+(E20/E27) mehrere Locks hält — und zwar in garantiert sortierter Reihenfolge, sonst verklemmen sich
+zwei gleichzeitige Gruppenbuchungen gegenseitig. Bei einem Hotel dieser Größe ist der Durchsatz
+belanglos, der Deadlock aber real. Wer das später ändern will, ändert nicht den Lock, sondern führt
+die Inventartabelle aus E10 ein.
 
 ---
 
