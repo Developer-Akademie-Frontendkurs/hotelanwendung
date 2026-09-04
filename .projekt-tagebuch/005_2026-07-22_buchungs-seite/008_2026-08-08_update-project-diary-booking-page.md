@@ -110,4 +110,4 @@ Aus den drei Doku-Commits dieses Branches (`e98c3b9`, `5cdc274`, `a64a8ff`) läs
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../005_2026-07-22_buchungs-seite.md) · [Nächster Commit →](009_2026-08-26_projekttagebuch-aktualisiert.md)

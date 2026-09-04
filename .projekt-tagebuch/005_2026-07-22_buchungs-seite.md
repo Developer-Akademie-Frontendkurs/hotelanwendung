@@ -1,8 +1,8 @@
-[← Vorheriger Branch](004_2026-06-10_startseite-erstellen.md) · [📓 Index](000_index.md)
+[← Vorheriger Branch](004_2026-06-10_startseite-erstellen.md) · [📓 Index](000_index.md) · [Nächster Branch →](006_2026-08-26_datenbank-anbindung.md)
 
 # 005 – Branch `buchungs-seite`
 
-**Erster Commit:** 2026-07-22 · **Commits:** 8 · **Status:** offen
+**Erster Commit:** 2026-07-22 · **Commits:** 9 · **Status:** gemergt in `main`
 
 ## Ziel des Branches
 
@@ -20,16 +20,17 @@ Nachdem die Startseite steht (Branch `startseite-erstellen`), bekommt die Hotela
 
 ## Commits
 
-| Nr.                                                                                           | Datum      | Beschreibung                                                                                |
-| --------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------- |
-| [001](005_2026-07-22_buchungs-seite/001_2026-07-22_add-booking-view-calendar.md)              | 2026-07-22 | Buchungsseite mit interaktivem Kalender und `afterRender`-Lebenszyklus                      |
-| [002](005_2026-07-22_buchungs-seite/002_2026-07-22_new-project-diary-entry.md)                | 2026-07-22 | Projekttagebuch für den neuen Branch anlegen (reiner Doku-Commit)                           |
-| [003](005_2026-07-22_buchungs-seite/003_2026-07-29_update-booking-view-weekend-cell-state.md) | 2026-07-29 | Feinschliff des Kalenders: festes 42-Zellen-Raster, Wochenend-Zustand und Nachbarmonat-Tage |
-| [004](005_2026-07-22_buchungs-seite/004_2026-07-29_update-project-diary-booking-view.md)      | 2026-07-29 | Projekttagebuch nachziehen (reiner Doku-Commit)                                             |
-| [005](005_2026-07-22_buchungs-seite/005_2026-08-05_add-header-configurations.md)              | 2026-08-05 | Header als konfigurierbare Komponente: `MainHeader`, `HeaderConfig` und Header pro Route    |
-| [006](005_2026-07-22_buchungs-seite/006_2026-08-05_add-booking-header-to-routing.md)          | 2026-08-05 | Eigener Buchungs-Header für die Route `/buchung`                                            |
-| [007](005_2026-07-22_buchungs-seite/007_2026-08-08_booking-state-management-step-tracking.md) | 2026-08-08 | Geteilter Buchungszustand mit Abo-Mechanismus und live aktualisierte Schritt-Anzeige        |
-| [008](005_2026-07-22_buchungs-seite/008_2026-08-08_update-project-diary-booking-page.md)      | 2026-08-08 | Projekttagebuch nachziehen: Header und Buchungszustand (reiner Doku-Commit)                 |
+| Nr.                                                                                           | Datum      | Beschreibung                                                                                      |
+| --------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------- |
+| [001](005_2026-07-22_buchungs-seite/001_2026-07-22_add-booking-view-calendar.md)              | 2026-07-22 | Buchungsseite mit interaktivem Kalender und `afterRender`-Lebenszyklus                            |
+| [002](005_2026-07-22_buchungs-seite/002_2026-07-22_new-project-diary-entry.md)                | 2026-07-22 | Projekttagebuch für den neuen Branch anlegen (reiner Doku-Commit)                                 |
+| [003](005_2026-07-22_buchungs-seite/003_2026-07-29_update-booking-view-weekend-cell-state.md) | 2026-07-29 | Feinschliff des Kalenders: festes 42-Zellen-Raster, Wochenend-Zustand und Nachbarmonat-Tage       |
+| [004](005_2026-07-22_buchungs-seite/004_2026-07-29_update-project-diary-booking-view.md)      | 2026-07-29 | Projekttagebuch nachziehen (reiner Doku-Commit)                                                   |
+| [005](005_2026-07-22_buchungs-seite/005_2026-08-05_add-header-configurations.md)              | 2026-08-05 | Header als konfigurierbare Komponente: `MainHeader`, `HeaderConfig` und Header pro Route          |
+| [006](005_2026-07-22_buchungs-seite/006_2026-08-05_add-booking-header-to-routing.md)          | 2026-08-05 | Eigener Buchungs-Header für die Route `/buchung`                                                  |
+| [007](005_2026-07-22_buchungs-seite/007_2026-08-08_booking-state-management-step-tracking.md) | 2026-08-08 | Geteilter Buchungszustand mit Abo-Mechanismus und live aktualisierte Schritt-Anzeige              |
+| [008](005_2026-07-22_buchungs-seite/008_2026-08-08_update-project-diary-booking-page.md)      | 2026-08-08 | Projekttagebuch nachziehen: Header und Buchungszustand (reiner Doku-Commit)                       |
+| [009](005_2026-07-22_buchungs-seite/009_2026-08-26_projekttagebuch-aktualisiert.md)           | 2026-08-26 | Tagebuch vervollständigen: Doku-Commits nachdokumentiert, Nummern verschoben (reiner Doku-Commit) |
 
 ## Zusammenfassung
 
@@ -41,10 +42,12 @@ Ab Commit 005 verschiebt sich der Fokus vom Kalender auf die **Struktur der Anwe
 
 Commit 007 löst schließlich ein Problem, das mit der reinen View-Struktur nicht mehr zu lösen war: Der **Kalender** kennt den gewählten Zeitraum, der **Header** soll ihn in seiner Schritt-Anzeige spiegeln – aber beide liegen an völlig verschiedenen Stellen im Aufbau. Die Antwort ist ein **geteilter Zustand** unter `src/shared/state/`, der die Daten außerhalb beider Views hält und über ein **Abo (`subscribe`/`notify`, Observer-Muster)** über Änderungen informiert. Damit reagiert die Fortschrittsanzeige live auf jeden Klick im Kalender, ohne dass Header und View voneinander wissen. Als notwendige Ergänzung bekommt der Lebenszyklus ein **Aufräumen** (`destroy`): Der Router meldet den alten Header beim Seitenwechsel ab, damit keine verwaisten Listener zurückbleiben.
 
-Zwischen den Code-Commits liegen drei reine **Doku-Commits** (002, 004 und 008), die das Projekttagebuch jeweils an den erreichten Code-Stand nachziehen. Sie sind bewusst mitdokumentiert: Zum einen gehören sie zur Historie des Branches, zum anderen zeigen sie ein Arbeitsmuster, das sich lohnt – **erst das Feature bauen, dann in einem eigenen Commit die Doku nachziehen**. So bleiben Code-Diffs frei von Markdown-Rauschen und umgekehrt.
+Zwischen und nach den Code-Commits liegen vier reine **Doku-Commits** (002, 004, 008 und 009), die das Projekttagebuch jeweils an den erreichten Code-Stand nachziehen. Sie sind bewusst mitdokumentiert: Zum einen gehören sie zur Historie des Branches, zum anderen zeigen sie ein Arbeitsmuster, das sich lohnt – **erst das Feature bauen, dann in einem eigenen Commit die Doku nachziehen**. So bleiben Code-Diffs frei von Markdown-Rauschen und umgekehrt.
 
-Der Branch ist derzeit **noch nicht in `main` gemergt** und damit offen für weitere Commits (z.B. die im Code als `TODO` markierte Backend-Anbindung der Buchungsdaten sowie die Schritte 2 und 3 der Buchungsstrecke).
+Commit 009 ist dabei ein Sonderfall: Er dokumentiert die Doku-Commits selbst nach und verschiebt dafür die laufenden Nummern der bestehenden Einträge (aus `003` wird `005`, aus `004` wird `006`, aus `005` wird `007`). Das ist der Preis einer strikt chronologischen Nummerierung – und für ein Lerntagebuch der richtige Preis, weil die Reihenfolge hier der eigentliche Inhalt ist.
+
+Der Branch wurde am 2026-08-26 über **Pull Request #3** (Merge-Commit `19ff5ef`, Titel „Buchungs Seite Kalender") in `main` gemergt und ist damit abgeschlossen. Die im Code als `TODO` markierte Backend-Anbindung der Buchungsdaten wandert in den nächsten Branch: [`datenbank-anbindung`](006_2026-08-26_datenbank-anbindung.md) baut das Datenbankschema, auf dem eine echte Buchung überhaupt erst möglich wird. Die Schritte 2 und 3 der Buchungsstrecke („Zimmer & Gäste", „Bestätigung") stehen weiterhin offen.
 
 ---
 
-[← Vorheriger Branch](004_2026-06-10_startseite-erstellen.md) · [📓 Index](000_index.md)
+[← Vorheriger Branch](004_2026-06-10_startseite-erstellen.md) · [📓 Index](000_index.md) · [Nächster Branch →](006_2026-08-26_datenbank-anbindung.md)
