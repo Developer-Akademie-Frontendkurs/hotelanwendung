@@ -5,6 +5,10 @@ import checker from 'vite-plugin-checker';
 export default defineConfig({
     plugins: [tailwindcss()],
     root: 'src',
+    // `envDir` ist standardmaessig gleich `root` — mit `root: 'src'` wuerde Vite die `.env`
+    // also in `src/` suchen und die im Projektwurzelverzeichnis nie laden. Relativ zu `root`
+    // aufgeloest zeigt '..' zurueck auf die Wurzel, wo `.env` und `.env.example` liegen (E35).
+    envDir: '..',
     build: {
         emptyOutDir: true,
         outDir: '../dist',
