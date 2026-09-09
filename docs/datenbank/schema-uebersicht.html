@@ -1,0 +1,603 @@
+<title>Hotelanwendung — Datenbankschema</title>
+
+<style>
+  /* ---- Tokens ------------------------------------------------------------
+     Palette: Patina. Neutrals sind bewusst blau-grün gekippt (nicht neutralgrau),
+     damit sie zum Akzent gehören. Akzent = oxidiertes Kupfer, sparsam.
+     Semantik (entschieden / verworfen / später) ist vom Akzent getrennt.        */
+  :root {
+    --ground: #F2F4F4;
+    --surface: #FFFFFF;
+    --surface-sunken: #E9ECED;
+    --ink: #141B1C;
+    --ink-soft: #48575A;
+    --ink-faint: #6E7E82;
+    --line: #D5DCDC;
+    --line-strong: #B6C1C1;
+    --accent: #0F6257;
+    --accent-soft: #E0EDEA;
+    --good: #2F6B3A;
+    --warn: #8A5B0E;
+    --bad: #97372F;
+    --plate: #FCFDFD;
+
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+
+    --measure: 68ch;
+    --pad: clamp(1.25rem, 4vw, 3.5rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #12181A;
+      --surface: #182022;
+      --surface-sunken: #0D1214;
+      --ink: #E8EEED;
+      --ink-soft: #A6B5B6;
+      --ink-faint: #7E8E90;
+      --line: #2A3639;
+      --line-strong: #3D4C50;
+      --accent: #63C2B0;
+      --accent-soft: #1B2E2C;
+      --good: #7FBA88;
+      --warn: #D3A055;
+      --bad: #DE8A80;
+      --plate: #F4F7F7;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #12181A;
+    --surface: #182022;
+    --surface-sunken: #0D1214;
+    --ink: #E8EEED;
+    --ink-soft: #A6B5B6;
+    --ink-faint: #7E8E90;
+    --line: #2A3639;
+    --line-strong: #3D4C50;
+    --accent: #63C2B0;
+    --accent-soft: #1B2E2C;
+    --good: #7FBA88;
+    --warn: #D3A055;
+    --bad: #DE8A80;
+    --plate: #F4F7F7;
+  }
+
+  :root[data-theme="light"] {
+    --ground: #F2F4F4;
+    --surface: #FFFFFF;
+    --surface-sunken: #E9ECED;
+    --ink: #141B1C;
+    --ink-soft: #48575A;
+    --ink-faint: #6E7E82;
+    --line: #D5DCDC;
+    --line-strong: #B6C1C1;
+    --accent: #0F6257;
+    --accent-soft: #E0EDEA;
+    --good: #2F6B3A;
+    --warn: #8A5B0E;
+    --bad: #97372F;
+    --plate: #FCFDFD;
+  }
+
+  /* ---- Basis ---------------------------------------------------------- */
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .wrap {
+    max-width: 74rem;
+    margin: 0 auto;
+    padding: var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2.5rem, 6vw, 4.5rem);
+  }
+
+  h1, h2, h3 { font-family: var(--serif); font-weight: 600; text-wrap: balance; line-height: 1.15; }
+  h1 { font-size: clamp(2rem, 5.5vw, 3.1rem); letter-spacing: -0.015em; }
+  h2 { font-size: clamp(1.4rem, 3vw, 1.85rem); }
+  h3 { font-size: 1.08rem; font-family: var(--sans); font-weight: 650; line-height: 1.3; }
+  p { max-width: var(--measure); }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  code { background: var(--surface-sunken); padding: 0.1em 0.34em; border-radius: 3px; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* ---- Kopf ----------------------------------------------------------- */
+  .masthead { display: flex; flex-direction: column; gap: 1.1rem; }
+  .masthead .lede { font-size: clamp(1.02rem, 2vw, 1.16rem); color: var(--ink-soft); max-width: 62ch; }
+
+  .facts {
+    display: flex; flex-wrap: wrap; gap: 0.5rem 2.25rem;
+    border-top: 1px solid var(--line); padding-top: 1.1rem; margin-top: 0.4rem;
+  }
+  .facts div { display: flex; flex-direction: column; }
+  .facts dt, .facts .k { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
+  .facts .v { font-family: var(--serif); font-size: 1.32rem; font-variant-numeric: tabular-nums; }
+
+  /* ---- Sektion -------------------------------------------------------- */
+  section { display: flex; flex-direction: column; gap: 1.25rem; }
+  .sec-head { display: flex; flex-direction: column; gap: 0.3rem; }
+
+  /* ---- Leitsätze ------------------------------------------------------ */
+  .tenets { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  @media (min-width: 46rem) { .tenets { grid-template-columns: 1fr 1fr; } }
+  .tenet { background: var(--surface); padding: 1.05rem 1.2rem; display: flex; flex-direction: column; gap: 0.3rem; }
+  .tenet b { font-size: 0.98rem; }
+  .tenet span { color: var(--ink-soft); font-size: 0.9rem; }
+
+  /* ---- Diagramm-Platte ------------------------------------------------ */
+  .plate {
+    background: var(--plate);
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+  .plate pre.mermaid { margin: 0; min-width: 40rem; }
+  .plate-note { color: var(--ink-faint); font-size: 0.84rem; }
+
+  /* ---- Tabellenkarten ------------------------------------------------- */
+  .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1rem 1.05rem; display: flex; flex-direction: column; gap: 0.55rem;
+  }
+  .card > .name { font-family: var(--mono); font-size: 0.9rem; color: var(--accent); font-weight: 600; }
+  .card > .role { font-size: 0.9rem; color: var(--ink-soft); }
+  .card > .cols { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-faint); line-height: 1.55; }
+  .card > .refs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: auto; padding-top: 0.35rem; }
+
+  .tag {
+    font-family: var(--mono); font-size: 0.67rem; letter-spacing: 0.04em;
+    border: 1px solid var(--line-strong); color: var(--ink-soft);
+    padding: 0.08rem 0.34rem; border-radius: 2px; white-space: nowrap;
+  }
+  .tag.key { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  /* ---- Nächte-Grafik -------------------------------------------------- */
+  .nights { display: grid; grid-template-columns: 9.5rem repeat(4, minmax(3.4rem, 1fr)); gap: 2px; min-width: 26rem; }
+  .nights > * { padding: 0.45rem 0.5rem; font-size: 0.8rem; background: var(--surface); }
+  .nights .rh { background: transparent; color: var(--ink-faint); font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; display: flex; align-items: center; }
+  .nights .d { text-align: center; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+  .nights .free { color: var(--good); text-align: center; }
+  .nights .full { color: var(--bad); text-align: center; font-weight: 700; background: var(--surface-sunken); }
+  .nights .yes { text-align: center; color: var(--accent); font-weight: 700; }
+  .nights .no { text-align: center; color: var(--ink-faint); }
+  .scrollx { overflow-x: auto; }
+
+  /* ---- Entscheidungstabelle ------------------------------------------ */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 44rem; font-size: 0.88rem; }
+  thead th {
+    text-align: left; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-faint); font-weight: 500;
+    padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--line-strong); white-space: nowrap;
+  }
+  tbody td { padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.id { font-family: var(--mono); color: var(--accent); font-weight: 600; white-space: nowrap; }
+  td.alt { color: var(--ink-faint); }
+  tbody tr:hover td { background: var(--accent-soft); }
+
+  .rnd { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-faint); }
+
+  /* ---- Zwei-Spalten-Listen ------------------------------------------- */
+  .split { display: grid; gap: 1.5rem; }
+  @media (min-width: 48rem) { .split { grid-template-columns: 1fr 1fr; } }
+  .stack { display: flex; flex-direction: column; gap: 0.55rem; }
+  ul.plain { list-style: none; display: flex; flex-direction: column; gap: 0.45rem; }
+  ul.plain li { padding-left: 1.05rem; position: relative; color: var(--ink-soft); font-size: 0.92rem; }
+  ul.plain li::before { content: "—"; position: absolute; left: 0; color: var(--line-strong); }
+  ul.plain li b { color: var(--ink); font-weight: 600; }
+
+  footer { border-top: 1px solid var(--line); padding-top: 1.25rem; color: var(--ink-faint); font-size: 0.84rem; }
+  footer p { max-width: var(--measure); }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="eyebrow">Hotelanwendung · Entwurf vom 17. August 2026</span>
+    <h1>Ein Datenbankschema und die Gründe dahinter</h1>
+    <p class="lede">
+      Kein Backend, ein Browser, eine Postgres-Datenbank. Daraus folgt fast alles auf dieser Seite:
+      Jede Regel, die verlässlich gelten muss, liegt in der Datenbank — nicht im TypeScript-Code,
+      den jeder Client umgehen kann.
+    </p>
+    <div class="facts">
+      <div><span class="k">Tabellen</span><span class="v">12</span></div>
+      <div><span class="k">Funktionen</span><span class="v">6</span></div>
+      <div><span class="k">Entscheidungen</span><span class="v">31</span></div>
+      <div><span class="k">Runden</span><span class="v">5</span></div>
+      <div><span class="k">Stand</span><span class="v">Freigegeben</span></div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Leitsätze</span>
+      <h2>Sieben Sätze, aus denen sich der Rest ergibt</h2>
+    </div>
+    <div class="tenets">
+      <div class="tenet"><b>Die Datenbank ist die letzte Verteidigungslinie.</b><span>Was der Client prüfen könnte, ist keine Regel, sondern eine Bitte.</span></div>
+      <div class="tenet"><b>Erweiterbar heißt nicht: alle Achsen offen.</b><span>Es heißt, dass die spätere Änderung eine mechanische Migration ist.</span></div>
+      <div class="tenet"><b>Eine Buchung ist ein Vertrag.</b><span>Ihr Preis wird eingefroren, nicht neu berechnet.</span></div>
+      <div class="tenet"><b>Fremde Systeme bleiben außerhalb der Domäne.</b><span><code>auth.users</code> gehört Supabase. Buchungen zeigen auf Kunden.</span></div>
+      <div class="tenet"><b>Modelliere die Domäne, nicht die einfachste Umsetzung.</b><span>Und benenne den Preis dafür sofort und laut.</span></div>
+      <div class="tenet"><b>Schema als Code, oder es existiert nicht überprüfbar.</b><span>Migrationen im Repo, generierte Typen, lokal reproduzierbar.</span></div>
+      <div class="tenet"><b>Korrektheit durch Konstruktion schlägt Aufmerksamkeit.</b><span>Halb-offene Intervalle, Cent als Ganzzahl, Constraints statt Konventionen.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Modell</span>
+      <h2>Zwölf Tabellen</h2>
+      <p class="plate-note">Waagerecht scrollbar. Quelle der Wahrheit ist <code>docs/datenbank/schema.md</code> — diese Seite ist eine Ableitung.</p>
+    </div>
+
+    <div class="plate">
+<pre class="mermaid">
+%%{init: {'theme':'neutral'}}%%
+erDiagram
+    HOTELS ||--o{ ROOM_TYPES : "hat"
+    HOTELS ||--o{ ROOMS : "hat"
+    HOTELS ||--o{ RATE_PLANS : "hat"
+    ROOM_TYPES ||--o{ ROOMS : "gruppiert"
+    ROOM_TYPES ||--o{ ROOM_TYPE_IMAGES : "zeigt"
+    ROOM_TYPES ||--o{ ROOM_TYPE_RATES : "kostet"
+    RATE_PLANS ||--o{ ROOM_TYPE_RATES : "bepreist"
+    ROOMS ||--o{ ROOM_BLOCKS : "gesperrt durch"
+    ROOMS ||--o{ BOOKINGS : "zugewiesen zu"
+    ROOM_TYPES ||--o{ BOOKINGS : "verkauft als"
+    RATE_PLANS ||--o{ BOOKINGS : "gebucht zu"
+    CUSTOMERS ||--o{ BOOKINGS : "bucht"
+    BOOKING_GROUPS ||--o{ BOOKINGS : "fasst zusammen"
+    BOOKINGS ||--|{ BOOKING_NIGHTS : "Preis pro Nacht"
+    BOOKINGS ||--o{ BOOKING_EVENTS : "Historie"
+    AUTH_USERS |o--o| CUSTOMERS : "Konto, optional"
+
+    HOTELS {
+        uuid id PK
+        text name
+        text timezone
+        int booking_horizon_days
+    }
+    ROOM_TYPES {
+        uuid id PK
+        uuid hotel_id FK
+        text name
+        int max_occupancy
+        timestamptz archived_at
+    }
+    ROOMS {
+        uuid id PK
+        uuid room_type_id FK
+        text room_number UK
+        timestamptz archived_at
+    }
+    ROOM_TYPE_IMAGES {
+        uuid room_type_id FK
+        text storage_path
+        text alt_text
+        int sort_order
+    }
+    ROOM_BLOCKS {
+        uuid room_id FK
+        daterange period
+        text reason
+    }
+    RATE_PLANS {
+        uuid id PK
+        text code UK
+        boolean is_default
+    }
+    ROOM_TYPE_RATES {
+        uuid room_type_id FK
+        uuid rate_plan_id FK
+        daterange validity
+        int amount_cents
+    }
+    CUSTOMERS {
+        uuid id PK
+        uuid user_id FK
+        citext email UK
+        text last_name
+    }
+    BOOKING_GROUPS {
+        uuid id PK
+    }
+    BOOKINGS {
+        uuid id PK
+        text booking_reference UK
+        uuid customer_id FK
+        uuid room_type_id FK
+        uuid room_id FK
+        daterange stay
+        int adults
+        text status
+        int total_amount_cents
+    }
+    BOOKING_NIGHTS {
+        uuid booking_id PK
+        date night PK
+        int amount_cents
+    }
+    BOOKING_EVENTS {
+        uuid booking_id FK
+        text event_type
+        jsonb payload
+        timestamptz created_at
+    }
+    AUTH_USERS {
+        uuid id PK
+    }
+</pre>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <span class="name">hotels</span>
+        <span class="role">Genau eine Zeile. Stammdaten, Zeitzone, Buchungshorizont.</span>
+        <span class="cols">name · timezone · check_in_time · check_out_time · booking_horizon_days</span>
+        <span class="refs"><span class="tag key">E14</span><span class="tag">E30</span></span>
+      </div>
+      <div class="card">
+        <span class="name">room_types</span>
+        <span class="role">Die verkaufte Einheit. Gebucht wird die Kategorie, nicht das Zimmer.</span>
+        <span class="cols">name · slug · description · max_occupancy · archived_at</span>
+        <span class="refs"><span class="tag key">E3</span><span class="tag">E15</span><span class="tag">E22</span></span>
+      </div>
+      <div class="card">
+        <span class="name">rooms</span>
+        <span class="role">Physische Zimmer. Zuweisung typischerweise beim Check-in.</span>
+        <span class="cols">room_number · room_type_id · archived_at</span>
+        <span class="refs"><span class="tag">E3</span><span class="tag">E22</span></span>
+      </div>
+      <div class="card">
+        <span class="name">room_type_images</span>
+        <span class="role">Bilder als Redaktionsdaten im Storage, nicht als Code im Repo.</span>
+        <span class="cols">storage_path · alt_text NOT NULL · sort_order</span>
+        <span class="refs"><span class="tag key">E19</span></span>
+      </div>
+      <div class="card">
+        <span class="name">room_blocks</span>
+        <span class="role">Sperrungen pro Zimmer. Reduzieren die Kapazität der Kategorie.</span>
+        <span class="cols">room_id · period · reason · EXCLUDE gegen Überlappung</span>
+        <span class="refs"><span class="tag key">E18</span></span>
+      </div>
+      <div class="card">
+        <span class="name">rate_plans</span>
+        <span class="role">Zunächst eine Zeile. Der Seam, der Tarife zu Datenzeilen macht.</span>
+        <span class="cols">code · name · is_default</span>
+        <span class="refs"><span class="tag">E5</span></span>
+      </div>
+      <div class="card">
+        <span class="name">room_type_rates</span>
+        <span class="role">Saisonpreise. Zwei widersprüchliche Preise für eine Nacht sind unmöglich.</span>
+        <span class="cols">validity daterange · amount_cents · currency · EXCLUDE</span>
+        <span class="refs"><span class="tag key">E5</span><span class="tag">E8</span></span>
+      </div>
+      <div class="card">
+        <span class="name">customers</span>
+        <span class="role">Kunde ohne Konto möglich. Konto wird später nur verknüpft.</span>
+        <span class="cols">email UNIQUE citext · user_id nullable → auth.users</span>
+        <span class="refs"><span class="tag key">E4</span><span class="tag">E26</span></span>
+      </div>
+      <div class="card">
+        <span class="name">booking_groups</span>
+        <span class="role">Anker für einen Vorgang mit mehreren Zimmern. Bewusst leer.</span>
+        <span class="cols">id · created_at</span>
+        <span class="refs"><span class="tag key">E27</span><span class="tag">E20</span></span>
+      </div>
+      <div class="card">
+        <span class="name">bookings</span>
+        <span class="role">Der Vertrag. Ein Zimmer, eingefrorener Betrag, Status ohne ENUM.</span>
+        <span class="cols">booking_reference · stay daterange · adults · children · status · total_amount_cents · cancelled_at</span>
+        <span class="refs"><span class="tag key">E3</span><span class="tag">E11</span><span class="tag">E20</span><span class="tag">E23</span></span>
+      </div>
+      <div class="card">
+        <span class="name">booking_nights</span>
+        <span class="role">Preis pro Nacht, eingefroren. Ohne das kein Umsatz pro Monat.</span>
+        <span class="cols">booking_id + night PK · amount_cents</span>
+        <span class="refs"><span class="tag key">E21</span></span>
+      </div>
+      <div class="card">
+        <span class="name">booking_events</span>
+        <span class="role">Append-only. Wer hat wann storniert — nachträglich nicht rekonstruierbar.</span>
+        <span class="cols">event_type · payload jsonb · actor_kind · created_at</span>
+        <span class="refs"><span class="tag key">E12</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Geschäftsregeln</span>
+      <h2>Was in der Datenbank rechnet</h2>
+    </div>
+
+    <div class="split">
+      <div class="stack">
+        <h3>Kapazität pro Nacht</h3>
+        <p>
+          Weil die <em>Kategorie</em> gebucht wird, ist Verfügbarkeit eine Zählung — und Zählungen sind
+          unter Nebenläufigkeit angreifbar. Die Buchungsfunktion nimmt deshalb einen
+          Advisory-Lock und prüft im selben Transaktionsschritt, in dem sie einfügt.
+        </p>
+        <ul class="plain">
+          <li><b>aktive Zimmer der Kategorie</b></li>
+          <li><b>minus</b> an dieser Nacht gesperrte Zimmer</li>
+          <li><b>minus</b> Buchungen, deren Status Kapazität belegt — alles außer <code>cancelled</code></li>
+        </ul>
+        <p class="plate-note">
+          Die Blockier-Regel ist an genau einer Stelle definiert. Zwei Definitionen wären der Fehler.
+        </p>
+      </div>
+
+      <div class="stack">
+        <h3>Der Abreisetag ist keine Nacht</h3>
+        <p>
+          Ein ausgebuchter Tag bleibt als <em>Abreisetag</em> wählbar. Wer ihn im Kalender komplett
+          durchstreicht, macht Anschlussbuchungen unmöglich — den bei hoher Belegung wertvollsten Fall.
+        </p>
+        <div class="scrollx">
+          <div class="nights">
+            <span class="rh">Nacht</span>
+            <span class="d">3.</span><span class="d">4.</span><span class="d">5.</span><span class="d">6.</span>
+            <span class="rh">frei?</span>
+            <span class="free">frei</span><span class="free">frei</span><span class="free">frei</span><span class="full">voll</span>
+            <span class="rh">als Anreise</span>
+            <span class="yes">✓</span><span class="yes">✓</span><span class="yes">✓</span><span class="no">✕</span>
+            <span class="rh">als Abreise</span>
+            <span class="no">✕</span><span class="yes">✓</span><span class="yes">✓</span><span class="yes">✓</span>
+          </div>
+        </div>
+        <p class="plate-note">
+          Buchung 3. → 6. sind drei Nächte und völlig in Ordnung, obwohl der 6. als Nacht voll ist.
+        </p>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <span class="name">is_staff() · current_customer_id()</span>
+        <span class="role">Der einzige Ort, an dem Rechte geprüft werden. Alle Policies gehen darüber — nie verstreutes <code>auth.uid()</code>. Damit ist „Mitarbeitende mit Rollen" später eine Änderung an einer Funktion.</span>
+        <span class="refs"><span class="tag key">E13</span></span>
+      </div>
+      <div class="card">
+        <span class="name">availability_calendar()</span>
+        <span class="role">Eine Zeile pro Nacht mit freier Anzahl und Sperrgrund. Füttert den Kalender: nicht buchbare Tage durchgestrichen, Tooltip mit Datum.</span>
+        <span class="refs"><span class="tag key">E24</span><span class="tag">E28</span></span>
+      </div>
+      <div class="card">
+        <span class="name">search_availability()</span>
+        <span class="role">Eine Zeile pro Kategorie: Minimum über den Zeitraum plus Gesamtpreis. Gibt nur Aggregate zurück — Verfügbarkeit im Browser zu rechnen hieße, fremde Buchungen auszuliefern.</span>
+        <span class="refs"><span class="tag key">E17</span><span class="tag">E28</span></span>
+      </div>
+      <div class="card">
+        <span class="name">create_booking()</span>
+        <span class="role">Lock, Prüfung, Kunde per E-Mail finden, Buchung, Nächte einfrieren, Ereignis schreiben — eine Transaktion. Bei Ablehnung ein strukturierter Fehler mit Code und Datum, damit die Oberfläche denselben Tooltip zeigen kann.</span>
+        <span class="refs"><span class="tag key">E10</span><span class="tag">E26</span><span class="tag">E31</span></span>
+      </div>
+      <div class="card">
+        <span class="name">find_rate_gaps()</span>
+        <span class="role">Nächte ohne Preiszeile. Eine Preislücke macht nicht buchbar — ein Fallback-Preis würde still zum falschen Preis verkaufen, und der Preis ist danach eingefroren.</span>
+        <span class="refs"><span class="tag key">E25</span></span>
+      </div>
+      <div class="card">
+        <span class="name">Sperrgründe, zweistufig</span>
+        <span class="role">Intern <code>ausgebucht</code>, <code>kein_preis</code>, <code>zu_klein</code>, <code>vergangenheit</code>, <code>ausserhalb_horizont</code>. Gäste sehen nur „Buchung nicht möglich". Im Kalender sehen Erfolg und Konfigurationsfehler identisch aus — für den Betrieb sind es Gegenteile.</span>
+        <span class="refs"><span class="tag key">E28</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Entscheidungen E1 – E31</span>
+      <h2>Was entschieden wurde und was dafür verworfen ist</h2>
+      <p>Erarbeitet in fünf Runden als Entscheidungsbaum: pro Runde nur die Fragen, deren Voraussetzungen schon geklärt waren.</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Entscheidung</th><th>Weil</th><th>Verworfen</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="id">E1</td><td>Erst Dokument, dann SQL</td><td>Ein laufendes Schema wird nicht mehr hinterfragt</td><td class="alt">Direkt Migrationen schreiben</td></tr>
+          <tr><td class="id">E2</td><td>Ein Hotel, Erweiterung billig halten</td><td>Vorauseilende <code>hotel_id</code> kostet in jeder Query ab heute</td><td class="alt">Mandantenfähig ab Tag 1</td></tr>
+          <tr><td class="id">E3</td><td>Gebucht wird die Kategorie</td><td>Das echte Domänenmodell; Zimmer wird später zugewiesen</td><td class="alt">Zimmergenaue Buchung mit DB-Garantie</td></tr>
+          <tr><td class="id">E4</td><td>Eigene <code>customers</code>, <code>auth.users</code> nur verknüpft</td><td>Buchung ohne Konto muss möglich sein; Verträge nicht an fremden Lebenszyklus binden</td><td class="alt">FK direkt auf <code>auth.users</code></td></tr>
+          <tr><td class="id">E5</td><td>Saisonpreise, Tarif-Seam, Preis eingefroren</td><td>Preistabellen ändern sich, ein Vertrag nicht</td><td class="alt">Tagespreis-Zeilen, Belegungspreise</td></tr>
+          <tr><td class="id">E6</td><td>Lesen direkt, Buchen über RPC</td><td>Prüfen und Einfügen müssen eine Transaktion sein</td><td class="alt">Alles im Client; Edge Function</td></tr>
+          <tr><td class="id">E7</td><td>Supabase CLI, Migrationen im Repo</td><td>Ohne Versionierung kein Review, kein Rollback, kein gemeinsamer Stand</td><td class="alt">Im Dashboard klicken</td></tr>
+          <tr><td class="id">E8</td><td>snake_case, uuid, Cent, halb-offene Intervalle</td><td>Off-by-one und Rundungsfehler sind ausschließbar, nicht verhandelbar</td><td class="alt">bigint-IDs, Float-Beträge</td></tr>
+          <tr><td class="id">E9</td><td>Mermaid im Repo ist normativ</td><td>Diagramme im Whiteboard driften gegen das Schema</td><td class="alt">Whiteboard als Quelle</td></tr>
+          <tr><td class="id">E10</td><td>Advisory-Lock in der Buchungsfunktion</td><td>Eine Wahrheit statt zweiter Zähltabelle; Durchsatz ist hier irrelevant</td><td class="alt">Tages-Inventar, SERIALIZABLE, Auto-Zuweisung</td></tr>
+          <tr><td class="id">E11</td><td>Status als <code>text</code> + CHECK, kein <code>pending</code></td><td>ENUM-Werte lassen sich nachträglich nicht entfernen</td><td class="alt">Postgres-ENUM, Lookup-Tabelle</td></tr>
+          <tr><td class="id">E12</td><td><code>booking_events</code> append-only ab Tag 1</td><td>Eine nachträglich eingebaute Historie hat keine Vergangenheit</td><td class="alt">Nur Zeitstempel; generisches Audit</td></tr>
+          <tr><td class="id">E13</td><td>RLS sofort an, Rollen nur als Seam</td><td>„Später anschalten" heißt „bis dahin offen"</td><td class="alt">Volles RBAC jetzt</td></tr>
+          <tr><td class="id">E14</td><td><code>hotels</code> mit einer Zeile</td><td>Rechtfertigt sich heute selbst als Stammdatenhalter</td><td class="alt">Gar nichts; <code>hotel_id</code> überall</td></tr>
+          <tr><td class="id">E15</td><td>Belegung, Bilder, Sperrungen sind drin</td><td>Ohne sie rechnet die Verfügbarkeit falsch</td><td class="alt">Zahlungen, Extras, Gutscheine, OTA, i18n</td></tr>
+          <tr><td class="id">E16</td><td>Gästezahl als Zähler</td><td>Namen erst beim Check-in; Zusatztabelle ist der billigste Nachrüstfall</td><td class="alt"><code>booking_guests</code> jetzt</td></tr>
+          <tr><td class="id">E17</td><td>Verfügbarkeit als RPC, nur Aggregate</td><td>Im Browser rechnen hieße, fremde Buchungen auszuliefern</td><td class="alt">View; Berechnung im Client</td></tr>
+          <tr><td class="id">E18</td><td>Sperrungen nur verfügbarkeitsrelevant; Sperrung schlägt Constraint</td><td>Das Datenmodell darf Fakten nicht verbieten, nur sichtbar machen</td><td class="alt">Zimmerstatus, volles Housekeeping</td></tr>
+          <tr><td class="id">E19</td><td>Storage, <code>sort_order</code>, <code>alt_text NOT NULL</code></td><td>Bilder sind Redaktionsdaten; optionale Barrierefreiheit wird nicht gepflegt</td><td class="alt">Repo-Assets, <code>is_primary</code>-Flag</td></tr>
+          <tr><td class="id">E20</td><td>Eine Buchung = ein Zimmer, plus Gruppen-ID</td><td>Der Wechsel zu Positionszeilen ist der einzige strukturelle Umbau</td><td class="alt"><code>booking_items</code> jetzt</td></tr>
+          <tr><td class="id">E21</td><td>Preis eingefroren pro Nacht</td><td>Umsatz pro Monat, Verlängerung, Teilstorno brauchen die Nacht</td><td class="alt">Nur Gesamtbetrag</td></tr>
+          <tr><td class="id">E22</td><td>RESTRICT und Archivieren statt Löschen</td><td>Gelöschte Kategorien zerstören die Vergangenheit</td><td class="alt">Hartes Löschen; <code>SET NULL</code></td></tr>
+          <tr><td class="id">E23</td><td>Buchungsnummer ohne I O 0 1</td><td>UUIDs sind am Telefon unbenutzbar</td><td class="alt">Nur UUID</td></tr>
+          <tr><td class="id">E24</td><td>Verfügbarkeit pro Tag, Sperrung im Kalender</td><td>Eine UI-Anforderung hat die Schnittstelle der Funktion geändert</td><td class="alt">Nur Minimum über den Zeitraum</td></tr>
+          <tr><td class="id">E25</td><td>Preislücke = nicht buchbar</td><td>Ein Fallback verkauft still zum falschen Preis</td><td class="alt">Basispreis; erzwungene Lückenlosigkeit</td></tr>
+          <tr><td class="id">E26</td><td>Kundenidentität über die E-Mail</td><td>Kundenkonto später sieht alte Buchungen automatisch</td><td class="alt">Immer neuer Datensatz</td></tr>
+          <tr><td class="id">E27</td><td><code>booking_groups</code> als Tabelle, nullable</td><td>Verwaiste IDs fallen sonst niemandem auf</td><td class="alt">Nackte uuid; verpflichtende Gruppe</td></tr>
+          <tr><td class="id">E28</td><td>Zwei Funktionen; Sperrgründe zweistufig</td><td>Sonst wandern Preissumme und Blockier-Regel in den Browser</td><td class="alt">Eine Funktion; alle Codes nach außen</td></tr>
+          <tr><td class="id">E29</td><td>Tageswert heißt „diese Nacht ist frei"</td><td>Sonst werden Anschlussbuchungen unmöglich</td><td class="alt">Tag komplett sperren</td></tr>
+          <tr><td class="id">E30</td><td>Buchungshorizont als Stammdatum</td><td>Trennt „buchen wir nicht" von „Preis fehlt"</td><td class="alt">Frontend-Konstante; keine Grenze</td></tr>
+          <tr><td class="id">E31</td><td>Strukturierter Fehler aus der Buchungsfunktion</td><td>Der gesperrte Kalender ist Komfort, keine Garantie</td><td class="alt">Boolean; nur Fehlertext</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Ränder</span>
+      <h2>Was fehlt — und was es später kostet</h2>
+    </div>
+    <div class="split">
+      <div class="stack">
+        <h3>Bewusst nicht Teil des Schemas</h3>
+        <ul class="plain">
+          <li>Ausstattungsmerkmale und Zusatzleistungen</li>
+          <li>Zahlungen und Stornobedingungen</li>
+          <li>Gutscheine und Rabattcodes</li>
+          <li>Housekeeping-Abläufe</li>
+          <li>Mehrsprachigkeit der Kategorietexte</li>
+          <li>Kanal- und OTA-Anbindung</li>
+        </ul>
+      </div>
+      <div class="stack">
+        <h3>Vorbereitete Wege</h3>
+        <ul class="plain">
+          <li><b>Kundenkonten</b> — <code>user_id</code> verknüpfen, Policies greifen schon</li>
+          <li><b>Mitarbeitende und Rollen</b> — eine Funktion ändern</li>
+          <li><b>Weitere Tarife</b> — Datenzeilen statt Schemaänderung</li>
+          <li><b>Live-Admin</b> — Realtime Broadcast per Trigger, nicht <code>postgres_changes</code></li>
+          <li><b>Kontingente und Stop-Sell</b> — Tages-Inventar, zweite Wahrheit</li>
+          <li><b>Mehrere Hotels</b> — Spalte, Backfill, Policies</li>
+          <li><b>Positionszeilen statt einer Buchung</b> — der einzige teure Umbau</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      Ableitung aus <code>docs/datenbank/schema.md</code> (normativ) und <code>docs/datenbank/README.md</code>
+      (Entscheidungen mit Begründung). Umsetzung in zehn Phasen: <code>docs/datenbank/umsetzungsplan.md</code>.
+      Änderungen beginnen immer im Repo, nicht auf dieser Seite.
+    </p>
+  </footer>
+
+</div>
