@@ -3,7 +3,7 @@
 > **Zweck:** Diese Datei ist so geschrieben, dass die Umsetzung in einer **späteren Session**
 > aufgesetzt werden kann, ohne die Grilling-Unterhaltung wiederholen zu müssen.
 >
-> **Vorher lesen:** [README.md](./README.md) (Entscheidungen E1–E36 mit Begründung) und
+> **Vorher lesen:** [README.md](./README.md) (Entscheidungen E1–E46 mit Begründung) und
 > [schema.md](./schema.md) (normatives Schema).
 >
 > **Regel für die Umsetzung:** `schema.md` ist die Quelle der Wahrheit. Weicht der Plan davon ab,
@@ -17,7 +17,8 @@ Kopiervorlage für den ersten Prompt:
 
 > Lies `docs/datenbank/README.md`, `docs/datenbank/schema.md` und
 > `docs/datenbank/umsetzungsplan.md`. Wir setzen Phase **N** um. Halte dich an die Entscheidungen
-> E1–E36; wenn dir etwas widersprüchlich vorkommt, frag nach, statt zu raten.
+> E1–E46 und die Vorgehensentscheidungen V1–V17; wenn dir etwas widersprüchlich vorkommt, frag
+> nach, statt zu raten.
 
 **Branch- und Commit-Schnitt (V6):** Phasen 1–7 laufen auf **einem** Themenbranch
 (`datenbank-anbindung`), **ein Commit pro Phase**. Kein Branch und kein PR pro Phase — die Phasen
@@ -42,7 +43,7 @@ bauen aufeinander auf und sind einzeln nie lauffähig, sieben PRs wären Zeremon
 
 ## 0b. Vorgehensentscheidungen (Grilling-Runde 2026-09-02)
 
-Domänenentscheidungen stehen als E1–E36 in `README.md`. Was hier steht, ist **Vorgehen** — es ändert
+Domänenentscheidungen stehen als E1–E46 in `README.md`. Was hier steht, ist **Vorgehen** — es ändert
 das Schema nicht, aber es bestimmt, wie diese Umsetzung abläuft.
 
 | # | Entscheidung | Begründung in Kurzform |
@@ -54,6 +55,104 @@ das Schema nicht, aber es bestimmt, wie diese Umsetzung abläuft.
 | **V5** | Testumfang und -werkzeug: siehe **E34**. | Steht in der E-Reihe, weil die Auswahl der sechs Kriterien direkt an Domänenentscheidungen hängt. |
 | **V6** | Ein Themenbranch, **ein Commit pro Phase**. | Sieben PRs für sieben aufeinander aufbauende Migrationen sind Zeremonie ohne Nutzen. |
 | **V7** | Dokumentation wird **vor** der ersten Migration fortgeschrieben, nicht danach. | Migrationen kann man später lesen, Begründungen nicht rekonstruieren. Genau deshalb existiert `README.md`. |
+
+> **Nachtrag 2026-09-09 zu V1:** Phase 8 und 9 sind **nicht mehr vertagt** — sie sind der Inhalt des
+> Branches `verbindung-ui-zu-datenbank`, zusammen mit den neuen Phasen 7b und 9b. Vertagt bleibt
+> allein Phase 10 (Cloud). Siehe 0c und V8–V16.
+
+---
+
+## 0c. Grilling-Runde 8 (2026-09-09) — Anbindung der Buchungsseite
+
+Ausgangslage: Die Phasen 1–7 stehen, die Buchungsseite existiert als Oberfläche, und ein Teil davon
+ist bereits angeschlossen (Zimmerliste über `room_types` + `search_availability`, Bilder über
+Storage). Diese Runde klärt, was „die Buchungsseite mit der Datenbank verbinden" vollständig heißt.
+
+**Was beim Erheben des Ist-Standes gefunden wurde** — jeder Punkt hat eine Frage ausgelöst:
+
+| Lücke | Bezug |
+| --- | --- |
+| Keine generierten Typen (`src/shared/types/` existierte nicht), Client untypisiert | Phase 8 |
+| Keine Service-Schicht — die View ruft `supabase.from`/`.rpc`/`.storage` direkt | Phase 8.4 (dort ausdrücklich verboten) |
+| Kalender kennt `availability_calendar` nicht: `selectable: !isPast` — Ausgebuchtes ist wählbar | Phase 9 |
+| Keine Zimmerauswahl — `room_type_id` landet nirgends | im Plan nicht vorgesehen |
+| Checkout ist Figma-Attrappe („Double Suite", „732 €", „Maxime Musterfrau") | im Plan nicht vorgesehen |
+| `submit()` endet in `console.log`, `create_booking` wird nie gerufen | im Plan nicht vorgesehen |
+| Rechnungsadress-Formular hat **kein Ziel im Schema** — `customers` hat keine Adressspalten | → E42 |
+| Kalender blättert unbegrenzt vorwärts, `booking_horizon_days` = 365 | E30 |
+| Gästezahl doppeldeutig: pro Zimmer (Datenbank) vs. gesamt (Oberfläche) | → E45 |
+| Popup-Text verspricht eine Bestätigungsmail; `bookings` kennt kein `pending` | E11 → E46 |
+
+### Fragen und Antworten
+
+Fünf Runden, 30 Fragen. `README.md` enthält die Begründungen der Domänenentscheidungen (E42–E46),
+hier steht, **was** gefragt und entschieden wurde — damit später nachvollziehbar ist, dass es eine
+Frage *war*.
+
+| #   | Frage | Entscheidung |
+| --- | ----- | ------------ |
+| Q1  | Umfang: nur Typen/Service, plus Kalender, oder plus Buchungsabschluss? | **alles** — Phase 8 + 9 + Buchungsabschluss |
+| Q2  | Rechnungsadresse: Felder streichen, Attrappe lassen oder Schema erweitern? | **eigene Tabelle** `billing_addresses`, 1:n zum Kunden (E42) |
+| Q3  | Generierte Typen und was aus `room.interface.ts` wird | `db:types`, DB-nahe Interfaces ableiten, View-Typen bleiben handgeschrieben (V8) |
+| Q4  | Zuschnitt der Service-Schicht | drei Dateien, `supabase` nur noch dort (V9) |
+| Q5  | Wo lebt der Buchungsentwurf? | `bookingState` wird der vollständige Entwurf, kein `sessionStorage` (V10) |
+| Q6  | Eine Seite oder drei Schritt-Routen? | **eine Seite** (V11) |
+| Q7  | Testumfang | **vorerst keine Tests**, werden später nachgezogen (V12) |
+| Q8  | Spaltenzuschnitt der neuen Tabelle | Straße/Hausnummer getrennt, `country_code` ISO-2, nur `archived_at` (E42) |
+| Q9  | Buchung ↔ Adresse: Verweis oder eingefrorene Kopie? | **Verweis**, Zeile unveränderlich (E43) |
+| Q10 | Wie kommt die Adresse in `create_booking`? | **Skalarparameter**, kein `jsonb` (V13) |
+| Q11 | Wie viel Kalender laden wir wann? | ganzer Horizont einmal je Belegung, im Speicher gecacht (V14) |
+| Q12 | Wie wählt der Gast ein Zimmer aus? | *überholt durch Q26* — Mengenwähler statt Auswahl-Button |
+| Q13 | Fehlerform an der Service-Naht | Ablehnung als **Ergebnis** (Result-Union), Infrastrukturfehler werfen (V15) |
+| Q14 | Was passiert nach erfolgreicher Buchung? | **Popup** nach Figma-Entwurf, später zusätzlich Mail |
+| Q15 | „Extra Angebot 23 €" | *präzisiert in Q18* |
+| Q16 | Popup-Text widerspricht E11, Buchungsnummer fehlt | Text angepasst, Buchungsnummer ergänzt (E46) |
+| Q17 | Popup-Mechanik und Ort der Komponente | `src/shared/ui/modal.ts`, `<dialog>`, genau ein Ausgang (V16) |
+| Q18 | Extra-Zeile sichtbar oder nur im Code? | Bausteine bleiben, Zeile wird **nicht gerendert** (V16) |
+| Q19 | Pflichtfelder und Absende-Button | Button aktiv, Prüfung beim Klick; Gästezahl verpflichtend; Datenschutz bleibt Text (V16) |
+| Q20 | Buchungshorizont im Kalender | vorwärts kappen, Grenze aus `hotels.booking_horizon_days` (V14) |
+| Q21 | Auswahl bei geänderter Gästezahl | *ersetzt durch Q27* |
+| Q22 | RLS der neuen Tabelle | *präzisiert in Q28/Q30* |
+| Q23 | Commit-Schnitt | *ersetzt durch Q29* |
+| Q24 | Eine Kategorie mit Menge, oder mehrere Kategorien je Vorgang? | **mehrere Kategorien**, `p_positions jsonb` (E44) |
+| Q25 | Gästezahl pro Zimmer oder pro Reise? | **pro Zimmer** (E45) |
+| Q26 | Umsetzung der Zimmerauswahl | Mengenwähler je Karte, Obergrenze 8 Zimmer (V16) |
+| Q27 | Auswahl bei geändertem Zeitraum/geänderter Gästezahl | Zeitraum behalten, Mengen zurücksetzen, Hinweis zeigen (V16) |
+| Q28 | Wer darf die Rechnungsadresse lesen und ändern? | Kunde selbst **und** Mitarbeitende (E43) |
+| Q29 | Commit-Schnitt mit Positionen | **fünf Commits** (V17) |
+| Q30 | „Ändern dürfen" gegen „eine Buchung ist ein Vertrag" | Ändern nur auf **unbenutzten** Adressen, auch für Staff (E43) |
+
+**Zwei Fragen haben eine frühere Antwort umgeworfen** — das ist der Ertrag der Runde, nicht ihr
+Makel: Q24 hat Q12 („`p_rooms` fest auf 1") kassiert, und Q30 hat gezeigt, dass Q28 und Q9 sich
+widersprachen. Beide Widersprüche wären sonst als Code entstanden und erst beim Debuggen aufgefallen.
+
+### Vorgehensentscheidungen V8–V17
+
+| #   | Entscheidung | Begründung in Kurzform |
+| --- | ------------ | ---------------------- |
+| **V8** | `pnpm db:types` erzeugt `src/shared/types/database.types.ts`; Client als `createClient<Database>`. DB-nahe Typen werden **abgeleitet** (`Database['public']['Functions'][…]['Returns'][number]`, `Tables<'room_types'>`), reine View-Typen (`RoomCard`, `RoomAmenity`, `RoomCardAvailability`) bleiben handgeschrieben. `post.interface.ts` fällt weg. | Phase 8.3: handgeschriebene Tabellentypen driften. View-Typen sind keine Tabellen und driften nicht — sie pauschal mitzugenerieren gäbe es gar nicht. |
+| **V9** | Drei Dateien unter `src/shared/services/`: `availability.service.ts` (`availability_calendar`, `search_availability`), `booking.service.ts` (`create_booking`), `roomTypes.service.ts` (Stammdaten, Bild-URLs, Hoteldaten). **`supabase` wird außerhalb von `services/` nicht mehr importiert** — auch nicht für `getPublicUrl`. | Phase 8.4 verlangt es. Eine Regel mit einer Ausnahme für „nur schnell die Bild-URL" ist nach einer Woche keine Regel mehr. |
+| **V10** | `bookingState` wird der vollständige Buchungsentwurf (Zeitraum, Belegung, Mengen je Kategorie, Kontakt- und Rechnungsdaten). `this.guests` verlässt die View. **Kein** `sessionStorage`. | Sonst muss die Zusammenfassung ihre Werte aus zwei Quellen zusammenklauben. Gegen Persistenz spricht nicht der Aufwand, sondern die Fehlerklasse: ein wiederhergestellter Entwurf mit abgelaufener Verfügbarkeit. |
+| **V11** | Es bleibt **eine** Seite `/buchung`. `BookingStep` wird Fortschrittsanzeige und Sprungziel, kein Router-Konzept. | Der Kommentar in `bookingState` beschreibt eine Absicht, das Markup eine Tatsache — und die Tatsache ist fertig gebaut und entspricht dem Entwurf. |
+| **V12** | **Vorerst keine Tests** für die Frontend-Seite; werden später nachgezogen. Die 91 Tests aus `pnpm test:db` decken die RPCs weiter ab. | Ausdrücklich so entschieden (Q7). Konsequenz, damit sie nicht überrascht: Die E29-Regel und `buildRoomCards` sind ab jetzt nur über die Oberfläche geprüft. Deshalb V16, letzter Punkt: die Regeln werden trotzdem als eigenständige Funktionen herausgezogen. |
+| **V13** | Die Rechnungsadresse kommt als **fünf Skalarparameter** in `create_booking`, nicht als `jsonb`. | Skalare erscheinen in den generierten Typen benannt und typisiert. Das `jsonb` aus E44 ist kein Gegenbeispiel: eine Liste variabler Länge lässt sich nicht als Skalare ausdrücken, eine feste Adresse schon. |
+| **V14** | Kalender: **einmal** der ganze Horizont je Belegungskombination, im Speicher gecacht (Schlüssel `${adults}-${children}`); Nachladen nur bei geänderter Belegung. Vorwärtsblättern endet bei `hotels.booking_horizon_days`. | 365 Zeilen sind für Postgres nichts, und das Blättern wird sofort. Monatsweises Nachladen macht jeden Monatswechsel zu einem Ladezustand — die Variante, die man später wieder ausbaut. Die Horizontgrenze kommt aus den Stammdaten, nicht als Konstante ins Frontend (E30). |
+| **V15** | `bookingService.createBooking()` liefert `{ ok: true, data } \| { ok: false, error: { code, date, roomTypeId, message } }`. Lesezugriffe **werfen** weiterhin. Der Service parst `error.details` als JSON und fällt bei unparsbarem Inhalt auf `error.message` zurück. | Eine ausgebuchte Nacht ist ein erwartetes Ergebnis, kein Ausnahmefall — und die Oberfläche braucht `datum` und Kategorie, um den Hinweis an der richtigen Stelle zu zeigen (E31). Bei Lesezugriffen gibt es keine fachliche Ablehnung, nur kaputte Infrastruktur. |
+| **V16** | Oberfläche: Mengenwähler je Zimmerkarte (0 bis `min(rooms_free, 8 − bereits gewählte)`), Hervorhebung ab Menge > 0, Auswahlleiste mit Summe; Bestellzeilen je Kategorie mit Menge > 0; Absende-Button immer aktiv mit Prüfung beim Klick; Gästezahl verpflichtend; Datenschutzhinweis bleibt Text; Extra-Angebot-Zeile wird nicht gerendert; Bestätigung über `src/shared/ui/modal.ts` (`<dialog>`, genau ein Ausgang). Wählbarkeits- und Zusammenführungsregeln werden als **eigenständige Funktionen** herausgezogen. | Details und Begründungen in Phase 9/9b. Das Herausziehen der Regeln passiert trotz V12 — es kostet nichts und ist die Voraussetzung dafür, dass die Tests später ohne Umbau nachgezogen werden können. |
+| **V17** | **Fünf Commits** auf `verbindung-ui-zu-datenbank`, jeder für sich lauffähig (anders als die Phasen 1–7). Danach ein Tagebuch-Eintrag. | Siehe „Commit-Schnitt" unten. Der Tagebuch-Eintrag, weil dieser Branch drei Entscheidungen enthält, die man aus Migrationen nicht rekonstruiert (V7). |
+
+### Commit-Schnitt
+
+| # | Inhalt | Phase |
+| - | ------ | ----- |
+| 1 | Migration `billing_addresses` samt RLS und `billing_address_in_use()` | 7b |
+| 2 | Migration `create_booking` neu: Positionen **und** Rechnungsadresse in einem Schritt | 7b |
+| 3 | Typen generieren, Service-Schicht, bestehende Zugriffe umziehen — **Verhalten unverändert** | 8 |
+| 4 | Kalender aus `availability_calendar`, E29-Regel, Horizont-Kappung | 9 |
+| 5 | Mengenwähler, Checkout, `create_booking`, Bestätigungs-Popup | 9b |
+
+Commit 2 fasst beide Änderungen an `create_booking` zusammen, weil beide dieselbe Funktion ersetzen —
+zwei `drop`/`create`-Runden hintereinander helfen niemandem.
 
 ---
 
@@ -228,32 +327,173 @@ einer Stelle ändern.
 
 ---
 
-## Phase 8 — Typen und Frontend-Anbindung
+## Phase 7b — Schema-Nachträge für die Buchungsseite (E42, E43, E44, E45)
 
-1. `pnpm db:types` → generierte Typen in `src/shared/types/database.types.ts`
-2. `createClient<Database>(...)` typisieren
-3. `post.interface.ts` als Muster ablösen: **keine** handgeschriebenen Interfaces für Tabellen mehr —
-   generierte Typen sind die Wahrheit, handgeschriebene driften
-4. Ein schmaler Datenzugriffs-Layer (z. B. `src/shared/services/booking.service.ts`), der die drei
-   RPCs kapselt. Views rufen **nie** direkt `supabase.rpc(...)` auf — sonst liegt Fachlogik in der
-   Darstellung
-5. `_testing-spike`-Aufbau (Vitest) für die Service-Schicht nutzen
+**Ziel:** Alles, was die Oberfläche braucht und im Schema noch fehlt — in zwei Migrationen, vorwärts.
+Die Migrationen der Phasen 1–7 werden **nicht** angefasst; sie sind geteilt und damit unveränderlich.
 
-**Fertig, wenn:** ein Typfehler entsteht, sobald man in einer Migration eine Spalte umbenennt und die
-Typen neu generiert. Genau das ist der Gegenwert von E7.
+### Commit 1 — `billing_addresses`
+
+1. Tabelle `billing_addresses` nach E42: `customer_id` (`on delete restrict`), `street`,
+   `house_number`, `postal_code`, `city`, `country_code` (`check char_length = 2`), `archived_at`,
+   Zeitstempel + `set_updated_at`-Trigger wie überall.
+2. `billing_address_in_use(uuid)` — `SECURITY DEFINER`, `set search_path = ''`, `stable`. Liefert
+   `true`, sobald eine Buchung auf die Adresse zeigt. `SECURITY DEFINER` ist hier **nicht** wegen
+   Privilegien nötig, sondern damit die Policy nicht durch die RLS von `bookings` hindurchfragen muss
+   und dabei je nach Aufrufer ein anderes Ergebnis bekommt.
+3. RLS nach E43:
+    - `select using (customer_id = (select public.current_customer_id()) or public.is_staff())`
+    - `update using (… wie select …) with check (… wie select …)` **plus**
+      `not public.billing_address_in_use(id)` in **beiden** Klauseln — sonst kann eine unbenutzte
+      Adresse per Update auf eine benutzte gedreht werden.
+    - **kein** `insert`, **kein** `delete`. Angelegt wird nur in `create_booking`.
+4. `revoke`/`grant` für `billing_address_in_use` nach dem Muster der anderen internen Funktionen.
+
+**Fertig, wenn:** `rls_audit()` weiterhin **null Zeilen** liefert. Die Prüffunktion aus Phase 7 gilt
+ausdrücklich auch für Tabellen, die es damals noch nicht gab — das ist jetzt der erste Ernstfall.
+
+### Commit 2 — `create_booking` neu
+
+1. Alte Funktion `drop`en (Signaturwechsel, keine Überladung — E44).
+2. Neue Signatur: `p_positions jsonb`, `p_check_in`, `p_check_out`, `p_adults`, `p_children`,
+   `p_email`, `p_first_name`, `p_last_name`, `p_phone`, dazu die fünf Adressparameter aus V13.
+3. Eingaben prüfen, bevor irgendetwas passiert: `p_positions` ist ein nicht-leeres Array, jede
+   Position hat `room_type_id` (uuid) und `rooms >= 1`, **keine Kategorie doppelt**, Summe der Zimmer
+   ≤ 8. Verstöße → `reject_booking('ungueltige_belegung', p_check_in)`.
+4. Advisory-Lock **unverändert** hotelweit (E33) — er deckt jetzt alle Positionen mit ab. Das
+   Hotel wird über die **erste** Position ermittelt; Positionen aus verschiedenen Hotels sind ein
+   Eingabefehler, kein Anwendungsfall (E14).
+5. Prüfschleife pro Position × Nacht wie bisher, mit derselben Reihenfolge der Gründe
+   (`vergangenheit` → `ausserhalb_horizont` → `zu_klein` → `ausgebucht` → `kein_preis`). Die
+   Belegung `p_adults`/`p_children` gilt **pro Zimmer** (E45) und damit für jede Position gleich.
+6. `reject_booking` um `room_type_id` im `DETAIL`-JSON erweitern (E44, Preis-Absatz) — die Oberfläche
+   muss wissen, an welcher Karte sie den Hinweis zeigt.
+7. Rechnungsadresse anlegen: **nach** dem Kunden-Upsert, **vor** den Buchungen, in derselben
+   Transaktion. Keine Wiederverwendung bestehender Adressen — in v1 kann der Gast seine vorhandenen
+   ohnehin nicht sehen (E43).
+8. `booking_groups`-Zeile anlegen, sobald **insgesamt** mehr als eine Buchung entsteht — also auch
+   bei zwei Positionen mit je einem Zimmer. Die bisherige Bedingung `p_rooms > 1` reicht nicht mehr.
+9. Rückgabe: `booking_group_id`, `bookings[]` (unverändert je Zimmer), `nights`,
+   `total_amount_cents` als **Summe über alle Positionen** — die bisherige Formel `v_total * p_rooms`
+   ist mit Positionen falsch.
+10. `revoke`/`grant`/`comment` neu setzen. Beim `drop` gehen sie mit verloren; das lautlos zu
+    vergessen hieße, dass `anon` nicht mehr buchen kann.
+
+**Fertig, wenn:** die Tests aus `supabase/tests/create-booking.spec.ts` auf die neue Signatur
+angepasst grün sind — **einschließlich** des Nebenläufigkeitstests (E39, „mehr als zwei gleichzeitige
+Anfragen"). Zusätzlich zwei neue Fälle: eine Buchung über **zwei** Kategorien erzeugt **eine** Gruppe
+und zwei Buchungen mit korrekter Summe, und eine Position, deren Kategorie ausgebucht ist, lehnt den
+**ganzen** Vorgang ab — inklusive der anderen, verfügbaren Position. Das ist der Sinn von „eine
+Transaktion".
+
+> **Achtung bei Commit 2:** Hier wird die Funktion angefasst, an der die Kernaussage von E10 hängt.
+> Wer den Nebenläufigkeitstest nach dem Umbau nicht laufen lässt, hat die Entscheidung nur noch
+> behauptet.
 
 ---
 
-## Phase 9 — Kalender-UI (E24, E28, E29)
+## Phase 8 — Typen und Service-Schicht (V8, V9, V10, V13, V15)
 
-1. Kalenderkomponente, gefüttert aus `availability_calendar`
-2. Tagesregel: **Anreise** = diese Nacht frei, **Abreise** = vorherige Nacht frei
-3. Nicht wählbare Tage durchgestrichen, Tooltip mit Datum + „Buchung nicht möglich"
-4. Nach abgelehnter Buchung (E31): denselben Tooltip aus dem strukturierten Fehler erzeugen
+**Ziel:** Die Naht zwischen Datenbank und Oberfläche entsteht. **Das Verhalten der Seite ändert sich
+in dieser Phase nicht** — wer am Ende einen Unterschied im Browser sieht, hat zu viel gemacht.
 
-**Fertig, wenn:** eine Nacht ausgebucht ist, ihr Datum als **Anreisetag** gesperrt und als
-**Abreisetag** wählbar bleibt. Dieser eine Test ist die Auszahlung von E8 — steht er nicht, verkauft
-die Seite Anschlussnächte nicht.
+1. `pnpm db:types` → `src/shared/types/database.types.ts`; `supabase.ts` auf
+   `createClient<Database>(…)` umstellen.
+2. `room.interface.ts` aufteilen (V8): `RoomAvailability`, `RoomTypeDetail`, `RoomTypeImage` werden
+   Ableitungen aus `Database`; `RoomCard`, `RoomCardAvailability`, `RoomAmenity` bleiben, wo sie sind
+   — sie beschreiben die Karte, nicht die Tabelle. `post.interface.ts` fällt weg, `Posts.ts` und
+   `SinglePost.ts` ziehen mit.
+3. Service-Schicht anlegen (V9):
+    - `roomTypes.service.ts` — Kategorien samt Bildern, öffentliche Bild-URLs, Hotelstammdaten
+      (`check_in_time`, `check_out_time`, Adresse, `booking_horizon_days` für V14/Phase 9).
+    - `availability.service.ts` — `availability_calendar`, `search_availability`.
+    - `booking.service.ts` — `create_booking` mit dem Result-Union aus V15, handgeschriebenem
+      Eingabetyp für `p_positions` und einer schmalen Laufzeitprüfung des `jsonb`-Ergebnisses
+      (E44: die generierten Typen sagen dazu nur `Json`).
+4. `Booking.ts`, `Posts.ts`, `SinglePost.ts` auf die Services umstellen. Danach findet
+   `grep -rn "from.*services/supabase" src/ --include=*.ts | grep -v "src/shared/services/"`
+   **nichts** mehr. Diese Zeile ist die Prüfung, nicht der gute Vorsatz.
+5. `bookingState` zum vollständigen Entwurf ausbauen (V10): Zeitraum, Belegung, Mengen je Kategorie,
+   Kontakt- und Rechnungsdaten. `this.guests` wandert aus der View hinein. `isStepComplete(2|3)`
+   bekommt endlich eine echte Bedingung.
+
+**Fertig, wenn:** `pnpm build` (also `tsc`) durchläuft, `pnpm lint` grün ist, die Seite sich exakt
+wie vorher verhält — und ein absichtlich in einer Migration umbenanntes Feld nach `pnpm db:types`
+einen **Typfehler** erzeugt. Genau das ist der Gegenwert von E7.
+
+---
+
+## Phase 9 — Kalender an `availability_calendar` (E24, E28, E29, E30, V14)
+
+1. Kalender aus `availability_calendar` speisen — einmal über den ganzen Horizont je
+   Belegungskombination, im Speicher gecacht (V14).
+2. **Tagesregel als eigene Funktion** herausziehen, nicht im Render-Zweig verstecken:
+   `isSelectableAsCheckIn(night)` = diese Nacht frei; `isSelectableAsCheckOut(night)` = die
+   **vorherige** Nacht frei. Welche der beiden gilt, hängt davon ab, ob bereits ein Anreisetag
+   gewählt ist. Das Herausziehen passiert trotz V12 (keine Tests jetzt) — es kostet nichts und ist
+   die Voraussetzung dafür, dass die Prüfung später ohne Umbau nachgezogen wird.
+3. Nicht wählbare Tage durchgestrichen, Tooltip mit Datum und Grund. Für Gäste ist der Grund fast
+   immer `nicht_buchbar` (E28/`mask_reason`) — der Text muss also ohne feine Unterscheidung
+   auskommen und trotzdem etwas sagen.
+4. Vorwärtsblättern bei `hotels.booking_horizon_days` kappen: `canGoNext()` symmetrisch zum
+   vorhandenen `canGoPrev()`, Grenze aus den Stammdaten (E30), **nicht** als Konstante im Frontend.
+5. Belegungsänderung lädt den Kalender neu; eine dadurch ungültig gewordene Auswahl wird nach der
+   Regel aus V16/Phase 9b behandelt.
+
+**Fertig, wenn:** eine ausgebuchte Nacht ihr Datum als **Anreisetag** sperrt und als **Abreisetag**
+wählbar lässt. Dieser eine Fall ist die Auszahlung von E8 — stimmt er nicht, verkauft die Seite keine
+Anschlussnächte. Zweitens: Der Kalender lässt sich nicht über den Horizont hinaus blättern.
+
+---
+
+## Phase 9b — Zimmerauswahl, Checkout und Buchen (E44, E45, E46, V15, V16)
+
+1. **Mengenwähler** je Zimmerkarte (`−` / Zahl / `+`), Start 0, Obergrenze
+   `min(rooms_free, 8 − bereits gewählte Zimmer)`. Nicht buchbare Kategorien zeigen keinen Wähler,
+   sondern ihren Grund. Karten mit Menge > 0 werden hervorgehoben.
+2. Auswahlleiste unter der Liste („2 Zimmer · 4 Nächte · 1.464 €") mit Sprung zum Checkout.
+3. `search_availability` kennt **kein** `p_rooms`: Die Ausgrauung „nur noch 1 Zimmer frei, du willst
+   2" rechnet das Frontend aus `rooms_free`. Das ist eine Bequemlichkeit, **keine** zweite Wahrheit —
+   verbindlich prüft `create_booking` (Leitsatz 1).
+4. Bestellzeilen im Checkout: **eine je Kategorie mit Menge > 0**, gerendert mit dem vorhandenen
+   `getOrderRowHtml()`. Damit bekommt auch das Entfernen-Kreuz aus dem Entwurf eine echte Funktion
+   (Menge auf 0). Die Zeile „Extra Angebot 23 €" wird **nicht** gerendert (V16): Sie steckt in keiner
+   Summe, und eine sichtbare Position, die im Gesamtpreis fehlt, ist ein Rechenfehler vor den Augen
+   des Gastes. Bausteine und `ICON_REMOVE` bleiben für die späteren Zusatzleistungen stehen.
+5. Zusammenfassung aus echten Daten: Hoteladresse und Uhrzeiten aus `hotels`
+   (`check_in_time`/`check_out_time`), Zeitraum und Belegung aus `bookingState`, Preise aus
+   `search_availability`. Die Gästezahl wird als **„Gäste pro Zimmer"** beschriftet (E45).
+6. **Auswahl invalidieren** (V16/Q27), wenn sich Zeitraum oder Belegung ändern: Zeitraum behalten,
+   Mengen dort auf 0 setzen, wo die Kategorie nicht mehr buchbar oder nicht mehr in der Menge
+   verfügbar ist, und einen Hinweis über der Liste zeigen („Ihre Auswahl wurde angepasst: Double
+   Premium fasst maximal 3 Gäste."). Der Zeitraum ist die teurere Entscheidung des Gastes, die Menge
+   die billigere — also fällt die billigere.
+7. **Prüfung beim Klick**, nicht per deaktiviertem Button: Pflicht sind Zeitraum, mindestens ein
+   Zimmer, Belegung (verpflichtend, kein stiller Suchdefault), Vorname, Nachname, E-Mail sowie
+   Straße, Hausnummer, PLZ, Ort, Land (wegen `billing_address_id not null`). Telefon bleibt optional.
+   Bei Verstoß: die rote Zeile aus dem Entwurf anzeigen und in das erste ungültige Feld springen.
+   Der Datenschutzhinweis bleibt Text — eine echte Einwilligung bräuchte Checkbox **und** eine
+   Spalte mit Zeitpunkt und ist ein eigener Vorgang, kein Nebenprodukt.
+8. `booking.service.ts` aufrufen und das Ergebnis nach V15 auswerten. Bei Ablehnung: Hinweis am
+   Datum **und** an der Kategorie aus dem `DETAIL`-JSON, danach Kalender und Zimmerliste neu laden —
+   die Ablehnung heißt, dass sich die Verfügbarkeit geändert hat.
+9. Bei Erfolg: `bookingState.reset()`, dann Bestätigung über `src/shared/ui/modal.ts` (`<dialog>` mit
+   `showModal()` — Fokusfang und Hintergrundsperre gibt es damit geschenkt). Inhalt nach E46:
+   Hirsch-Logo, „Vielen Dank für Ihre Buchung.", „Ihre Buchung ist bestätigt.", „Wir freuen uns auf
+   Sie.", **Buchungsnummer**, Zeitraum, Gesamtpreis, Button „zurück zur Homepage". **Genau ein
+   Ausgang:** Button, Escape und Klick auf den Hintergrund führen alle zur Router-Navigation nach
+   `/`. Jeder Weg, der nur schließt, ließe den Gast auf einem Formular zurück, dessen Buchung bereits
+   getätigt ist.
+10. Ein Kommentar am geänderten Popup-Satz hält fest, warum er vom Entwurf abweicht und wann er
+    zurückkommt (E46).
+
+**Fertig, wenn:** eine Buchung über **zwei** Kategorien durchläuft, das Popup die Buchungsnummer
+zeigt, und ein zweiter Versuch auf das **letzte** freie Zimmer eine Ablehnung mit dem richtigen Datum
+**und** der richtigen Karte erzeugt.
+
+**Bewusst offen nach dieser Phase:** keine Tests auf der Frontend-Seite (V12), keine Bestätigungsmail
+(E46), keine Belegung je Position (E45), keine Zusatzleistungen, keine Einwilligung mit Zeitstempel.
+Alle fünf sind benannt, keine ist versehentlich.
 
 ---
 

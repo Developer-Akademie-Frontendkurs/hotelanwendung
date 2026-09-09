@@ -27,6 +27,8 @@ erDiagram
     ROOM_TYPES ||--o{ BOOKINGS : "verkauft als"
     RATE_PLANS ||--o{ BOOKINGS : "gebucht zu"
     CUSTOMERS ||--o{ BOOKINGS : "bucht"
+    CUSTOMERS ||--o{ BILLING_ADDRESSES : "hat"
+    BILLING_ADDRESSES ||--o{ BOOKINGS : "berechnet an"
     BOOKING_GROUPS ||--o{ BOOKINGS : "fasst zusammen"
 
     BOOKINGS ||--|{ BOOKING_NIGHTS : "eingefroren pro Nacht"
@@ -103,6 +105,17 @@ erDiagram
         text first_name
         text last_name
         text phone
+    }
+
+    BILLING_ADDRESSES {
+        uuid id PK
+        uuid customer_id FK
+        text street
+        text house_number
+        text postal_code
+        text city
+        text country_code "ISO-3166-1 alpha-2 - E42"
+        timestamptz archived_at "nullable - E22"
     }
 
     BOOKING_GROUPS {
@@ -300,6 +313,33 @@ Spalte**. Der Vergleich ist damit eine Spalte und keine Konvention: gesucht wird
 Originalschreibweise bleibt in `email` erhalten, weil sie in der Bestätigungsmail sichtbar ist. Die
 Case-Insensitivität selbst ist nicht verhandelbar (E26) — nur ihr Mechanismus war offen.
 
+### `billing_addresses` — Rechnungsadresse, nicht Sitzadresse (E42, E43)
+
+| Spalte | Typ | Regeln |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `customer_id` | `uuid` | `NOT NULL REFERENCES customers ON DELETE RESTRICT` |
+| `street` | `text` | `NOT NULL` |
+| `house_number` | `text` | `NOT NULL` |
+| `postal_code` | `text` | `NOT NULL` |
+| `city` | `text` | `NOT NULL` |
+| `country_code` | `text` | `NOT NULL CHECK (char_length(country_code) = 2)` — ISO-3166-1 alpha-2 |
+| `archived_at` | `timestamptz` | `NULL` = aktiv (E22) |
+
+**Warum eine eigene Tabelle (E42):** Eine Adresse an `customers` wäre die **Sitzadresse** — wo der
+Gast wohnt. Die Rechnungsadresse ist etwas anderes: wohin die Rechnung geht. Sie fallen häufig
+zusammen und sind trotzdem nicht dasselbe Feld. Ein Kunde kann mehrere haben, also 1:n.
+
+**Straße und Hausnummer getrennt** — anders als bei `hotels`, wo `address_line1` genügt. Das Formular
+hat zwei Felder; Zusammenkleben und späteres Auseinanderparsen verliert genau bei den Adressen
+Information, bei denen es darauf ankommt.
+
+**Unveränderlich, sobald benutzt (E43):** Zeigt eine Buchung auf die Zeile, darf sie nicht mehr
+geändert werden — auch nicht von `is_staff()`. Durchgesetzt in der UPDATE-Policy über
+`billing_address_in_use(uuid)`. Eine Korrektur ist damit eine neue Zeile, kein stilles `UPDATE` auf
+der Vergangenheit. Ohne diese Sperre würde ein Umzug im Jahr 2027 die Rechnungsadresse der Buchung
+von 2026 rückwirkend ändern.
+
 ### `booking_groups` (E27)
 
 | Spalte | Typ | Regeln |
@@ -317,6 +357,7 @@ dann ist E20 gefallen (siehe E27).
 | `id` | `uuid` | PK |
 | `booking_reference` | `text` | `NOT NULL UNIQUE`, 8 Zeichen, Alphabet ohne `I O 0 1` (E23) |
 | `customer_id` | `uuid` | `NOT NULL REFERENCES customers ON DELETE RESTRICT` |
+| `billing_address_id` | `uuid` | `NOT NULL REFERENCES billing_addresses ON DELETE RESTRICT` (E43) |
 | `room_type_id` | `uuid` | `NOT NULL REFERENCES room_types ON DELETE RESTRICT` |
 | `room_id` | `uuid` | `NULL REFERENCES rooms ON DELETE RESTRICT` — Zuweisung beim Check-in (E3) |
 | `rate_plan_id` | `uuid` | `NOT NULL REFERENCES rate_plans ON DELETE RESTRICT` |
@@ -398,7 +439,8 @@ Ohne Backend ist die Datenbank die letzte Verteidigungslinie (Leitsatz 1). Alle 
 | `availability_calendar(von, bis, erwachsene, kinder, kategorie?, hotel?)` | **eine Zeile pro Nacht**: `rooms_free`, `unavailable_reason`. Füttert den Kalender. | E24, E28 |
 | `search_availability(anreise, abreise, erwachsene, kinder, hotel?)` | **eine Zeile pro Kategorie**: Minimum über den Zeitraum, Gesamtpreis. Füttert die Ergebnisliste. | E17, E28 |
 | `reject_booking(code, datum)` | erzeugt die strukturierte Ablehnung; Code durch `mask_reason`, maschinenlesbare Fassung im `DETAIL` | E31 |
-| `create_booking(...)` | Hotelweiter Advisory-Lock → Prüfung über `availability_nights` → `customers`-Upsert → `bookings` + `booking_nights` + `booking_events`, alles in **einer** Transaktion. Strukturierter Fehler bei Ablehnung. | E10, E26, E31, E32, E33 |
+| `create_booking(positionen, ...)` | Hotelweiter Advisory-Lock → Prüfung über `availability_nights` **je Position** → `customers`-Upsert → `billing_addresses` → `bookings` + `booking_nights` + `booking_events`, alles in **einer** Transaktion. Strukturierter Fehler bei Ablehnung. | E10, E26, E31, E32, E33, E42, E44 |
+| `billing_address_in_use(uuid)` | `true`, sobald eine Buchung auf die Adresse zeigt. Trägt die Unveränderlichkeit aus E43 in die UPDATE-Policy. | E43 |
 | `find_rate_gaps(tage)` | Admin: Nächte ohne Preiszeile | E25 |
 | `rls_audit()` | Admin: Abnahme des Schutzes als Dauerprüfung. Keine Zeilen = in Ordnung. | E40 |
 
@@ -438,16 +480,22 @@ aus, für den Betrieb sind es entgegengesetzte Signale.
 ### `create_booking` — Ablauf
 
 ```text
+0. p_positions validieren: nicht leer, keine Kategorie doppelt,
+   rooms >= 1 je Position, Summe <= 8                -- E44
 1. pg_advisory_xact_lock(hashtext('booking:' || hotel_id))  -- EIN Lock fuers Hotel (E10, E33)
+   -- deckt ALLE Positionen ab; genau dafuer wurde er hotelweit gewaehlt
 2. Horizont, Vergangenheit, Belegung pruefen        -- E30, E15
-3. search_availability() fuer den Zeitraum          -- eine Wahrheit, kein Copy-Paste
+   -- Belegung gilt PRO ZIMMER, nicht pro Reise      -- E45
+3. availability_nights() je Position und Nacht      -- eine Wahrheit, kein Copy-Paste
 4. bei Ablehnung: strukturierter Fehler
-   { code, datum, grund }                          -- E31
+   { code, datum, room_type_id, grund }             -- E31, E44
 5. customers: per email_normalized finden oder anlegen -- E26, E32
-6. bookings einfuegen (Referenz erzeugen)           -- E23
-7. booking_nights aus den Saisonpreisen einfrieren  -- E21
-8. booking_events: 'created'                        -- E12
-   -- bei mehreren Zimmern: booking_groups-Zeile + n bookings, alles in DIESER Transaktion (E20/E27)
+6. billing_addresses: neue Zeile anlegen            -- E42, E43
+7. bookings einfuegen (Referenz erzeugen)           -- E23
+8. booking_nights aus den Saisonpreisen einfrieren  -- E21
+9. booking_events: 'created'                        -- E12
+   -- ab der ZWEITEN Buchung (auch ueber zwei Positionen mit je einem Zimmer):
+   -- booking_groups-Zeile, alles in DIESER Transaktion (E20/E27/E44)
 ```
 
 Schritt 3 ruft dieselbe Funktion auf, die auch die Ergebnisliste füttert. Zwei Implementierungen
@@ -477,6 +525,7 @@ Jede Tabelle bekommt `ENABLE ROW LEVEL SECURITY`. Policies **ausschließlich** �
 | `booking_nights` | eigene (über Buchung) oder `is_staff()` | keine |
 | `booking_events` | eigene oder `is_staff()` | keine (nur `SECURITY DEFINER`-Funktionen) |
 | `booking_groups` | `is_staff()` | keine |
+| `billing_addresses` | eigene oder `is_staff()` | `UPDATE` nur auf **unbenutzten** Zeilen (`NOT billing_address_in_use(id)`), sonst keine — angelegt wird nur in `create_booking()` (E43) |
 
 Der Key im Browser (`src/shared/services/supabase.ts`) ist kein Geheimnis, sondern eine öffentliche
 Kennung. RLS *ist* der Schutz — es gibt keinen zweiten.
@@ -496,6 +545,8 @@ Kennung. RLS *ist* der Schutz — es gibt keinen zweiten.
 | Teil-Index `rooms(room_type_id)` `WHERE archived_at IS NULL` | Kapazitätszählung |
 | `booking_events(booking_id, created_at)` | Historie einer Buchung in Reihenfolge |
 | `room_type_images(room_type_id, sort_order, id)` | stabile Bildreihenfolge |
+| `billing_addresses(customer_id)` | Adressen eines Kunden (Kundenkonto, E42) |
+| `bookings(billing_address_id)` | `billing_address_in_use()` — die Funktion sitzt in einer Policy und wird bei **jedem** Änderungsversuch ausgewertet (E43) |
 
 Zwei frühere Einträge sind hier bewusst **weggefallen**:
 
@@ -510,6 +561,9 @@ Zwei frühere Einträge sind hier bewusst **weggefallen**:
 
 Ausstattungsmerkmale, Zusatzleistungen (Frühstück/Parkplatz), Zahlungen, Stornobedingungen,
 Gutscheine, Mehrsprachigkeit, OTA-/Channel-Anbindung, Housekeeping-Abläufe.
+
+Ebenso: eine Belegung **je Position** statt je Vorgang (E45) und ein abweichender Rechnungsempfänger
+(`company`/`recipient_name` an `billing_addresses`, E42).
 
 Alle **additiv** nachrüstbar. Die einzige Erweiterung mit strukturellen Kosten ist
 `bookings` → `bookings` + `booking_items` (E20/E27) — der Punkt, an dem man vorher nachdenkt.
