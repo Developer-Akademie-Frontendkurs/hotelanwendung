@@ -441,4 +441,4 @@ Damit schließt sich der Bogen zum vorigen Branch: Dort entstand ein Kalender mi
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../006_2026-08-26_datenbank-anbindung.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../006_2026-08-26_datenbank-anbindung.md) · [Nächster Commit →](010_2026-09-04_update-project-diary.md)

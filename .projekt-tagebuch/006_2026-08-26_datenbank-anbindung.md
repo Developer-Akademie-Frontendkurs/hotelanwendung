@@ -1,8 +1,8 @@
-[← Vorheriger Branch](005_2026-07-22_buchungs-seite.md) · [📓 Index](000_index.md)
+[← Vorheriger Branch](005_2026-07-22_buchungs-seite.md) · [📓 Index](000_index.md) · [Nächster Branch →](007_2026-09-06_buchungsseite-ui-fertigstellen.md)
 
 # 006 – Branch `datenbank-anbindung`
 
-**Erster Commit:** 2026-08-26 · **Commits:** 9 · **Status:** offen
+**Erster Commit:** 2026-08-26 · **Commits:** 12 · **Status:** gemergt in `main`
 
 ## Ziel des Branches
 
@@ -46,6 +46,9 @@ Am Ende: **91 grüne Tests**, davon sechs, die laut `E34` genau deshalb ausgewä
 | [007](006_2026-08-26_datenbank-anbindung/007_2026-09-02_phase-5-verfuegbarkeit.md)                    | 2026-09-02 | Phase 5: Verfügbarkeit pro Nacht und pro Kategorie, Maskierung auch der Zahlen              |
 | [008](006_2026-08-26_datenbank-anbindung/008_2026-09-02_phase-6-create-booking.md)                    | 2026-09-02 | Phase 6: `create_booking` mit Advisory-Lock, Preiseinfrierung und strukturierter Ablehnung  |
 | [009](006_2026-08-26_datenbank-anbindung/009_2026-09-02_phase-7-rls-abnahme.md)                       | 2026-09-02 | Phase 7: `rls_audit` als Dauerprüfung, Runde 7 (`E37`–`E41`), Doku nachgeführt              |
+| [010](006_2026-08-26_datenbank-anbindung/010_2026-09-04_update-project-diary.md)                      | 2026-09-04 | Projekttagebuch für die Phasen 1–7 nachziehen (reiner Doku-Commit)                          |
+| [011](006_2026-08-26_datenbank-anbindung/011_2026-09-04_clear-sensitive-keys-in-env-example.md)       | 2026-09-04 | `.env.example` leert die Beispiel-Keys – zwei Zeilen mit einer Lehre über Vorlagen          |
+| [012](006_2026-08-26_datenbank-anbindung/012_2026-09-06_add-envdir-configuration-to-vite.md)          | 2026-09-06 | `envDir: '..'` in `vite.config.ts` – die `.env` wurde bei `root: 'src'` nie geladen         |
 
 ## Zusammenfassung
 
@@ -85,8 +88,12 @@ Ein Test ohne Gegenprobe kann nicht zwischen „funktioniert richtig" und „leh
 
 **Und der Branch ist ehrlich über seine Lücken.** Die letzte Phase hält in `E37`–`E41` fest, was erst beim Bauen sichtbar wurde: dass `E28` eine Lücke hatte (die Zahl verrät den maskierten Grund), dass ein `is_staff()`-Wachposten in v1 auch den Service-Role-Key abgewiesen hätte, und dass der Staff-Zweig der Maskierung derzeit **toter Code** ist – ungetestet, mit benanntem Lösungsweg. Das ist etwas anderes als verschwiegene technische Schuld: Eine benannte Lücke mit Ausweg kostet drei Zeilen und spart der nächsten Person eine Stunde.
 
-Der Branch ist derzeit **noch nicht in `main` gemergt**. Die Phasen 8–10 sind bewusst vertagt (`V1`): TypeScript-Typen und Service-Schicht, der Anschluss der Kalender-UI aus Branch `buchungs-seite` an `availability_calendar` und `create_booking`, und schließlich das Cloud-Deployment. Damit schließt sich der Bogen: Dort entstand ein Kalender mit einem `TODO`, hier das Backend, das es erfüllen kann.
+**Die letzten drei Commits sind der Nachlauf.** Commit 010 zieht das Projekttagebuch für die Phasen 1–7 nach – 4 830 Zeilen Markdown, kein Anwendungscode. Commit 011 leert die Beispiel-Keys in `.env.example`, und Commit 012 repariert eine Kleinigkeit, die vorher niemandem aufgefallen war: Weil `vite.config.ts` mit `root: 'src'` arbeitet, suchte Vite die `.env` in `src/` – also dort, wo sie nie lag. Beide Commits zusammen sind sechs geänderte Zeilen und beide zeigen dasselbe Muster: Die Fehler stecken nicht in den 2 000 Zeilen SQL, sondern in der Konfiguration darum herum.
+
+Der Branch wurde am 2026-09-09 in `main` aufgenommen – allerdings **nicht** über einen eigenen Pull Request. Von seinem letzten Commit (`227ad78`) zweigte der Branch [`buchungsseite-ui-fertigstellen`](007_2026-09-06_buchungsseite-ui-fertigstellen.md) ab, und dessen **Pull Request #4** (Merge-Commit `9b81803`) brachte beide Branches gemeinsam nach `main`. Wer in `git log main` nachsieht, findet deshalb die Datenbank-Commits und die UI-Commits in einer durchgehenden Reihe. Das ist eine sehr praxisnahe Beobachtung für Lernende: Branches, die man aufeinander stapelt, mergen sich auch gemeinsam – und die Zuordnung „welcher Commit gehörte zu welchem Branch?" ist danach nur noch über den Merge-Commit und seine beiden Eltern (`M^1`, `M^2`) zu rekonstruieren.
+
+Die Phasen 8–10 waren am Ende dieses Branches noch vertagt (`V1`): TypeScript-Typen und Service-Schicht, der Anschluss der Kalender-UI an `availability_calendar` und `create_booking`, und schließlich das Cloud-Deployment. Aufgehoben wird diese Vertagung erst in Branch [`verbindung-ui-zu-datenbank`](008_2026-09-09_verbindung-ui-zu-datenbank.md). Damit schließt sich der Bogen: In `buchungs-seite` entstand ein Kalender mit einem `TODO`, hier das Backend, das es erfüllen kann – und dort wird beides verbunden.
 
 ---
 
-[← Vorheriger Branch](005_2026-07-22_buchungs-seite.md) · [📓 Index](000_index.md)
+[← Vorheriger Branch](005_2026-07-22_buchungs-seite.md) · [📓 Index](000_index.md) · [Nächster Branch →](007_2026-09-06_buchungsseite-ui-fertigstellen.md)
