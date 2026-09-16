@@ -15,6 +15,7 @@ erDiagram
     HOTELS ||--o{ ROOM_TYPES : "hat"
     HOTELS ||--o{ ROOMS : "hat"
     HOTELS ||--o{ RATE_PLANS : "hat"
+    HOTELS ||--o{ SERVICES : "bietet an"
 
     ROOM_TYPES ||--o{ ROOMS : "gruppiert"
     ROOM_TYPES ||--o{ ROOM_TYPE_IMAGES : "zeigt"
@@ -32,6 +33,8 @@ erDiagram
     BOOKING_GROUPS ||--o{ BOOKINGS : "fasst zusammen"
 
     BOOKINGS ||--|{ BOOKING_NIGHTS : "eingefroren pro Nacht"
+    BOOKINGS ||--o{ BOOKING_EXTRAS : "eingefroren je Leistung"
+    SERVICES ||--o{ BOOKING_EXTRAS : "berechnet als"
     BOOKINGS ||--o{ BOOKING_EVENTS : "Historie"
 
     AUTH_USERS |o--o| CUSTOMERS : "Konto (optional, spaeter)"
@@ -292,6 +295,27 @@ Zwei widersprüchliche Preise für dieselbe Nacht sind damit **unmöglich** — 
 Doku", sondern von der Datenbank abgelehnt. Lücken bleiben erlaubt und bedeuten „nicht buchbar"
 (E25).
 
+### `services` — Zusatzleistungen (E47)
+
+| Spalte | Typ | Regeln |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `hotel_id` | `uuid` | `NOT NULL REFERENCES hotels ON DELETE RESTRICT` |
+| `code` | `text` | `NOT NULL`, `UNIQUE (hotel_id, code)` — v1 genau `BREAKFAST` |
+| `name` | `text` | `NOT NULL` — der Text, den der Gast liest |
+| `charge_basis` | `text` | `NOT NULL CHECK (IN ('per_person_night'))` — sagt, was **eine** Einheit in `booking_extras.quantity` ist |
+| `amount_cents` | `int` | `NOT NULL CHECK (> 0)` |
+| `child_amount_cents` | `int` | `CHECK (>= 0)` — `NULL` heißt „kein eigener Preis", Kinder zahlen dann wie Erwachsene |
+| `currency` | `text` | `NOT NULL DEFAULT 'EUR' CHECK (char_length(currency) = 3)` |
+| `archived_at` | `timestamptz` | |
+
+Dasselbe Verhältnis wie `room_type_rates` zu `booking_nights`: Was hier steht, gilt **heute**.
+
+`0` ist bei `child_amount_cents` **erlaubt** und heißt „Kinder frei" — anders als bei
+`room_type_rates`, wo eine fehlende Zeile bereits „nicht buchbar" sagt (E25) und ein Nullpreis
+deshalb immer ein Versehen wäre. Eine Leistung, die es für Kinder gratis gibt, ist dagegen eine
+echte Konfiguration.
+
 ### `customers` (E4, E26, E32)
 
 | Spalte | Typ | Regeln |
@@ -367,7 +391,9 @@ dann ist E20 gefallen (siehe E27).
 | `adults` | `int` | `NOT NULL CHECK (adults >= 1)` |
 | `children` | `int` | `NOT NULL DEFAULT 0 CHECK (children >= 0)` |
 | `status` | `text` | `NOT NULL DEFAULT 'confirmed'` + `CHECK` (E11) |
-| `total_amount_cents` | `int` | `NOT NULL CHECK (>= 0)` — eingefroren (E5) |
+| `total_amount_cents` | `int` | `NOT NULL CHECK (>= 0)` — **Zimmerpreis**, Summe der `booking_nights`, eingefroren (E5) |
+| `extras_amount_cents` | `int` | `NOT NULL DEFAULT 0 CHECK (>= 0)` — Summe der `booking_extras` (E47) |
+| `grand_total_cents` | `int` | `GENERATED ALWAYS AS (total_amount_cents + extras_amount_cents) STORED` — was der Gast zahlt (E47) |
 | `currency` | `text` | `NOT NULL` |
 | `cancelled_at` | `timestamptz` | denormalisiert für Abfragen (E22) |
 
@@ -403,6 +429,29 @@ Doppelbelegung physisch unmöglich.
 `PRIMARY KEY (booking_id, night)`. Jede Nacht des halb-offenen Intervalls bekommt genau eine Zeile —
 der Abreisetag **nicht**. Damit ist Umsatz pro Monat, Verlängerung und Teilstorno überhaupt
 beantwortbar.
+
+### `booking_extras` — eingefrorene Zusatzleistungen (E21, E47)
+
+| Spalte | Typ | Regeln |
+| --- | --- | --- |
+| `booking_id` | `uuid` | `REFERENCES bookings ON DELETE CASCADE`, Teil des PK |
+| `service_id` | `uuid` | `REFERENCES services ON DELETE RESTRICT`, Teil des PK |
+| `guest_kind` | `text` | `CHECK (IN ('adult', 'child'))`, Teil des PK |
+| `quantity` | `int` | `NOT NULL CHECK (> 0)` — Einheiten nach `services.charge_basis` |
+| `unit_amount_cents` | `int` | `NOT NULL CHECK (>= 0)` |
+| `amount_cents` | `int` | `NOT NULL CHECK (>= 0)` |
+
+```sql
+PRIMARY KEY (booking_id, service_id, guest_kind)
+CHECK (amount_cents = quantity * unit_amount_cents)
+```
+
+Erwachsene und Kinder stehen als **getrennte Zeilen**: Es sind zwei Preise und damit zwei Positionen
+auf der Rechnung — zusammengezogen ließe sich „2 Erwachsene und 1 Kind" aus dem Betrag nicht mehr
+zurückrechnen.
+
+Das `CHECK` macht die Zeile selbstprüfend. Ohne es wäre eine Position denkbar, die eine andere Summe
+behauptet als ihre eigenen Faktoren ergeben — und niemand wüsste, welche der beiden Zahlen stimmt.
 
 ### `booking_events` — append-only Historie (E12)
 
@@ -493,6 +542,8 @@ aus, für den Betrieb sind es entgegengesetzte Signale.
 6. billing_addresses: neue Zeile anlegen            -- E42, E43
 7. bookings einfuegen (Referenz erzeugen)           -- E23
 8. booking_nights aus den Saisonpreisen einfrieren  -- E21
+8b. booking_extras je gewaehlter Zusatzleistung einfrieren,
+    getrennt nach Erwachsenen und Kindern           -- E47
 9. booking_events: 'created'                        -- E12
    -- ab der ZWEITEN Buchung (auch ueber zwei Positionen mit je einem Zimmer):
    -- booking_groups-Zeile, alles in DIESER Transaktion (E20/E27/E44)
@@ -518,11 +569,11 @@ Jede Tabelle bekommt `ENABLE ROW LEVEL SECURITY`. Policies **ausschließlich** �
 | Tabelle | lesen | schreiben |
 | --- | --- | --- |
 | `hotels` | alle | `is_staff()` |
-| `room_types`, `room_type_images`, `rate_plans`, `room_type_rates` | alle (nicht archiviert) | `is_staff()` |
+| `room_types`, `room_type_images`, `rate_plans`, `room_type_rates`, `services` | alle (nicht archiviert) | `is_staff()` |
 | `rooms`, `room_blocks` | nur `is_staff()` | `is_staff()` |
 | `customers` | eigener Datensatz oder `is_staff()` | eigener Datensatz oder `is_staff()` |
 | `bookings` | eigene oder `is_staff()` | **keine** Insert-Policy — nur über `create_booking()` |
-| `booking_nights` | eigene (über Buchung) oder `is_staff()` | keine |
+| `booking_nights`, `booking_extras` | eigene (über Buchung) oder `is_staff()` | keine |
 | `booking_events` | eigene oder `is_staff()` | keine (nur `SECURITY DEFINER`-Funktionen) |
 | `booking_groups` | `is_staff()` | keine |
 | `billing_addresses` | eigene oder `is_staff()` | `UPDATE` nur auf **unbenutzten** Zeilen (`NOT billing_address_in_use(id)`), sonst keine — angelegt wird nur in `create_booking()` (E43) |
@@ -559,8 +610,13 @@ Zwei frühere Einträge sind hier bewusst **weggefallen**:
 
 ## 6. Was hier absichtlich fehlt (E15)
 
-Ausstattungsmerkmale, Zusatzleistungen (Frühstück/Parkplatz), Zahlungen, Stornobedingungen,
-Gutscheine, Mehrsprachigkeit, OTA-/Channel-Anbindung, Housekeeping-Abläufe.
+Ausstattungsmerkmale, Zahlungen, Stornobedingungen, Gutscheine, Mehrsprachigkeit, OTA-/Channel-Anbindung,
+Housekeeping-Abläufe.
+
+Die **Zusatzleistungen** standen bis 2026-09-16 ebenfalls hier. Sie sind mit E47 (`services` /
+`booking_extras`) hereingekommen — rein additiv, wie E15 es versprochen hatte: keine bestehende
+Tabelle hat dabei ihre Bedeutung geändert. Weitere Leistungen (Parkplatz, Zustellbett) sind jetzt
+Datenzeilen.
 
 Ebenso: eine Belegung **je Position** statt je Vorgang (E45) und ein abweichender Rechnungsempfänger
 (`company`/`recipient_name` an `billing_addresses`, E42).

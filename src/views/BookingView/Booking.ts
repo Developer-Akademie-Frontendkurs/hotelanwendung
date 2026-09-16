@@ -3,11 +3,11 @@ import { bookingState } from '../../shared/state/bookingState';
 import { supabase } from '../../shared/services/supabase';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
 import { clampQuantity, getLimitMessage, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
+import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
 import './booking.css';
 
 /*
     *** Vorbereitung und Verknüpfung BookingView zu Datenbank ***
-        TODO: Checkbox in Kategorie für mit und ohne Frühstück
         TODO: Unter Zimmerauswahl neue Section Zusätze (Zustellbestten, Kinderbett)
         TODO: Buchungssteps verknüpfen
         TODO: Console Logs json Buchung
@@ -27,12 +27,19 @@ type DayCell = {
     selectable: boolean;
 };
 
+type BookingPosition = {
+    roomTypeId: string;
+    rooms: number;
+    withBreakfast: boolean;
+};
+
 type Booking = {
     checkIn: string;
     checkOut: string;
     nights: number;
     adults: number;
     children: number;
+    positions: BookingPosition[];
 };
 
 type GuestField = 'adults' | 'children';
@@ -141,6 +148,10 @@ export class BookingView extends AbstractView {
     private roomsEl: HTMLElement | null = null;
     private readonly guests: Record<GuestField, number | null> = { adults: null, children: null };
     private rooms: RoomCard[] = [];
+    // `null` heißt: für dieses Hotel ist kein Frühstück hinterlegt. Dann wird auch keins
+    // angeboten – `create_booking` würde eine Buchung mit Frühstück ablehnen (E25), und
+    // eine Checkbox, die in eine Ablehnung führt, ist eine Falle.
+    private breakfastService: BreakfastService | null = null;
     private roomsState: RoomsState = 'loading';
     private roomsError: string | null = null;
     // Hinweis über der Liste, wenn eine neue Suche gewählte Mengen angepasst hat (V16.6).
@@ -182,7 +193,7 @@ export class BookingView extends AbstractView {
             this.handleRoomsClick(event);
         });
         this.roomsEl?.addEventListener('change', (event: Event): void => {
-            this.handleQuantityChange(event);
+            this.handleRoomsChange(event);
         });
         void this.loadRooms();
 
@@ -395,8 +406,66 @@ export class BookingView extends AbstractView {
                     </div>
                 </div>
                 <p data-room-quantity-notice="${room.roomTypeId}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze text-right"></p>
+                ${this.getBreakfastHtml(room)}
             </div>
         `;
+    }
+
+    /**
+     * Frühstück je Kategorie (E47).
+     *
+     * Die Checkbox sitzt an der Kategorie und nicht am einzelnen Zimmer, weil
+     * `create_booking` genau diese Granularität kennt: alle Zimmer einer Position
+     * bekommen dieselbe Buchung. Frühstück je einzelnem Zimmer wäre der Umbau nach
+     * `booking_items` (E20/E27).
+     */
+    private getBreakfastHtml(room: RoomCard): string {
+        const service = this.breakfastService;
+        if (service === null) return '';
+
+        const inputId = `booking-breakfast-${room.slug}`;
+        const rooms = bookingState.getRoomQuantity(room.roomTypeId);
+
+        return /*html*/ `
+            <div class="flex flex-col gap-1 border-t border-purple-haze/25 pt-3">
+                <label for="${inputId}" class="flex items-center justify-between gap-4 cursor-pointer">
+                    <span class="font-playfair-display font-medium text-16 768:text-18 leading-tight text-purple-haze-dark">mit ${service.name}</span>
+                    <input
+                        id="${inputId}"
+                        data-room-breakfast="${room.roomTypeId}"
+                        type="checkbox"
+                        ${bookingState.getBreakfast(room.roomTypeId) ? 'checked' : ''}
+                        ${rooms === 0 ? 'disabled' : ''}
+                        class="shrink-0 w-5 h-5 accent-purple-haze cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
+                    />
+                </label>
+                <p data-room-breakfast-amount="${room.roomTypeId}" class="font-antic-didone text-14 leading-tight text-purple-haze text-right">${this.getBreakfastLabel(room)}</p>
+            </div>
+        `;
+    }
+
+    /**
+     * Der Text unter der Checkbox.
+     *
+     * Ohne Häkchen der Einzelpreis, mit Häkchen der Betrag, der tatsächlich dazukommt.
+     * Ein Aufschlag, den der Gast erst auf der Bestätigung als Zahl sieht, ist kein
+     * Angebot, sondern eine Überraschung.
+     */
+    private getBreakfastLabel(room: RoomCard): string {
+        const service = this.breakfastService;
+        const availability = room.availability;
+        if (service === null) return '';
+
+        const perAdult = formatPrice(service.unitAmountCents, service.currency);
+        const perChild = formatPrice(service.childUnitAmountCents, service.currency);
+        const preise = `${perAdult} pro Erwachsenem, ${perChild} pro Kind und Nacht`;
+
+        const rooms = bookingState.getRoomQuantity(room.roomTypeId);
+        if (availability === null || rooms === 0 || !bookingState.getBreakfast(room.roomTypeId)) return preise;
+
+        const occupancy = { adults: this.guests.adults ?? 0, children: this.guests.children ?? 0 };
+        const amount = getBreakfastAmountCents(service, occupancy, availability.nights, rooms);
+        return `+ ${formatPrice(amount, service.currency)} · ${preise}`;
     }
 
     /** Der Wähler hat zwei Vorbedingungen: einen Zeitraum und eine Belegung (V16.7 — kein stiller Suchdefault). */
@@ -445,9 +514,16 @@ export class BookingView extends AbstractView {
     }
 
     /** Geklemmt wird auf `change`, nicht bei jedem Tastendruck: sonst ist „1" auf dem Weg zu „12" nie tippbar. */
-    private handleQuantityChange(event: Event): void {
+    private handleRoomsChange(event: Event): void {
         const target = event.target;
         if (!(target instanceof HTMLInputElement)) return;
+
+        const breakfastId = target.dataset.roomBreakfast;
+        if (breakfastId !== undefined) {
+            bookingState.setBreakfast(breakfastId, target.checked);
+            this.updateQuantityUi(null);
+            return;
+        }
 
         const roomTypeId = target.dataset.roomQuantity;
         if (roomTypeId === undefined) return;
@@ -503,6 +579,18 @@ export class BookingView extends AbstractView {
 
             const noticeEl = roomsEl.querySelector<HTMLElement>(`[data-room-quantity-notice="${room.roomTypeId}"]`);
             if (noticeEl) noticeEl.textContent = notice !== null && notice.roomTypeId === room.roomTypeId ? notice.message : '';
+
+            // Das Häkchen wird aus dem Zustand nachgezogen, nicht nur vom Klick gesetzt:
+            // Eine Menge von 0 räumt es weg (siehe `bookingState`), und dann muss es auch
+            // im DOM verschwinden.
+            const breakfastEl = roomsEl.querySelector<HTMLInputElement>(`[data-room-breakfast="${room.roomTypeId}"]`);
+            if (breakfastEl) {
+                breakfastEl.checked = bookingState.getBreakfast(room.roomTypeId);
+                breakfastEl.disabled = quantity === 0;
+            }
+
+            const breakfastAmountEl = roomsEl.querySelector<HTMLElement>(`[data-room-breakfast-amount="${room.roomTypeId}"]`);
+            if (breakfastAmountEl) breakfastAmountEl.textContent = this.getBreakfastLabel(room);
         });
     }
 
@@ -694,8 +782,13 @@ export class BookingView extends AbstractView {
         this.renderRooms();
 
         try {
-            const [details, availability] = await Promise.all([
+            const [details, breakfast, availability] = await Promise.all([
                 supabase.from('room_types').select('id, name, slug, description, room_type_images(storage_path, alt_text, sort_order)').order('name'),
+                // Der Frühstückspreis kommt aus der Datenbank, nicht als Konstante aus
+                // dem Frontend – dasselbe Argument wie beim Buchungshorizont (E30). Ohne
+                // `hotel_id`-Filter, weil es genau ein Hotel gibt; `search_availability`
+                // nimmt oben dieselbe Abkürzung.
+                supabase.from('services').select('id, name, amount_cents, child_amount_cents, currency').eq('code', 'BREAKFAST').maybeSingle(),
                 // Ohne gewählte Erwachsenenzahl wird nicht gesucht: eine geratene Belegung
                 // liefert Preise und Restbestände, die niemand bestellt hat (V16.7).
                 checkIn === null || checkOut === null || adults === null
@@ -715,8 +808,10 @@ export class BookingView extends AbstractView {
 
             if (details.error) throw new Error(details.error.message);
             if (availability !== null && availability.error) throw new Error(availability.error.message);
+            if (breakfast.error) throw new Error(breakfast.error.message);
 
             this.rooms = buildRoomCards(details.data, availability === null ? null : (availability.data as RoomAvailability[]));
+            this.breakfastService = buildBreakfastService(breakfast.data);
 
             // Ein neues Suchergebnis kann gewählte Mengen unmöglich gemacht haben (V16.6).
             const reconciled = reconcileQuantities(bookingState.getRoomQuantities(), this.rooms);
@@ -957,12 +1052,24 @@ export class BookingView extends AbstractView {
         if (checkIn === null || checkOut === null || adults === null) return;
 
         const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY);
+        const quantities = bookingState.getRoomQuantities();
+        const breakfast = bookingState.getRoomBreakfast();
+
         const booking: Booking = {
             checkIn: toISODate(checkIn),
             checkOut: toISODate(checkOut),
             nights,
             adults,
             children: this.guests.children ?? 0,
+            // Eine Position je Kategorie – genau die Form, die `create_booking` je Aufruf
+            // erwartet (`p_room_type_id`, `p_rooms`, `p_with_breakfast`).
+            positions: Object.entries(quantities).map(
+                ([roomTypeId, rooms]: [string, number]): BookingPosition => ({
+                    roomTypeId,
+                    rooms,
+                    withBreakfast: breakfast[roomTypeId] ?? false,
+                }),
+            ),
         };
 
         // TODO: Buchungsdaten später an das Backend senden (fetch / Supabase).
@@ -1022,9 +1129,15 @@ function pickImage(images: RoomTypeImage[]): RoomTypeImage | null {
     return [...images].sort((a: RoomTypeImage, b: RoomTypeImage): number => a.sort_order - b.sort_order)[0] ?? null;
 }
 
-/** Zahl vor dem Symbol wie im Design ("732€") – `style: 'currency'` stellt das € bei de-AT voran. */
+/**
+ * Zahl vor dem Symbol wie im Design ("732€") – `style: 'currency'` stellt das € bei de-AT voran.
+ *
+ * Volle Euro bleiben ohne Nachkommastellen, alles andere bekommt genau zwei: Sonst
+ * stünde der Kinderpreis von 850 ct als „8,5€" da – als Betrag gelesen ein Tippfehler.
+ */
 function formatPrice(cents: number, currency: string): string {
-    const amount = new Intl.NumberFormat('de-AT', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(cents / 100);
+    const digits = cents % 100 === 0 ? 0 : 2;
+    const amount = new Intl.NumberFormat('de-AT', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(cents / 100);
     return currency === 'EUR' ? `${amount}€` : `${amount} ${currency}`;
 }
 

@@ -396,6 +396,9 @@ Dasselbe Muster wie bei `rate_plan_id` (E5) und der `customers`-Trennung (E4).
 **Draußen:** Ausstattungsmerkmale, Zusatzleistungen, Zahlungen, Stornobedingungen, Gutscheine,
 Mehrsprachigkeit, OTA-Anbindung.
 
+> **Nachtrag 2026-09-16:** Die **Zusatzleistungen** sind seit E47 drin (`services` / `booking_extras`).
+> Der Zaun hat gehalten, was er versprochen hat: Die Erweiterung war rein additiv.
+
 **Begründung der Aufnahmen:**
 
 - **Belegungsgrenzen** sind keine Zusatzfunktion. Ohne sie ist die Verfügbarkeitsabfrage _fachlich
@@ -1047,6 +1050,66 @@ fest, warum er weg ist. Damit ist es eine datierte Abweichung vom Entwurf, kein 
 
 ---
 
+## 4i. Entschieden (Runde 9) — Frühstück als Zusatzleistung
+
+Ausgangslage: Die Buchungsseite soll je Zimmerkategorie eine Checkbox „mit Frühstück" bekommen,
+17 € pro Person und Nacht. Die Frage war ausdrücklich, **ob** der Betrag in den Zimmerpreis wandert
+oder ein eigener Posten wird.
+
+### E47 — Das Frühstück ist ein eigener Posten, nicht Teil des Zimmerpreises
+
+**Entscheidung:** Zwei neue Tabellen — `services` (Stammdaten: was gilt heute) und `booking_extras`
+(Vertrag: was beim Buchen galt) — nach demselben Muster wie `room_type_rates`/`booking_nights`.
+`bookings` bekommt `extras_amount_cents` und die generierte Spalte `grand_total_cents`;
+`total_amount_cents` behält seine Bedeutung als **Zimmerpreis**. `create_booking` bekommt
+`p_with_breakfast boolean`. Preis: 17 € pro Erwachsenem, 8,50 € pro Kind, je Person **und Nacht** —
+gefrühstückt wird am Morgen nach jeder gebuchten Nacht, das letzte am Abreisetag.
+
+**Begründung — drei Gründe, von denen jeder allein reicht:**
+
+1. **Der Zimmerpreis kann es nicht ausdrücken.** `room_type_rates.amount_cents` gilt pro **Zimmer**
+   und Nacht, das Frühstück kostet pro **Person** und Morgen. Ein Doppelzimmer mit einem statt zwei
+   Gästen kostet dasselbe Zimmer, aber ein Frühstück weniger. In einer Preiszeile ist das erst mit
+   Belegungspreisen darstellbar (E5) — und die sind ausdrücklich vertagt.
+2. **Das Einfrieren wäre unumkehrbar.** `booking_nights` friert den Preis pro Nacht ein (E21). Wäre
+   das Frühstück eingebacken, ließe sich an einer bestehenden Buchung nie mehr trennen, was
+   Beherbergung und was Verpflegung war — und getrennt ausgewiesen werden muss beides, sobald aus
+   der Buchung eine Rechnung wird.
+3. **Der Client darf den Preis nicht setzen** (E6, Leitsatz 1). `create_booking` rechnet die Summe
+   selbst. Ein Aufschlag, den nur das Frontend kennt, stünde im Checkout und fehlte in der
+   angelegten Buchung — der Gast sähe den Rechenfehler auf der Bestätigung. Das ist derselbe Fall,
+   den V16 bei der Zeile „Extra Angebot 23 €" schon einmal verhindert hat.
+
+**Ausdrücklich verworfen: ein zweiter Rate-Plan** („Übernachtung mit Frühstück"). Der Seam aus E5
+liegt bereit, trägt hier aber nicht: derselbe Konflikt Person/Zimmer wie unter 1., dazu jede Saison
+und jede Kategorie doppelt zu pflegen — eine Preisänderung müsste an zwei Stellen passieren, und
+eine vergessene wäre stillschweigend ein falscher Preis. Der Rate-Plan-Seam ist für **andere
+Konditionen desselben Zimmers** gedacht (flexibel / nicht erstattbar), nicht für eine zusätzliche
+Leistung.
+
+**Warum `total_amount_cents` seine Bedeutung behält:** Die Spalte war bisher deckungsgleich mit der
+Summe der `booking_nights`. Diese Invariante umzudefinieren hieße, jede bestehende Abfrage, jeden
+Test und die Rückgabe von `create_booking` still etwas anderes meinen zu lassen. Der volle Betrag
+bekommt deshalb einen **eigenen Namen** (`grand_total_cents`, generiert) — damit gibt es keine
+Stelle mehr, an der „die Summe" zweideutig ist.
+
+**Erwachsene und Kinder sind zwei Positionen**, nicht eine Summe: Es sind zwei Preise, auf einer
+Rechnung stehen deshalb zwei Zeilen, und aus einem zusammengezogenen Betrag ließe sich „2 Erwachsene
+und 1 Kind" später nicht mehr zurückrechnen. Die Datenbank kennt nur die *Anzahl* der Kinder, kein
+Alter — eine Altersgrenze wäre eine eigene Entscheidung.
+
+**Preis, benannt:** `p_with_breakfast` gilt für **alle** Zimmer eines Aufrufs, also für eine
+Kategorie. Genau das ist die Granularität der Checkbox. Frühstück je **einzelnem** Zimmer verlangte
+`booking_items` (E20/E27) — der einzige teure Umbau, und er wird dafür nicht angefasst. Sobald E44
+`p_room_type_id`/`p_rooms` durch `p_positions jsonb` ersetzt, wandert der Wert als Feld in die
+Position; das ist derselbe Weg, den E45 für die Belegung je Position beschreibt.
+
+**Damit fällt ein Punkt hinter dem Scope-Zaun (E15) weg** — additiv, wie dort behauptet: Keine
+bestehende Tabelle ändert ihre Bedeutung, und der nächste Zusatz (Zustellbett, Kinderbett) ist ein
+`INSERT` in `services`, keine Migration.
+
+---
+
 ## 5. Offene Punkte
 
 | #   | Frage | hängt an |
@@ -1062,7 +1125,7 @@ Der Zeitpunkt für RLS (früh, direkt nach Phase 2) und der Seed-Umfang (minimal
 Umsetzungsplan, weil sie Vorgehen sind und nicht Domäne.
 
 Bewusst hinter dem Zaun (E15) und damit **kein** Teil dieses Schemas: Ausstattungsmerkmale,
-Zusatzleistungen, Zahlungen, Stornobedingungen, Gutscheine, Mehrsprachigkeit, OTA-Anbindung,
+Zahlungen, Stornobedingungen, Gutscheine, Mehrsprachigkeit, OTA-Anbindung,
 Housekeeping-Abläufe. Alle additiv nachrüstbar.
 
 Benannte Upgrade-Pfade, die aus Entscheidungen folgen: Tages-Inventar-Tabelle (E10), volles RBAC
@@ -1105,3 +1168,4 @@ Für den Call als Zusammenfassung auf einer Folie:
 | 2026-09-02 | Grilling-Runde zur **Umsetzung**: Runde 6 (E32–E36) entschieden und begründet; E28 bestätigt; Cloud-Instanz als Wegwerf-Spike freigegeben; `schema.md` um E32/E33 korrigiert; Umsetzungsplan um die Vorgehensentscheidungen ergänzt |
 | 2026-09-02 | Phasen 1–7 umgesetzt und getestet (91 Tests). Runde 7 (E37–E41) aus der Umsetzung heraus entschieden; `schema.md` um Trigger, Teilindizes, `is_blocking_status` im Prädikat und die internen Funktionen nachgeführt                 |
 | 2026-09-09 | Grilling-Runde 8 zur **Anbindung der Buchungsseite**: E42–E46 entschieden. E44 revidiert den Nachsatz von E41 (mehrere Kategorien je Vorgang). Fragen/Antworten und V8–V16 im Umsetzungsplan, Phasen 8/9 dort ausgearbeitet, Phase 7b und 9b ergänzt |
+| 2026-09-16 | Runde 9: **E47** — Frühstück als eigener Posten (`services`, `booking_extras`, `bookings.extras_amount_cents`/`grand_total_cents`, `p_with_breakfast`). Zusatzleistungen damit aus dem Scope-Zaun E15 heraus; `schema.md` um beide Tabellen und die RLS-Zeilen ergänzt |

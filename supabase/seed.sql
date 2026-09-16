@@ -139,3 +139,24 @@ cross join (
         ('00000000-0000-4000-8000-000000000102'::uuid, 16500),  -- Double Premium
         ('00000000-0000-4000-8000-000000000103'::uuid, 9500)    -- Einzelzimmer Alpin
 ) as basis (room_type_id, grundpreis_cents);
+
+-- ---------------------------------------------------------------------------
+-- Zusatzleistungen (E47)
+-- ---------------------------------------------------------------------------
+--
+-- Das Fruehstueck ist die erste Zeile in `services` und damit der Beleg, dass der
+-- Zusatz Daten sind und keine Schemaaenderung: Ein zweiter Zusatz (Zustellbett,
+-- Kinderbett) ist ein weiteres INSERT, keine Migration.
+insert into public.services (id, hotel_id, code, name, charge_basis, amount_cents, child_amount_cents)
+values (
+    '00000000-0000-4000-8000-000000000301',
+    '00000000-0000-4000-8000-000000000001',
+    'BREAKFAST',
+    'Frühstück',
+    -- Pro Person und Nacht: gefruehstueckt wird am Morgen nach jeder gebuchten Nacht.
+    'per_person_night',
+    1700,
+    -- Kinder zur Haelfte. NULL waere "kein eigener Preis" und damit voller Preis -
+    -- der Rabatt steht hier als Zahl, nicht als Regel im Quelltext.
+    850
+);

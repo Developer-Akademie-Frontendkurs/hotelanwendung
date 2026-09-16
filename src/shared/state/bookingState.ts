@@ -13,11 +13,21 @@ export type BookingDates = {
  */
 export type RoomQuantities = Readonly<Record<string, number>>;
 
+/**
+ * Frühstück je Kategorie, geschlüsselt wie die Mengen (E47).
+ *
+ * Bewusst neben `roomQuantities` und nicht darin: Die Regeln in `roomQuantity.ts`
+ * rechnen mit Zahlen, und ein Objekt statt einer Zahl würde jede dieser Funktionen
+ * anfassen, ohne dass eine von ihnen das Häkchen je braucht.
+ */
+export type RoomBreakfast = Readonly<Record<string, boolean>>;
+
 type Listener = () => void;
 
 let checkIn: Date | null = null;
 let checkOut: Date | null = null;
 let roomQuantities: Record<string, number> = {};
+let roomBreakfast: Record<string, boolean> = {};
 
 const listeners = new Set<Listener>();
 
@@ -53,11 +63,40 @@ function setRoomQuantities(next: RoomQuantities): void {
     // Mengen von 0 fallen heraus, statt als `0` stehen zu bleiben: sonst wandern leere
     // Positionen bis in `create_booking` mit.
     roomQuantities = Object.fromEntries(Object.entries(next).filter(([, rooms]: [string, number]): boolean => rooms > 0));
+
+    // Ohne Zimmer kein Frühstück. Bliebe das Häkchen stehen, käme es beim erneuten
+    // Wählen derselben Kategorie unbestellt zurück – und stünde dann in einer Summe,
+    // die der Gast nie gesetzt hat.
+    roomBreakfast = Object.fromEntries(
+        Object.entries(roomBreakfast).filter(([roomTypeId, wanted]: [string, boolean]): boolean => wanted && roomQuantities[roomTypeId] !== undefined),
+    );
+    notify();
+}
+
+function getRoomBreakfast(): RoomBreakfast {
+    return { ...roomBreakfast };
+}
+
+function getBreakfast(roomTypeId: string): boolean {
+    return roomBreakfast[roomTypeId] ?? false;
+}
+
+function setBreakfast(roomTypeId: string, wanted: boolean): void {
+    // Kein Häkchen ohne Zimmer – dieselbe Regel wie beim Abgleich oben, nur an dem
+    // Ende, an dem der Gast klickt.
+    if (wanted && getRoomQuantity(roomTypeId) === 0) return;
+
+    // Abgewähltes wird entfernt, nicht auf `false` gesetzt: `false` und „nicht gewählt"
+    // sind dieselbe Aussage, und zwei Schreibweisen für eine Aussage laufen auseinander.
+    roomBreakfast = wanted
+        ? { ...roomBreakfast, [roomTypeId]: true }
+        : Object.fromEntries(Object.entries(roomBreakfast).filter(([id]: [string, boolean]): boolean => id !== roomTypeId));
     notify();
 }
 
 function reset(): void {
     roomQuantities = {};
+    roomBreakfast = {};
     setDates(null, null);
 }
 
@@ -86,6 +125,9 @@ export const bookingState = {
     getRoomQuantity,
     setRoomQuantity,
     setRoomQuantities,
+    getRoomBreakfast,
+    getBreakfast,
+    setBreakfast,
     reset,
     isStepComplete,
     subscribe,

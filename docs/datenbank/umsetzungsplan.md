@@ -515,8 +515,20 @@ zeigt, und ein zweiter Versuch auf das **letzte** freie Zimmer eine Ablehnung mi
 **und** der richtigen Karte erzeugt.
 
 **Bewusst offen nach dieser Phase:** keine Tests auf der Frontend-Seite (V12), keine Bestätigungsmail
-(E46), keine Belegung je Position (E45), keine Zusatzleistungen, keine Einwilligung mit Zeitstempel.
-Alle fünf sind benannt, keine ist versehentlich.
+(E46), keine Belegung je Position (E45), keine Einwilligung mit Zeitstempel. Alle vier sind benannt,
+keine ist versehentlich.
+
+> **Nachtrag 2026-09-16 (E47):** Die **Zusatzleistungen** standen hier ebenfalls als offen. Sie sind
+> mit dem Frühstück umgesetzt worden — vorgezogen, weil die Checkbox an der Zimmerkarte hängt und
+> damit zu genau dieser Phase gehört. Neu: `services`, `booking_extras`,
+> `bookings.extras_amount_cents`/`grand_total_cents`, `create_booking(… p_with_breakfast boolean)`.
+> Für die Bestellzeilen (Punkt 4) heißt das: Das Frühstück **wird** gerendert — es steckt jetzt in
+> einer Summe, und genau das war die Bedingung, unter der V16 die Zeile „Extra Angebot 23 €"
+> zurückgehalten hat.
+>
+> Offen bleibt an dieser Stelle die **Anbindung des Checkouts** selbst (Punkte 4–9): Die
+> Zusammenfassung rechts ist weiterhin die Figma-Attrappe. Die Checkbox schreibt in `bookingState`,
+> und `submit()` gibt die Positionen inklusive `withBreakfast` aus — verbunden ist noch nichts.
 
 ---
 
@@ -545,6 +557,7 @@ Reihenfolge nach Nutzen, jeweils mit der Entscheidung, die den Weg offen gehalte
 | Admin-Live-Liste per Realtime **Broadcast** (nicht `postgres_changes`) | Trigger + Kanal | E6 |
 | Zahlungen | neue Tabellen + Edge Function für externe Effekte | E6, E11 (`pending`) |
 | Weitere Rate-Plans, Belegungspreise | Datenzeilen statt Schemaänderung | E5 |
+| Weitere Zusatzleistungen (Parkplatz, Zustellbett) | Datenzeilen in `services`; eine neue `charge_basis` bei anderer Bezugsgröße | E47 |
 | `booking_guests` (Namen der Mitreisenden) | reine Zusatztabelle | E16 |
 | Tages-Inventar (Kontingente, Stop-Sell) | zweite Wahrheit, Pflegeaufwand | E10 |
 | Mehrere Hotels | `hotel_id`-Backfill, Policies erweitern | E2, E14 |
