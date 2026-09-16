@@ -24,3 +24,14 @@
 .booking__clear:hover {
     opacity: 1;
 }
+
+/*
+    Mengenwähler: die nativen Spinner des Zahlenfeldes weichen den eigenen
+    `−`/`+`-Knöpfen. `appearance: none` (Tailwind `appearance-none`) genügt in WebKit
+    nicht — dort hängen die Pfeile an Pseudo-Elementen.
+*/
+.booking__quantity::-webkit-outer-spin-button,
+.booking__quantity::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+}

@@ -23,6 +23,8 @@ export interface RoomTypeImage {
 
 /** Stammdaten einer Kategorie samt Bildern – per Embed in einer Abfrage geholt. */
 export interface RoomTypeDetail {
+    /** `room_types.id` – Schlüssel der gewählten Menge und später der Position in `create_booking`. */
+    id: string;
     name: string;
     slug: string;
     description: string | null;
@@ -51,6 +53,7 @@ export interface RoomCardAvailability {
 
 /** Alles, was eine Zimmerkarte zum Rendern braucht – aus beiden Abfragen zusammengeführt. */
 export interface RoomCard {
+    roomTypeId: string;
     slug: string;
     name: string;
     description: string | null;

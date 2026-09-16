@@ -154,6 +154,21 @@ widersprachen. Beide Widersprüche wären sonst als Code entstanden und erst bei
 Commit 2 fasst beide Änderungen an `create_booking` zusammen, weil beide dieselbe Funktion ersetzen —
 zwei `drop`/`create`-Runden hintereinander helfen niemandem.
 
+> **Nachtrag 2026-09-16 — Mengenwähler vorgezogen (Grilling-Runde 9).** Der Mengenwähler aus
+> Phase 9b, Punkt 1 ist **vor** den Commits 1–4 umgesetzt worden, als eigener Commit auf demselben
+> Branch. Er ist ohne Migration, Typen und Service-Schicht lauffähig, und die Commits 3 und 4
+> fassen sein Markup nicht an. Frontend-only heißt hier wörtlich: die Mengen stehen in
+> `bookingState` (erster Schritt von V10, geschlüsselt nach `room_type_id`), aber noch in keinem
+> Aufruf — `create_booking` bekommt sie erst mit Commit 2 und 5. Mitgeliefert sind auch Punkt 1
+> von V16.6 (Abgleich der Mengen nach jeder neuen Suche) und die Hervorhebung gewählter Karten;
+> Auswahlleiste (9b.2) und Bestellzeilen (9b.4) bleiben bei Commit 5.
+>
+> Die Obergrenze bleibt bei **8** Zimmern (`MAX_ROOMS_PER_BOOKING` in
+> `src/views/BookingView/roomQuantity.ts`) — eine abweichende Zahl in der Oberfläche wurde
+> erwogen und verworfen, weil der Gast die Ablehnung sonst erst beim Absenden erfährt. Mit dem
+> Minimalseed (8 Zimmer in 3 Kategorien, V4) kann die Grenze nie greifen; sie ist trotzdem
+> umgesetzt, weil der Seed nicht die Regel ist.
+
 ---
 
 ## Phase 1 — Werkzeuge und Projektgerüst (E7, E35)

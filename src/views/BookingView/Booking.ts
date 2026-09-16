@@ -2,11 +2,11 @@ import AbstractView from '../AbstractView';
 import { bookingState } from '../../shared/state/bookingState';
 import { supabase } from '../../shared/services/supabase';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
+import { clampQuantity, getLimitMessage, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
 import './booking.css';
 
 /*
     *** Vorbereitung und Verknüpfung BookingView zu Datenbank ***
-        TODO: Anzahl der gewünschen Zimmer in jedem Kategorie aufnehmen
         TODO: Checkbox in Kategorie für mit und ohne Frühstück
         TODO: Unter Zimmerauswahl neue Section Zusätze (Zustellbestten, Kinderbett)
         TODO: Buchungssteps verknüpfen
@@ -148,6 +148,8 @@ export class BookingView extends AbstractView {
     private rooms: RoomCard[] = [];
     private roomsState: RoomsState = 'loading';
     private roomsError: string | null = null;
+    // Hinweis über der Liste, wenn eine neue Suche gewählte Mengen angepasst hat (V16.6).
+    private quantityNotice: string | null = null;
     // Zählt die Suchanfragen mit. Trifft eine ältere Antwort nach einer neueren ein,
     // wird sie verworfen, statt das Ergebnis der neueren zu überschreiben.
     private roomsRequestId = 0;
@@ -181,6 +183,12 @@ export class BookingView extends AbstractView {
         });
 
         this.roomsEl = document.getElementById('booking-rooms');
+        this.roomsEl?.addEventListener('click', (event: MouseEvent): void => {
+            this.handleRoomsClick(event);
+        });
+        this.roomsEl?.addEventListener('change', (event: Event): void => {
+            this.handleQuantityChange(event);
+        });
         void this.loadRooms();
 
         this.calendarEl = document.getElementById('booking-calendar');
@@ -262,11 +270,22 @@ export class BookingView extends AbstractView {
                     return this.getRoomsNoticeHtml('Zurzeit sind keine Zimmerkategorien hinterlegt.');
                 }
                 return /*html*/ `
+                    ${this.getQuantityNoticeHtml()}
                     <div class="flex flex-col gap-8 768:gap-11">
                         ${this.rooms.map((room: RoomCard): string => this.getRoomCardHtml(room)).join('')}
                     </div>
                 `;
         }
+    }
+
+    private getQuantityNoticeHtml(): string {
+        if (this.quantityNotice === null) return '';
+
+        return /*html*/ `
+            <p role="status" class="mb-8 768:mb-11 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-4 py-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">
+                ${this.quantityNotice}
+            </p>
+        `;
     }
 
     private getRoomsNoticeHtml(message: string): string {
@@ -296,17 +315,162 @@ export class BookingView extends AbstractView {
                 `;
 
         const description = room.description === null ? '' : /*html*/ `<p class="font-antic-didone text-18 768:text-20 text-purple-haze-dark">${room.description}</p>`;
+        const isSelected = bookingState.getRoomQuantity(room.roomTypeId) > 0;
 
         return /*html*/ `
-            <article class="flex flex-col 768:flex-row overflow-hidden ${isBookable ? '' : 'opacity-60'}">
+            <article data-room-card="${room.roomTypeId}" class="flex flex-col 768:flex-row overflow-hidden ${isBookable ? '' : 'opacity-60'} ${isSelected ? 'ring-2 ring-purple-haze' : ''}">
                 ${this.getRoomImageHtml(room)}
                 <div class="flex-1 flex flex-col justify-center gap-3 bg-purple-haze-light px-5 py-6 768:px-8 768:py-8">
                     ${amenitiesHtml}
                     ${description}
+                    ${this.getRoomQuantityHtml(room)}
                     ${getAvailabilityHtml(room.availability)}
                 </div>
             </article>
         `;
+    }
+
+    /**
+     * Mengenwähler der Karte: `−` / Zahl / `+`.
+     *
+     * Die nativen Spinner des Zahlenfeldes sind ausgeblendet (`booking.css`) — dasselbe
+     * Muster wie beim Gäste-`select` mit eigenem Chevron.
+     */
+    private getRoomQuantityHtml(room: RoomCard): string {
+        const availability = room.availability;
+
+        // Ohne vollständigen Zeitraum kennt niemand `rooms_free`. Ein Feld ohne geprüfte
+        // Obergrenze würde eine Menge versprechen, die es nicht geben muss.
+        if (availability === null) {
+            return /*html*/ `<p class="font-antic-didone text-16 text-purple-haze-dark/70">Bitte zuerst Zeitraum wählen</p>`;
+        }
+
+        // Nicht buchbare Kategorien zeigen ihren Grund (Zeile darunter), keinen Wähler.
+        if (!availability.isBookable) return '';
+
+        const quantity = bookingState.getRoomQuantity(room.roomTypeId);
+        const otherRooms = getTotalRooms(bookingState.getRoomQuantities()) - quantity;
+        const max = getRoomMax(availability.roomsFree, otherRooms);
+        const inputId = `booking-rooms-${room.slug}`;
+
+        return /*html*/ `
+            <div class="flex flex-col gap-1.5">
+                <div class="flex items-center justify-between gap-4">
+                    <label for="${inputId}" class="font-playfair-display font-medium text-16 768:text-18 leading-tight text-purple-haze-dark">Anzahl Zimmer</label>
+                    <div class="flex items-center gap-2">
+                        ${this.getQuantityStepHtml(room, -1, `Ein Zimmer weniger – ${room.name}`, '&minus;', quantity === 0)}
+                        <input
+                            id="${inputId}"
+                            data-room-quantity="${room.roomTypeId}"
+                            type="number"
+                            inputmode="numeric"
+                            min="0"
+                            max="${max.toString()}"
+                            step="1"
+                            value="${quantity.toString()}"
+                            class="booking__quantity w-16 456:w-20 appearance-none rounded-xl border border-purple-haze bg-white px-2 py-2 font-antic-didone text-18 456:text-24 leading-tight text-center text-purple-haze-dark transition-colors hover:bg-purple-haze-light focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
+                        />
+                        ${this.getQuantityStepHtml(room, 1, `Ein Zimmer mehr – ${room.name}`, '+', quantity >= (availability.roomsFree ?? 0))}
+                    </div>
+                </div>
+                <p data-room-quantity-notice="${room.roomTypeId}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze text-right"></p>
+            </div>
+        `;
+    }
+
+    /**
+     * Ein Schritt-Knopf.
+     *
+     * `+` wird nur von `rooms_free` gesperrt, nicht von der Gesamtgrenze: die ist unsere
+     * Regel, und ein ausgegrauter Knopf erklärt sie nicht. Der Klick löst stattdessen den
+     * Hinweis aus (Q10).
+     */
+    private getQuantityStepHtml(room: RoomCard, step: number, ariaLabel: string, glyph: string, disabled: boolean): string {
+        return /*html*/ `
+            <button
+                type="button"
+                data-room-step="${step.toString()}"
+                data-room-type="${room.roomTypeId}"
+                aria-label="${ariaLabel}"
+                ${disabled ? 'disabled' : ''}
+                class="shrink-0 flex items-center justify-center w-9 h-9 456:w-10 456:h-10 rounded-full bg-purple-haze font-antic-didone text-24 leading-none text-white cursor-pointer transition-colors hover:bg-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-haze"
+            >${glyph}</button>
+        `;
+    }
+
+    private handleRoomsClick(event: MouseEvent): void {
+        const target = event.target as HTMLElement;
+
+        const stepEl = target.closest<HTMLElement>('[data-room-step]');
+        if (!stepEl) return;
+
+        const roomTypeId = stepEl.dataset.roomType;
+        const step = Number(stepEl.dataset.roomStep);
+        if (roomTypeId === undefined || !Number.isFinite(step)) return;
+
+        this.setRoomQuantity(roomTypeId, bookingState.getRoomQuantity(roomTypeId) + step);
+    }
+
+    /** Geklemmt wird auf `change`, nicht bei jedem Tastendruck: sonst ist „1" auf dem Weg zu „12" nie tippbar. */
+    private handleQuantityChange(event: Event): void {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement)) return;
+
+        const roomTypeId = target.dataset.roomQuantity;
+        if (roomTypeId === undefined) return;
+
+        this.setRoomQuantity(roomTypeId, normalizeQuantityInput(target.value));
+    }
+
+    private setRoomQuantity(roomTypeId: string, desired: number): void {
+        const room = this.rooms.find((candidate: RoomCard): boolean => candidate.roomTypeId === roomTypeId);
+        const availability = room?.availability;
+        if (!availability?.isBookable) return;
+
+        const otherRooms = getTotalRooms(bookingState.getRoomQuantities()) - bookingState.getRoomQuantity(roomTypeId);
+        const clamped = clampQuantity(desired, availability.roomsFree, otherRooms);
+        bookingState.setRoomQuantity(roomTypeId, clamped.value);
+
+        // Der Gast soll sofort erfahren, warum es nicht weitergeht — nicht erst beim Absenden.
+        const message = desired > clamped.value ? getLimitMessage(clamped.limitedBy, availability.roomsFree) : null;
+        this.updateQuantityUi(message === null ? null : { roomTypeId, message });
+    }
+
+    /**
+     * Schreibt Mengen, Maxima, Knopf-Zustände und Hinweise direkt an die vorhandenen
+     * Knoten — ohne `renderRooms()`, weil ein Neuaufbau der Liste den Fokus aus dem Feld
+     * nimmt, in dem gerade getippt wird.
+     */
+    private updateQuantityUi(notice: { roomTypeId: string; message: string } | null): void {
+        const roomsEl = this.roomsEl;
+        if (!roomsEl) return;
+
+        const quantities = bookingState.getRoomQuantities();
+        const totalRooms = getTotalRooms(quantities);
+
+        this.rooms.forEach((room: RoomCard): void => {
+            const quantity = quantities[room.roomTypeId] ?? 0;
+            const roomsFree = room.availability?.roomsFree ?? 0;
+
+            const card = roomsEl.querySelector<HTMLElement>(`[data-room-card="${room.roomTypeId}"]`);
+            card?.classList.toggle('ring-2', quantity > 0);
+            card?.classList.toggle('ring-purple-haze', quantity > 0);
+
+            const input = roomsEl.querySelector<HTMLInputElement>(`[data-room-quantity="${room.roomTypeId}"]`);
+            if (input) {
+                input.value = quantity.toString();
+                input.max = getRoomMax(roomsFree, totalRooms - quantity).toString();
+            }
+
+            const minus = roomsEl.querySelector<HTMLButtonElement>(`[data-room-step="-1"][data-room-type="${room.roomTypeId}"]`);
+            if (minus) minus.disabled = quantity === 0;
+
+            const plus = roomsEl.querySelector<HTMLButtonElement>(`[data-room-step="1"][data-room-type="${room.roomTypeId}"]`);
+            if (plus) plus.disabled = quantity >= roomsFree;
+
+            const noticeEl = roomsEl.querySelector<HTMLElement>(`[data-room-quantity-notice="${room.roomTypeId}"]`);
+            if (noticeEl) noticeEl.textContent = notice !== null && notice.roomTypeId === room.roomTypeId ? notice.message : '';
+        });
     }
 
     private getRoomImageHtml(room: RoomCard): string {
@@ -497,7 +661,7 @@ export class BookingView extends AbstractView {
 
         try {
             const [details, availability] = await Promise.all([
-                supabase.from('room_types').select('name, slug, description, room_type_images(storage_path, alt_text, sort_order)').order('name'),
+                supabase.from('room_types').select('id, name, slug, description, room_type_images(storage_path, alt_text, sort_order)').order('name'),
                 checkIn === null || checkOut === null
                     ? null
                     : supabase.rpc('search_availability', {
@@ -515,6 +679,12 @@ export class BookingView extends AbstractView {
             if (availability !== null && availability.error) throw new Error(availability.error.message);
 
             this.rooms = buildRoomCards(details.data, availability === null ? null : (availability.data as RoomAvailability[]));
+
+            // Ein neues Suchergebnis kann gewählte Mengen unmöglich gemacht haben (V16.6).
+            const reconciled = reconcileQuantities(bookingState.getRoomQuantities(), this.rooms);
+            bookingState.setRoomQuantities(reconciled.quantities);
+            this.quantityNotice = reconciled.notice;
+
             this.roomsState = 'ready';
             this.roomsError = null;
         } catch (error) {
@@ -773,6 +943,7 @@ function buildRoomCards(details: RoomTypeDetail[], availability: RoomAvailabilit
         const room = availabilityBySlug.get(detail.slug);
 
         return {
+            roomTypeId: detail.id,
             slug: detail.slug,
             name: detail.name,
             description: detail.description,

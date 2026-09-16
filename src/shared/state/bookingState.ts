@@ -5,10 +5,19 @@ export type BookingDates = {
     checkOut: Date | null;
 };
 
+/**
+ * Gewählte Zimmer je Kategorie, geschlüsselt nach `room_type_id`.
+ *
+ * Der Schlüssel ist bewusst die UUID und nicht der sprechendere `slug`: die Positionen
+ * in `create_booking` (`p_positions`) verlangen genau diese ID.
+ */
+export type RoomQuantities = Readonly<Record<string, number>>;
+
 type Listener = () => void;
 
 let checkIn: Date | null = null;
 let checkOut: Date | null = null;
+let roomQuantities: Record<string, number> = {};
 
 const listeners = new Set<Listener>();
 
@@ -28,7 +37,27 @@ function setDates(nextCheckIn: Date | null, nextCheckOut: Date | null): void {
     notify();
 }
 
+function getRoomQuantities(): RoomQuantities {
+    return { ...roomQuantities };
+}
+
+function getRoomQuantity(roomTypeId: string): number {
+    return roomQuantities[roomTypeId] ?? 0;
+}
+
+function setRoomQuantity(roomTypeId: string, rooms: number): void {
+    setRoomQuantities({ ...roomQuantities, [roomTypeId]: rooms });
+}
+
+function setRoomQuantities(next: RoomQuantities): void {
+    // Mengen von 0 fallen heraus, statt als `0` stehen zu bleiben: sonst wandern leere
+    // Positionen bis in `create_booking` mit.
+    roomQuantities = Object.fromEntries(Object.entries(next).filter(([, rooms]: [string, number]): boolean => rooms > 0));
+    notify();
+}
+
 function reset(): void {
+    roomQuantities = {};
     setDates(null, null);
 }
 
@@ -53,6 +82,10 @@ function subscribe(listener: Listener): () => void {
 export const bookingState = {
     getDates,
     setDates,
+    getRoomQuantities,
+    getRoomQuantity,
+    setRoomQuantity,
+    setRoomQuantities,
     reset,
     isStepComplete,
     subscribe,
