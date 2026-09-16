@@ -163,6 +163,14 @@ zwei `drop`/`create`-Runden hintereinander helfen niemandem.
 > von V16.6 (Abgleich der Mengen nach jeder neuen Suche) und die Hervorhebung gewählter Karten;
 > Auswahlleiste (9b.2) und Bestellzeilen (9b.4) bleiben bei Commit 5.
 >
+> **Mitgezogen: die Belegung ist verpflichtend** (V16.7, vorgezogen aus Phase 9b, Punkt 7).
+> `DEFAULT_ADULTS`/`DEFAULT_CHILDREN` sind entfernt — ohne gewählte Erwachsenenzahl läuft
+> `search_availability` nicht, es gibt also keinen Preis, keinen Restbestand und keinen Wähler,
+> und der `weiter`-Knopf des Kalenders bleibt gesperrt. Pflicht ist allein die Erwachsenenzahl
+> (Auswahl ab 1); ein leeres Kinderfeld **ist** „keine Kinder" — das ist keine geratene Belegung,
+> sondern die Abwesenheit von Kindern, weshalb die frühere 0-Option im Kinderfeld entfallen ist.
+> Der Hinweis am Feld erscheint erst, sobald der Zeitraum steht.
+>
 > Die Obergrenze bleibt bei **8** Zimmern (`MAX_ROOMS_PER_BOOKING` in
 > `src/views/BookingView/roomQuantity.ts`) — eine abweichende Zahl in der Oberfläche wurde
 > erwogen und verworfen, weil der Gast die Ablehnung sonst erst beim Absenden erfährt. Mit dem

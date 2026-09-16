@@ -31,8 +31,8 @@ type Booking = {
     checkIn: string;
     checkOut: string;
     nights: number;
-    adults: number | null;
-    children: number | null;
+    adults: number;
+    children: number;
 };
 
 type GuestField = 'adults' | 'children';
@@ -133,11 +133,6 @@ const ROOM_AMENITIES: Readonly<Record<string, readonly RoomAmenity[]>> = {
 
 const ROOM_IMAGE_BUCKET = 'room-images';
 
-// Ohne getroffene Gästeauswahl sucht die Anwendung mit dieser Belegung – dieselben
-// Werte stehen dann auch in der Info-Leiste über den Zimmern.
-const DEFAULT_ADULTS = 2;
-const DEFAULT_CHILDREN = 0;
-
 export class BookingView extends AbstractView {
     private readonly today: Date;
     private displayedYear: number;
@@ -203,9 +198,9 @@ export class BookingView extends AbstractView {
         return /*html*/ `
             <div class="mb-8 768:mb-12">
                 <h2 class="font-playfair-display text-28 768:text-36 text-purple-haze-dark text-center mb-5 768:mb-6">Anzahl der Gäste</h2>
-                <div id="booking-guests" class="flex flex-col 576:flex-row 576:justify-center gap-4 768:gap-8">
+                <div id="booking-guests" class="flex flex-col 576:flex-row 576:items-start 576:justify-center gap-4 768:gap-8">
                     ${this.getGuestFieldHtml('adults', 'Erwachsene', 'Anzahl der Erwachsenen', buildAdultOptions(), ADULT_ICON)}
-                    ${this.getGuestFieldHtml('children', 'Kinder', 'Anzahl der Kinder', buildChildOptions(), CHILD_ICON)}
+                    ${this.getGuestFieldHtml('children', 'Keine Kinder', 'Anzahl der Kinder', buildChildOptions(), CHILD_ICON)}
                 </div>
             </div>
         `;
@@ -221,7 +216,12 @@ export class BookingView extends AbstractView {
             })
             .join('');
 
+        // Nur die Erwachsenenzahl ist Pflicht (Kinder: leer = keine Kinder), also hängt
+        // auch nur an diesem Feld eine Hinweiszeile.
+        const notice = field === 'adults' ? /*html*/ `<p data-guests-notice aria-live="polite" class="font-antic-didone text-14 leading-tight text-red-600"></p>` : '';
+
         return /*html*/ `
+            <div class="flex flex-col gap-1.5">
             <div class="flex items-center gap-3 768:gap-4">
                 <div class="relative flex-1 576:flex-none 576:w-60">
                     <select
@@ -240,7 +240,24 @@ export class BookingView extends AbstractView {
                     ${icon}
                 </span>
             </div>
+            ${notice}
+            </div>
         `;
+    }
+
+    /**
+     * Sagt am Feld, was fehlt — aber erst, wenn der Zeitraum steht.
+     *
+     * Vorher wäre der Hinweis eine Begrüßung mit einem Fehler: wer die Seite öffnet, hat
+     * noch nichts falsch gemacht.
+     */
+    private renderGuestsNotice(): void {
+        const noticeEl = document.querySelector<HTMLElement>('[data-guests-notice]');
+        if (!noticeEl) return;
+
+        const { checkIn, checkOut } = bookingState.getDates();
+        const isMissing = checkIn !== null && checkOut !== null && this.guests.adults === null;
+        noticeEl.textContent = isMissing ? 'Bitte wählen Sie die Anzahl der Erwachsenen.' : '';
     }
 
     private handleGuestChange(event: Event): void {
@@ -251,6 +268,9 @@ export class BookingView extends AbstractView {
         if (field !== 'adults' && field !== 'children') return;
 
         this.guests[field] = target.value === '' ? null : Number(target.value);
+        this.renderGuestsNotice();
+        // Der weiter-Knopf hängt jetzt mit an der Belegung.
+        this.renderCalendar();
         void this.loadRooms();
     }
 
@@ -339,10 +359,11 @@ export class BookingView extends AbstractView {
     private getRoomQuantityHtml(room: RoomCard): string {
         const availability = room.availability;
 
-        // Ohne vollständigen Zeitraum kennt niemand `rooms_free`. Ein Feld ohne geprüfte
+        // Ohne Zeitraum und Belegung kennt niemand `rooms_free`. Ein Feld ohne geprüfte
         // Obergrenze würde eine Menge versprechen, die es nicht geben muss.
         if (availability === null) {
-            return /*html*/ `<p class="font-antic-didone text-16 text-purple-haze-dark/70">Bitte zuerst Zeitraum wählen</p>`;
+            const hint = this.getMissingSelectionHint();
+            return hint === '' ? '' : /*html*/ `<p class="font-antic-didone text-16 text-purple-haze-dark/70">${hint}</p>`;
         }
 
         // Nicht buchbare Kategorien zeigen ihren Grund (Zeile darunter), keinen Wähler.
@@ -376,6 +397,18 @@ export class BookingView extends AbstractView {
                 <p data-room-quantity-notice="${room.roomTypeId}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze text-right"></p>
             </div>
         `;
+    }
+
+    /** Der Wähler hat zwei Vorbedingungen: einen Zeitraum und eine Belegung (V16.7 — kein stiller Suchdefault). */
+    private getMissingSelectionHint(): string {
+        const { checkIn, checkOut } = bookingState.getDates();
+        const needsDates = checkIn === null || checkOut === null;
+        const needsGuests = this.guests.adults === null;
+
+        if (needsDates && needsGuests) return 'Bitte zuerst Zeitraum und Anzahl der Gäste wählen';
+        if (needsDates) return 'Bitte zuerst Zeitraum wählen';
+        if (needsGuests) return 'Bitte zuerst die Anzahl der Gäste wählen';
+        return '';
     }
 
     /**
@@ -654,6 +687,7 @@ export class BookingView extends AbstractView {
      */
     private async loadRooms(): Promise<void> {
         const { checkIn, checkOut } = bookingState.getDates();
+        const adults = this.guests.adults;
 
         const requestId = ++this.roomsRequestId;
         this.roomsState = 'loading';
@@ -662,13 +696,17 @@ export class BookingView extends AbstractView {
         try {
             const [details, availability] = await Promise.all([
                 supabase.from('room_types').select('id, name, slug, description, room_type_images(storage_path, alt_text, sort_order)').order('name'),
-                checkIn === null || checkOut === null
+                // Ohne gewählte Erwachsenenzahl wird nicht gesucht: eine geratene Belegung
+                // liefert Preise und Restbestände, die niemand bestellt hat (V16.7).
+                checkIn === null || checkOut === null || adults === null
                     ? null
                     : supabase.rpc('search_availability', {
                           p_check_in: toISODate(checkIn),
                           p_check_out: toISODate(checkOut),
-                          p_adults: this.guests.adults ?? DEFAULT_ADULTS,
-                          p_children: this.guests.children ?? DEFAULT_CHILDREN,
+                          p_adults: adults,
+                          // Leeres Kinderfeld heißt „keine Kinder" — das ist keine Vermutung,
+                          // sondern die Abwesenheit von Kindern.
+                          p_children: this.guests.children ?? 0,
                       }),
             ]);
 
@@ -801,7 +839,7 @@ export class BookingView extends AbstractView {
 
     private getFooterHtml(): string {
         const { checkIn, checkOut } = bookingState.getDates();
-        const canSubmit = checkIn !== null && checkOut !== null;
+        const canSubmit = checkIn !== null && checkOut !== null && this.guests.adults !== null;
         return /*html*/ `
             <div class="flex justify-center mt-8 768:mt-10">
                 <button
@@ -886,12 +924,14 @@ export class BookingView extends AbstractView {
             bookingState.setDates(checkIn, date);
         }
         this.renderCalendar();
+        this.renderGuestsNotice();
         void this.loadRooms();
     }
 
     private clearSelection(): void {
         bookingState.setDates(null, null);
         this.renderCalendar();
+        this.renderGuestsNotice();
         void this.loadRooms();
     }
 
@@ -913,15 +953,16 @@ export class BookingView extends AbstractView {
 
     private submit(): void {
         const { checkIn, checkOut } = bookingState.getDates();
-        if (checkIn === null || checkOut === null) return;
+        const adults = this.guests.adults;
+        if (checkIn === null || checkOut === null || adults === null) return;
 
         const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY);
         const booking: Booking = {
             checkIn: toISODate(checkIn),
             checkOut: toISODate(checkOut),
             nights,
-            adults: this.guests.adults,
-            children: this.guests.children,
+            adults,
+            children: this.guests.children ?? 0,
         };
 
         // TODO: Buchungsdaten später an das Backend senden (fetch / Supabase).
@@ -1027,9 +1068,10 @@ function buildAdultOptions(): readonly GuestOption[] {
     });
 }
 
+/** Ohne eigene 0-Option: der leere Platzhalter „Keine Kinder" ist dieser Fall (Q17). */
 function buildChildOptions(): readonly GuestOption[] {
-    return Array.from({ length: MAX_CHILDREN + 1 }, (_unused: unknown, value: number): GuestOption => {
-        if (value === 0) return { value, label: 'Keine Kinder' };
+    return Array.from({ length: MAX_CHILDREN }, (_unused: unknown, index: number): GuestOption => {
+        const value = index + 1;
         return { value, label: value === 1 ? '1 Kind' : `${value.toString()} Kinder` };
     });
 }
