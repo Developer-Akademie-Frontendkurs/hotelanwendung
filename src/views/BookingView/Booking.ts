@@ -4,6 +4,17 @@ import { supabase } from '../../shared/services/supabase';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
 import './booking.css';
 
+/*
+    *** Vorbereitung und Verknüpfung BookingView zu Datenbank ***
+        TODO: Anzahl der gewünschen Zimmer in jedem Kategorie aufnehmen
+        TODO: Checkbox in Kategorie für mit und ohne Frühstück
+        TODO: Unter Zimmerauswahl neue Section Zusätze (Zustellbestten, Kinderbett)
+        TODO: Buchungssteps verknüpfen
+        TODO: Console Logs json Buchung
+        TODO: Migrations notwending? Eventuelle Änderungen an der Datenbank?
+        TODO: Integration Datenbank Buchungspeichern
+*/
+
 type DayCell = {
     date: Date;
     inCurrentMonth: boolean;
