@@ -13,6 +13,14 @@ export type BookingDates = {
  */
 export type RoomQuantities = Readonly<Record<string, number>>;
 
+/**
+ * Zusatzleistungen je Vorgang (E49), geschlüsselt nach `services.code`, Wert = Menge.
+ *
+ * Eine Checkbox ist Menge 1; nur das Kinderbett kennt mehr. Nicht gewählte Leistungen
+ * stehen nicht als 0 darin – dieselbe Regel wie bei den Zimmermengen.
+ */
+export type ServiceQuantities = Readonly<Record<string, number>>;
+
 type Listener = () => void;
 
 let checkIn: Date | null = null;
@@ -21,6 +29,7 @@ let roomQuantities: Record<string, number> = {};
 // Frühstück für ALLE Gäste des Vorgangs (E47, E48). Seit die Belegung eine Gesamtzahl
 // ist, gibt es keine Gäste „einer Kategorie" mehr, an die ein Häkchen gebunden wäre.
 let breakfast = false;
+let services: Record<string, number> = {};
 
 const listeners = new Set<Listener>();
 
@@ -60,7 +69,10 @@ function setRoomQuantities(next: RoomQuantities): void {
     // Ohne Zimmer kein Frühstück. Bliebe das Häkchen stehen, käme es beim erneuten
     // Wählen eines Zimmers unbestellt zurück – und stünde dann in einer Summe, die der
     // Gast nie gesetzt hat.
-    if (Object.keys(roomQuantities).length === 0) breakfast = false;
+    if (Object.keys(roomQuantities).length === 0) {
+        breakfast = false;
+        services = {};
+    }
     notify();
 }
 
@@ -75,9 +87,29 @@ function setBreakfast(wanted: boolean): void {
     notify();
 }
 
+function getServices(): ServiceQuantities {
+    return { ...services };
+}
+
+function getServiceQuantity(code: string): number {
+    return services[code] ?? 0;
+}
+
+function setServices(next: ServiceQuantities): void {
+    // Ohne Zimmer keine Leistungen – dieselbe Regel wie beim Frühstück.
+    const hasRooms = Object.keys(roomQuantities).length > 0;
+    services = hasRooms ? Object.fromEntries(Object.entries(next).filter(([, quantity]: [string, number]): boolean => quantity > 0)) : {};
+    notify();
+}
+
+function setServiceQuantity(code: string, quantity: number): void {
+    setServices({ ...services, [code]: quantity });
+}
+
 function reset(): void {
     roomQuantities = {};
     breakfast = false;
+    services = {};
     setDates(null, null);
 }
 
@@ -108,6 +140,10 @@ export const bookingState = {
     setRoomQuantities,
     getBreakfast,
     setBreakfast,
+    getServices,
+    getServiceQuantity,
+    setServices,
+    setServiceQuantity,
     reset,
     isStepComplete,
     subscribe,

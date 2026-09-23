@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildBreakfastService, getBreakfastAmountCents } from './breakfast';
 
-const service = buildBreakfastService({ id: 'x', name: 'Frühstück', amount_cents: 1700, child_amount_cents: 850, currency: 'EUR' });
+const service = buildBreakfastService({ id: 'x', name: 'Frühstück', description: null, amount_cents: 1700, child_amount_cents: 850, currency: 'EUR' });
 
 describe('getBreakfastAmountCents (E47, E48)', () => {
     it('rechnet für die Gäste des Vorgangs, nicht je Zimmer', () => {
@@ -12,7 +12,7 @@ describe('getBreakfastAmountCents (E47, E48)', () => {
     });
 
     it('lässt Kinder ohne eigenen Preis wie Erwachsene zahlen', () => {
-        const ohneKinderpreis = buildBreakfastService({ id: 'x', name: 'Frühstück', amount_cents: 1700, child_amount_cents: null, currency: 'EUR' });
+        const ohneKinderpreis = buildBreakfastService({ id: 'x', name: 'Frühstück', description: null, amount_cents: 1700, child_amount_cents: null, currency: 'EUR' });
         expect(ohneKinderpreis?.childUnitAmountCents).toBe(1700);
     });
 });

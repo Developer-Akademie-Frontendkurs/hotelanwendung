@@ -1155,6 +1155,43 @@ Gast (ein neues Bedienelement für eine Frage, die die Rezeption ohnehin klärt)
 in welchem Zimmer schläft, weiß die Buchung nicht. Und E44 ist damit ohne die Rechnungsadresse aus V13
 umgesetzt: `create_booking` wird für `billing_addresses` noch einmal ersetzt.
 
+### E49 — Zusatzleistungen je Vorgang
+
+**Entscheidung:** Unter der Zimmerliste steht die Sektion „Zusatzleistungen" mit dem Frühstück (E48)
+und fünf Leistungen je Vorgang. Umgesetzt in `20260923102000_services_per_booking.sql` und `seed.sql`:
+
+| Code | Leistung | `charge_basis` | Preis (Seed) |
+| --- | --- | --- | --- |
+| `CHILD_BED` | Kinderbett | `per_unit` | 0 € — nur mit Kind, höchstens eines je Zimmer |
+| `GARAGE` | Tiefgarage (1 Stellplatz) | `per_night` | 15 € |
+| `PET` | Haustier (1 Tier) | `per_stay` | 10 € |
+| `LATE_CHECKOUT` | Late Check-out bis 15 Uhr | `per_stay` | 0 € — nach Verfügbarkeit |
+| `MASSAGE` | Massage, 50 Minuten | `per_stay` | 75 € — Termin vor Ort |
+
+1. **Einmal je Vorgang, an der ersten Buchung.** Ein Häkchen heißt „für den Aufenthalt", nicht „je
+   Zimmer". Die Posten hängen an der ersten Buchungszeile, weil `booking_extras` an `booking_id`
+   hängt und ein Stellplatz sich nicht auf drei Zimmer aufteilen lässt.
+2. **Drei neue Bezugsgrößen statt neuer Spalten:** `per_night` (Nächte), `per_stay` (1), `per_unit`
+   (gewählte Menge). Das hatte der Kommentar an `charge_basis` in E47 so vorausgesagt.
+3. **0 € ist erlaubt.** Kinderbett und Late Check-out kosten nichts, müssen aber als Posten dastehen —
+   sonst weiß niemand, dass das Bett bereitstehen muss.
+4. **`guest_kind = 'none'`** für Leistungen, die nicht pro Person rechnen. Die Regel steht in
+   `create_booking`, weil ein Tabellen-`CHECK` nicht in `services` nachsehen kann.
+5. **`create_booking(…, p_services jsonb)`**, z. B. `[{"code":"GARAGE"},{"code":"CHILD_BED","quantity":2}]`.
+   Abgelehnt werden `BREAKFAST` in der Liste (eigener Parameter), doppelte Codes, Mengen ≠ 1 außerhalb
+   von `per_unit` (`ungueltige_leistung`), unbekannte Codes (`leistung_unbekannt`, maskiert) und ein
+   Kinderbett ohne Kind oder über min(Kinder, Zimmer) (`ungueltige_belegung`).
+6. **Hinweis statt Kapazitätsprüfung.** Tiefgarage, Massage und Late Check-out haben in Wirklichkeit
+   begrenzte Kapazität. v1 bucht und berechnet sie, die Beschreibung sagt „nach Verfügbarkeit" bzw.
+   „Termin vor Ort". Eine echte Prüfung wäre ein eigenes Inventar.
+
+**Ausdrücklich verworfen:** das Zustellbett (es hätte `max_occupancy` erhöhen müssen und damit Suche,
+Kalender und Buchung berührt) und Icons in der Datenbank (Darstellung, zugeordnet über `code` im
+Frontend wie die Ausstattung über `slug`).
+
+**Preis, benannt:** Die Kinderbett-Regel hängt am Code `CHILD_BED`, nicht an einer Spalte. Kommt eine
+zweite Leistung mit derselben Grenze, wird daraus eine Spalte.
+
 ---
 
 ## 5. Offene Punkte
@@ -1162,7 +1199,7 @@ umgesetzt: `create_booking` wird für `billing_addresses` noch einmal ersetzt.
 | #   | Frage | hängt an |
 | --- | ----- | -------- |
 
-**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E48).
+**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E49).
 
 Der zuvor offene Punkt ist erledigt: Die **Umsetzungsinterpretation in E28** (feine Sperrgründe nur
 für `is_staff()`) wurde in der Grilling-Runde vom 2026-09-02 ausdrücklich bestätigt. Ebenfalls dort

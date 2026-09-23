@@ -12,6 +12,7 @@
 export interface ServiceRow {
     id: string;
     name: string;
+    description: string | null;
     amount_cents: number;
     /** `null` heißt: kein eigener Kinderpreis hinterlegt. */
     child_amount_cents: number | null;
@@ -22,6 +23,7 @@ export interface ServiceRow {
 export interface BreakfastService {
     serviceId: string;
     name: string;
+    description: string | null;
     unitAmountCents: number;
     /** `services.child_amount_cents` – `null` dort heißt: Kinder zahlen wie Erwachsene. */
     childUnitAmountCents: number;
@@ -59,6 +61,7 @@ export function buildBreakfastService(row: ServiceRow | null): BreakfastService 
     return {
         serviceId: row.id,
         name: row.name,
+        description: row.description,
         unitAmountCents: row.amount_cents,
         childUnitAmountCents: row.child_amount_cents ?? row.amount_cents,
         currency: row.currency,

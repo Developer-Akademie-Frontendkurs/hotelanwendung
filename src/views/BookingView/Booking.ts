@@ -4,11 +4,11 @@ import { supabase } from '../../shared/services/supabase';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
 import { clampQuantity, getLimitMessage, getMissingBeds, getRoomLimit, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
+import { buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService, type ServiceRow } from './services';
 import './booking.css';
 
 /*
     *** Vorbereitung und Verknüpfung BookingView zu Datenbank ***
-        TODO: Unter Zimmerauswahl neue Section Zusätze (Zustellbetten, Kinderbett)
         TODO: Buchungssteps verknüpfen
         TODO: Console Logs json Buchung
         TODO: Migrations notwending? Eventuelle Änderungen an der Datenbank?
@@ -32,6 +32,12 @@ type BookingPosition = {
     rooms: number;
 };
 
+/** Eine Zusatzleistung je Vorgang – die Form von `p_services` in `create_booking` (E49). */
+type BookingService = {
+    code: string;
+    quantity: number;
+};
+
 /** Gäste als Gesamtzahl des Vorgangs (E48) – verteilt werden sie in `create_booking`. */
 type Booking = {
     checkIn: string;
@@ -41,6 +47,7 @@ type Booking = {
     children: number;
     positions: BookingPosition[];
     withBreakfast: boolean;
+    services: BookingService[];
 };
 
 type GuestField = 'adults' | 'children';
@@ -124,6 +131,37 @@ const ICON_REMOVE = /*html*/ `
  * Figma-Design. Kategorien ohne Eintrag (z. B. `einzelzimmer-alpin`) bekommen keine
  * Ausstattungsliste, statt erfundene Merkmale anzuzeigen.
  */
+// Icons der Zusatzleistungen, zugeordnet über `services.code` – wie die Ausstattung über
+// den `slug`. Darstellung gehört nicht in die Datenbank (E49).
+const SERVICE_ICON_CLASS = 'w-9 h-9 shrink-0 text-purple-haze';
+const SERVICE_ICONS: Readonly<Record<string, string>> = {
+    BREAKFAST: /*html*/ `
+        <svg class="${SERVICE_ICON_CLASS}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 10h12v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5v-4Z" /><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16" /><path d="M8 3.5v3M12 3.5v3" />
+        </svg>`,
+    CHILD_BED: /*html*/ `
+        <svg class="${SERVICE_ICON_CLASS}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 5v15M21 5v15M3 9h18M3 17h18M7.5 9v8M12 9v8M16.5 9v8" />
+        </svg>`,
+    GARAGE: /*html*/ `
+        <svg class="${SERVICE_ICON_CLASS}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 15l1.6-4.6A2 2 0 0 1 8.5 9h7a2 2 0 0 1 1.9 1.4L19 15" /><path d="M3.5 15h17v3.5h-17Z" /><path d="M6 18.5V20M18 18.5V20" /><path d="M7 16.8h.01M17 16.8h.01" />
+        </svg>`,
+    PET: /*html*/ `
+        <svg class="${SERVICE_ICON_CLASS}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="6" cy="10" r="1.8" /><circle cx="9.5" cy="6" r="1.8" /><circle cx="14.5" cy="6" r="1.8" /><circle cx="18" cy="10" r="1.8" />
+            <path d="M12 12c-2.5 0-5 3-5 5.2 0 1.6 1.3 2.3 2.6 2.3.9 0 1.6-.5 2.4-.5s1.5.5 2.4.5c1.3 0 2.6-.7 2.6-2.3 0-2.2-2.5-5.2-5-5.2Z" />
+        </svg>`,
+    LATE_CHECKOUT: /*html*/ `
+        <svg class="${SERVICE_ICON_CLASS}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.5 2" />
+        </svg>`,
+    MASSAGE: /*html*/ `
+        <svg class="${SERVICE_ICON_CLASS}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20c-4.5 0-8-3-8-7.5 3 0 5.5 1.6 8 4.6 2.5-3 5-4.6 8-4.6 0 4.5-3.5 7.5-8 7.5Z" /><path d="M12 17c-1.6-2-2.4-4-2.4-6.2S10.6 6.4 12 5c1.4 1.4 2.4 3.6 2.4 5.8S13.6 15 12 17Z" />
+        </svg>`,
+};
+
 const ROOM_AMENITIES: Readonly<Record<string, readonly RoomAmenity[]>> = {
     'double-suite': [
         { icon: ICON_BED, label: 'King-size Bett' },
@@ -153,6 +191,8 @@ export class BookingView extends AbstractView {
     // angeboten – `create_booking` würde eine Buchung mit Frühstück ablehnen (E25), und
     // eine Checkbox, die in eine Ablehnung führt, ist eine Falle.
     private breakfastService: BreakfastService | null = null;
+    // Leistungen je Vorgang aus `services`, ohne Frühstück, nach `sort_order` (E49).
+    private extraServices: ExtraService[] = [];
     private roomsState: RoomsState = 'loading';
     private roomsError: string | null = null;
     // Hinweis über der Liste, wenn eine neue Suche gewählte Mengen angepasst hat (V16.6).
@@ -307,7 +347,7 @@ export class BookingView extends AbstractView {
                         ${this.rooms.map((room: RoomCard): string => this.getRoomCardHtml(room)).join('')}
                     </div>
                     <p data-capacity-notice role="status" aria-live="polite" class="${this.getCapacityText() === '' ? 'hidden' : ''} mt-8 768:mt-11 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-4 py-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">${this.getCapacityText()}</p>
-                    ${this.getBreakfastHtml()}
+                    ${this.getServicesSectionHtml()}
                 `;
         }
     }
@@ -414,39 +454,116 @@ export class BookingView extends AbstractView {
     }
 
     /**
-     * Frühstück für alle Gäste (E47, E48).
+     * Sektion „Zusatzleistungen" unter der Zimmerliste (E47–E49).
      *
-     * Unter der Zimmerliste statt auf einer Karte: Seit die Belegung eine Gesamtzahl ist
-     * und `create_booking` die Personen selbst auf die Zimmer verteilt, gibt es keine
-     * „Gäste dieser Kategorie" mehr, für die ein Häkchen auf einer Karte gelten könnte.
+     * Das Frühstück steht als erste Zeile darin: Seit die Belegung eine Gesamtzahl ist,
+     * gilt es wie alle anderen Leistungen für den ganzen Vorgang (E48). Die Gestaltung
+     * folgt der Zimmerkarte – heller Lila-Grund, Ring bei Auswahl.
      */
-    private getBreakfastHtml(): string {
-        const service = this.breakfastService;
-        if (service === null) return '';
+    private getServicesSectionHtml(): string {
+        if (this.breakfastService === null && this.extraServices.length === 0) return '';
 
         const hasRooms = getTotalRooms(bookingState.getRoomQuantities()) > 0;
-        const checked = bookingState.getBreakfast();
 
         return /*html*/ `
-            <div data-breakfast-card class="mt-8 768:mt-11 flex flex-col gap-1 bg-purple-haze-light px-5 py-5 768:px-8 ${checked ? 'ring-2 ring-purple-haze' : ''}">
-                <label for="booking-breakfast" class="flex items-center justify-between gap-4 cursor-pointer">
-                    <span class="font-playfair-display font-medium text-16 768:text-18 leading-tight text-purple-haze-dark">${service.name} für alle Gäste</span>
-                    <input
-                        id="booking-breakfast"
-                        data-breakfast
-                        type="checkbox"
-                        ${checked ? 'checked' : ''}
-                        ${hasRooms ? '' : 'disabled'}
-                        class="shrink-0 w-5 h-5 accent-purple-haze cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
-                    />
-                </label>
-                <p data-breakfast-amount class="font-antic-didone text-14 leading-tight text-purple-haze text-right">${this.getBreakfastLabel()}</p>
-            </div>
+            <section aria-labelledby="booking-services-title" class="mt-10 768:mt-16">
+                <h2 id="booking-services-title" class="font-playfair-display text-28 768:text-36 text-purple-haze-dark text-center mb-2">Zusatzleistungen</h2>
+                <p class="font-antic-didone text-16 768:text-18 leading-tight text-purple-haze-dark/70 text-center mb-6 768:mb-8">
+                    Gilt einmal für Ihren gesamten Aufenthalt – unabhängig von der Zimmeranzahl.
+                </p>
+                <p data-services-hint class="${hasRooms ? 'hidden' : ''} mb-4 font-antic-didone text-16 text-purple-haze text-center">Bitte zuerst ein Zimmer wählen.</p>
+                <ul class="flex flex-col gap-4 768:gap-5">
+                    ${this.getBreakfastRowHtml()}
+                    ${this.extraServices.map((service: ExtraService): string => this.getServiceRowHtml(service)).join('')}
+                </ul>
+            </section>
         `;
     }
 
+    /** Eine Zeile der Sektion – Icon, Text, Preis und das Bedienelement rechts. */
+    private getServiceRowShellHtml(code: string, inputId: string, name: string, description: string | null, label: string, control: string, selected: boolean): string {
+        const descriptionHtml = description === null ? '' : /*html*/ `<p class="font-antic-didone text-14 768:text-16 leading-tight text-purple-haze-dark/80">${description}</p>`;
+
+        return /*html*/ `
+            <li data-service-row="${code}" class="flex items-center gap-4 bg-purple-haze-light px-5 py-4 768:px-8 768:py-5 ${selected ? 'ring-2 ring-purple-haze' : ''}">
+                ${SERVICE_ICONS[code] ?? ''}
+                <div class="flex-1 min-w-0 flex flex-col gap-1">
+                    <label for="${inputId}" class="font-playfair-display font-medium text-16 768:text-18 leading-tight text-purple-haze-dark cursor-pointer">${name}</label>
+                    ${descriptionHtml}
+                    <p data-service-amount="${code}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze">${label}</p>
+                </div>
+                ${control}
+            </li>
+        `;
+    }
+
+    private getCheckboxHtml(inputId: string, dataAttribute: string, checked: boolean, disabled: boolean): string {
+        return /*html*/ `
+            <input
+                id="${inputId}"
+                ${dataAttribute}
+                type="checkbox"
+                ${checked ? 'checked' : ''}
+                ${disabled ? 'disabled' : ''}
+                class="shrink-0 w-5 h-5 accent-purple-haze cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
+            />
+        `;
+    }
+
+    private getBreakfastRowHtml(): string {
+        const service = this.breakfastService;
+        if (service === null) return '';
+
+        const checked = bookingState.getBreakfast();
+        const disabled = getTotalRooms(bookingState.getRoomQuantities()) === 0;
+        const control = this.getCheckboxHtml('booking-breakfast', 'data-breakfast', checked, disabled);
+        return this.getServiceRowShellHtml('BREAKFAST', 'booking-breakfast', `${service.name} für alle Gäste`, service.description, this.getBreakfastLabel(), control, checked);
+    }
+
+    private getServiceRowHtml(service: ExtraService): string {
+        const quantity = bookingState.getServiceQuantity(service.code);
+        const max = getServiceMax(service, this.getServiceContext());
+        const inputId = `booking-service-${service.code.toLowerCase()}`;
+
+        const control =
+            service.chargeBasis === 'per_unit'
+                ? /*html*/ `
+                    <div class="shrink-0 flex items-center gap-2">
+                        ${this.getServiceStepHtml(service, -1, '&minus;', quantity === 0)}
+                        <output id="${inputId}" data-service-quantity="${service.code}" aria-live="polite" class="w-8 text-center font-antic-didone text-18 456:text-24 leading-tight text-purple-haze-dark">${quantity.toString()}</output>
+                        ${this.getServiceStepHtml(service, 1, '+', quantity >= max)}
+                    </div>
+                `
+                : this.getCheckboxHtml(inputId, `data-service-code="${service.code}"`, quantity > 0, max === 0);
+
+        return this.getServiceRowShellHtml(service.code, inputId, service.name, service.description, this.getServiceLabel(service), control, quantity > 0);
+    }
+
+    private getServiceStepHtml(service: ExtraService, step: number, glyph: string, disabled: boolean): string {
+        const ariaLabel = `${service.name}: ${step > 0 ? 'eines mehr' : 'eines weniger'}`;
+        return /*html*/ `
+            <button
+                type="button"
+                data-service-step="${step.toString()}"
+                data-service-code="${service.code}"
+                aria-label="${ariaLabel}"
+                ${disabled ? 'disabled' : ''}
+                class="shrink-0 flex items-center justify-center w-9 h-9 456:w-10 456:h-10 rounded-full bg-purple-haze font-antic-didone text-24 leading-none text-white cursor-pointer transition-colors hover:bg-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-haze"
+            >${glyph}</button>
+        `;
+    }
+
+    private getServiceContext(): { rooms: number; children: number } {
+        return { rooms: getTotalRooms(bookingState.getRoomQuantities()), children: this.guests.children ?? 0 };
+    }
+
+    /** Alle Kategorien haben denselben Zeitraum und damit dieselbe Zahl an Nächten. */
+    private getNights(): number | undefined {
+        return this.rooms.find((room: RoomCard): boolean => room.availability !== null)?.availability?.nights;
+    }
+
     /**
-     * Der Text unter der Checkbox.
+     * Der Text unter dem Frühstück.
      *
      * Ohne Häkchen der Einzelpreis, mit Häkchen der Betrag, der tatsächlich dazukommt.
      * Ein Aufschlag, den der Gast erst auf der Bestätigung als Zahl sieht, ist kein
@@ -460,15 +577,32 @@ export class BookingView extends AbstractView {
         const perChild = formatPrice(service.childUnitAmountCents, service.currency);
         const preise = `${perAdult} pro Erwachsenem, ${perChild} pro Kind und Nacht`;
 
-        if (getTotalRooms(bookingState.getRoomQuantities()) === 0) return `${preise} · Bitte zuerst ein Zimmer wählen`;
-
-        // Alle Kategorien haben denselben Zeitraum und damit dieselbe Zahl an Nächten.
-        const nights = this.rooms.find((room: RoomCard): boolean => room.availability !== null)?.availability?.nights;
+        const nights = this.getNights();
         if (nights === undefined || !bookingState.getBreakfast()) return preise;
 
         const occupancy = { adults: this.guests.adults ?? 0, children: this.guests.children ?? 0 };
         const amount = getBreakfastAmountCents(service, occupancy, nights);
         return `+ ${formatPrice(amount, service.currency)} · ${preise}`;
+    }
+
+    /** Dasselbe für eine Leistung je Vorgang: Einheit vor der Wahl, Aufschlag danach. */
+    private getServiceLabel(service: ExtraService): string {
+        const unitPrice = service.unitAmountCents === 0 ? 'kostenlos' : formatPrice(service.unitAmountCents, service.currency);
+        const quantity = bookingState.getServiceQuantity(service.code);
+
+        if (service.code === CHILD_BED) {
+            if ((this.guests.children ?? 0) === 0) return 'Nur mit Kind buchbar';
+            const max = getServiceMax(service, this.getServiceContext());
+            const grenze = max > 1 ? `bis zu ${max.toString()}, 1 je Zimmer` : '1 je Zimmer';
+            return `${unitPrice} · ${grenze}`;
+        }
+
+        const einheit = service.chargeBasis === 'per_night' ? `${unitPrice} pro Nacht` : service.unitAmountCents === 0 ? unitPrice : `${unitPrice} einmalig`;
+        const nights = this.getNights();
+        if (quantity === 0 || nights === undefined || service.unitAmountCents === 0) return einheit;
+
+        const amount = formatPrice(getServiceAmountCents(service, quantity, nights), service.currency);
+        return service.chargeBasis === 'per_night' ? `+ ${amount} für ${formatNights(nights)} · ${einheit}` : `+ ${amount}`;
     }
 
     /**
@@ -522,6 +656,15 @@ export class BookingView extends AbstractView {
     private handleRoomsClick(event: MouseEvent): void {
         const target = event.target as HTMLElement;
 
+        const serviceStepEl = target.closest<HTMLElement>('[data-service-step]');
+        if (serviceStepEl) {
+            const code = serviceStepEl.dataset.serviceCode;
+            const serviceStep = Number(serviceStepEl.dataset.serviceStep);
+            if (code === undefined || !Number.isFinite(serviceStep)) return;
+            this.setServiceQuantity(code, bookingState.getServiceQuantity(code) + serviceStep);
+            return;
+        }
+
         const stepEl = target.closest<HTMLElement>('[data-room-step]');
         if (!stepEl) return;
 
@@ -543,6 +686,12 @@ export class BookingView extends AbstractView {
             return;
         }
 
+        const serviceCode = target.dataset.serviceCode;
+        if (serviceCode !== undefined) {
+            this.setServiceQuantity(serviceCode, target.checked ? 1 : 0);
+            return;
+        }
+
         const roomTypeId = target.dataset.roomQuantity;
         if (roomTypeId === undefined) return;
 
@@ -558,10 +707,21 @@ export class BookingView extends AbstractView {
         const roomLimit = getRoomLimit(this.guests.adults);
         const clamped = clampQuantity(desired, availability.roomsFree, otherRooms, roomLimit);
         bookingState.setRoomQuantity(roomTypeId, clamped.value);
+        // Weniger Zimmer können das Kinderbett-Maximum senken (1 je Zimmer, E49).
+        bookingState.setServices(reconcileServices(bookingState.getServices(), this.extraServices, this.getServiceContext()));
 
         // Der Gast soll sofort erfahren, warum es nicht weitergeht — nicht erst beim Absenden.
         const message = desired > clamped.value ? getLimitMessage(clamped.limitedBy, availability.roomsFree, roomLimit) : null;
         this.updateQuantityUi(message === null ? null : { roomTypeId, message });
+    }
+
+    private setServiceQuantity(code: string, desired: number): void {
+        const service = this.extraServices.find((candidate: ExtraService): boolean => candidate.code === code);
+        if (service === undefined) return;
+
+        const value = Math.max(0, Math.min(desired, getServiceMax(service, this.getServiceContext())));
+        bookingState.setServiceQuantity(code, value);
+        this.updateQuantityUi(null);
     }
 
     /**
@@ -608,21 +768,52 @@ export class BookingView extends AbstractView {
             capacityEl.classList.toggle('hidden', text === '');
         }
 
-        // Das Häkchen wird aus dem Zustand nachgezogen, nicht nur vom Klick gesetzt: Sind
-        // alle Mengen wieder 0, räumt `bookingState` es weg, und dann muss es auch im DOM
-        // verschwinden.
-        const checked = bookingState.getBreakfast();
+        this.updateServicesUi(roomsEl, totalRooms);
+    }
+
+    /**
+     * Zieht die Sektion „Zusatzleistungen" aus dem Zustand nach, nicht nur vom Klick: Sind
+     * alle Zimmer wieder 0, räumt `bookingState` die Auswahl weg, und dann muss sie auch
+     * im DOM verschwinden.
+     */
+    private updateServicesUi(roomsEl: HTMLElement, totalRooms: number): void {
+        roomsEl.querySelector<HTMLElement>('[data-services-hint]')?.classList.toggle('hidden', totalRooms > 0);
+
+        const markRow = (code: string, selected: boolean, label: string): void => {
+            const row = roomsEl.querySelector<HTMLElement>(`[data-service-row="${code}"]`);
+            row?.classList.toggle('ring-2', selected);
+            row?.classList.toggle('ring-purple-haze', selected);
+            const amountEl = roomsEl.querySelector<HTMLElement>(`[data-service-amount="${code}"]`);
+            if (amountEl) amountEl.textContent = label;
+        };
+
         const breakfastEl = roomsEl.querySelector<HTMLInputElement>('[data-breakfast]');
         if (breakfastEl) {
-            breakfastEl.checked = checked;
+            breakfastEl.checked = bookingState.getBreakfast();
             breakfastEl.disabled = totalRooms === 0;
         }
-        const breakfastCard = roomsEl.querySelector<HTMLElement>('[data-breakfast-card]');
-        breakfastCard?.classList.toggle('ring-2', checked);
-        breakfastCard?.classList.toggle('ring-purple-haze', checked);
+        markRow('BREAKFAST', bookingState.getBreakfast(), this.getBreakfastLabel());
 
-        const breakfastAmountEl = roomsEl.querySelector<HTMLElement>('[data-breakfast-amount]');
-        if (breakfastAmountEl) breakfastAmountEl.textContent = this.getBreakfastLabel();
+        const context = this.getServiceContext();
+        this.extraServices.forEach((service: ExtraService): void => {
+            const quantity = bookingState.getServiceQuantity(service.code);
+            const max = getServiceMax(service, context);
+
+            const checkbox = roomsEl.querySelector<HTMLInputElement>(`input[data-service-code="${service.code}"]`);
+            if (checkbox) {
+                checkbox.checked = quantity > 0;
+                checkbox.disabled = max === 0;
+            }
+
+            const output = roomsEl.querySelector<HTMLOutputElement>(`[data-service-quantity="${service.code}"]`);
+            if (output) output.value = quantity.toString();
+            const minus = roomsEl.querySelector<HTMLButtonElement>(`[data-service-step="-1"][data-service-code="${service.code}"]`);
+            if (minus) minus.disabled = quantity === 0;
+            const plus = roomsEl.querySelector<HTMLButtonElement>(`[data-service-step="1"][data-service-code="${service.code}"]`);
+            if (plus) plus.disabled = quantity >= max;
+
+            markRow(service.code, quantity > 0, this.getServiceLabel(service));
+        });
     }
 
     private getRoomImageHtml(room: RoomCard): string {
@@ -813,13 +1004,13 @@ export class BookingView extends AbstractView {
         this.renderRooms();
 
         try {
-            const [details, breakfast, availability] = await Promise.all([
+            const [details, services, availability] = await Promise.all([
                 supabase.from('room_types').select('id, name, slug, description, max_occupancy, room_type_images(storage_path, alt_text, sort_order)').order('name'),
-                // Der Frühstückspreis kommt aus der Datenbank, nicht als Konstante aus
-                // dem Frontend – dasselbe Argument wie beim Buchungshorizont (E30). Ohne
+                // Preise der Zusatzleistungen kommen aus der Datenbank, nicht als Konstante
+                // aus dem Frontend – dasselbe Argument wie beim Buchungshorizont (E30). Ohne
                 // `hotel_id`-Filter, weil es genau ein Hotel gibt; `search_availability`
                 // nimmt oben dieselbe Abkürzung.
-                supabase.from('services').select('id, name, amount_cents, child_amount_cents, currency').eq('code', 'BREAKFAST').maybeSingle(),
+                supabase.from('services').select('id, code, name, description, charge_basis, amount_cents, child_amount_cents, currency, sort_order').order('sort_order'),
                 // Ohne gewählte Erwachsenenzahl wird nicht gesucht: eine geratene Belegung
                 // liefert Preise und Restbestände, die niemand bestellt hat (V16.7).
                 checkIn === null || checkOut === null || adults === null
@@ -839,15 +1030,19 @@ export class BookingView extends AbstractView {
 
             if (details.error) throw new Error(details.error.message);
             if (availability !== null && availability.error) throw new Error(availability.error.message);
-            if (breakfast.error) throw new Error(breakfast.error.message);
+            if (services.error) throw new Error(services.error.message);
 
             this.rooms = buildRoomCards(details.data, availability === null ? null : (availability.data as RoomAvailability[]));
-            this.breakfastService = buildBreakfastService(breakfast.data);
+            const serviceRows = services.data as ServiceRow[];
+            this.breakfastService = buildBreakfastService(serviceRows.find((row: ServiceRow): boolean => row.code === 'BREAKFAST') ?? null);
+            this.extraServices = buildExtraServices(serviceRows);
 
             // Ein neues Suchergebnis kann gewählte Mengen unmöglich gemacht haben (V16.6).
             const reconciled = reconcileQuantities(bookingState.getRoomQuantities(), this.rooms, getRoomLimit(this.guests.adults));
             bookingState.setRoomQuantities(reconciled.quantities);
             this.quantityNotice = reconciled.notice;
+            // … und damit auch die Leistungen: weniger Kinder, weniger Kinderbetten.
+            bookingState.setServices(reconcileServices(bookingState.getServices(), this.extraServices, this.getServiceContext()));
 
             this.roomsState = 'ready';
             this.roomsError = null;
@@ -1095,6 +1290,8 @@ export class BookingView extends AbstractView {
             // (E44). Frühstück und Gäste gelten für den ganzen Vorgang (E48).
             positions: Object.entries(quantities).map(([roomTypeId, rooms]: [string, number]): BookingPosition => ({ roomTypeId, rooms })),
             withBreakfast: bookingState.getBreakfast(),
+            // Die Form von `p_services` (E49). Die Menge ist nur beim Kinderbett mehr als 1.
+            services: Object.entries(bookingState.getServices()).map(([code, quantity]: [string, number]): BookingService => ({ code, quantity })),
         };
 
         // TODO: Buchungsdaten später an das Backend senden (fetch / Supabase).

@@ -268,3 +268,101 @@ describe('Frühstück: Konfigurationslücken und Sichtbarkeit (E25, E28, E13)', 
         expect(fremd).toHaveLength(0);
     });
 });
+
+/**
+ * Zusatzleistungen je Vorgang (E49).
+ *
+ * Geprüft wird, was die Entscheidung von E47 unterscheidet: Die Leistungen gelten
+ * einmal für den ganzen Vorgang, hängen deshalb an der ERSTEN Buchung, und ihre Menge
+ * folgt der Bezugsgröße — nicht der Personenzahl.
+ */
+describe('Zusatzleistungen je Vorgang (E49)', () => {
+    let fixture: Fixture;
+
+    const GARAGE_CENTS = 1500;
+    const MASSAGE_CENTS = 7500;
+
+    beforeAll(async () => {
+        fixture = await createFixture({ roomCount: 3, maxOccupancy: 2, withRatePlan: true });
+        await withRates(fixture);
+        const { error } = await serviceClient.from('services').insert([
+            { hotel_id: fixture.hotelId, code: 'CHILD_BED', name: 'Kinderbett', charge_basis: 'per_unit', amount_cents: 0 },
+            { hotel_id: fixture.hotelId, code: 'GARAGE', name: 'Tiefgarage', charge_basis: 'per_night', amount_cents: GARAGE_CENTS },
+            { hotel_id: fixture.hotelId, code: 'MASSAGE', name: 'Massage', charge_basis: 'per_stay', amount_cents: MASSAGE_CENTS },
+        ]);
+        expect(error).toBeNull();
+    });
+
+    afterAll(async () => {
+        await cleanup(fixture);
+    });
+
+    // Ein Erwachsener in einem Zimmer: Die Belegung passt, damit die Ablehnung wirklich
+    // von der Leistung kommt und nicht vorher an zu_klein scheitert.
+    function reject(overrides: Record<string, unknown>): Promise<RejectDetail> {
+        return book(fixture, { p_check_in: isoDay(50), p_check_out: isoDay(52), p_adults: 1, p_children: 0, ...overrides }).then(({ error }) => {
+            expect(error).not.toBeNull();
+            return JSON.parse(error?.details ?? '{}') as RejectDetail;
+        });
+    }
+
+    it('hängt die Leistungen einmal an die erste Buchung — Menge nach Bezugsgröße', async () => {
+        const { data, error } = await book(fixture, {
+            p_positions: [{ room_type_id: fixture.roomTypeId, rooms: 2 }],
+            p_services: [{ code: 'GARAGE' }, { code: 'MASSAGE' }, { code: 'CHILD_BED', quantity: 1 }],
+        });
+        expect(error).toBeNull();
+        const gebucht = data as BookingResult;
+
+        // 3 Nächte Tiefgarage + eine Massage — auf der ersten Buchung, nicht auf jeder.
+        const leistungen = 3 * GARAGE_CENTS + MASSAGE_CENTS;
+        expect(gebucht.bookings.map((b) => b.extras_amount_cents)).toEqual([leistungen, 0]);
+        expect(gebucht.extras_amount_cents).toBe(leistungen);
+        expect(gebucht.grand_total_cents).toBe(gebucht.total_amount_cents + leistungen);
+
+        const rows = await extrasOf(gebucht.bookings[0]?.id ?? '');
+        // Das Kinderbett steht als 0-Euro-Posten da: kostenlos, aber bestellt.
+        expect(rows).toHaveLength(3);
+        expect(rows.every((row) => row.guest_kind === 'none')).toBe(true);
+        expect(rows.map((row) => [row.quantity, row.amount_cents]).sort()).toEqual(
+            [
+                [1, 0],
+                [1, MASSAGE_CENTS],
+                [3, 3 * GARAGE_CENTS],
+            ].sort(),
+        );
+        expect(await extrasOf(gebucht.bookings[1]?.id ?? '')).toHaveLength(0);
+    });
+
+    it('lehnt das Frühstück in der Liste ab — es hat seinen eigenen Parameter', async () => {
+        expect((await reject({ p_services: [{ code: 'BREAKFAST' }] })).code).toBe('ungueltige_leistung');
+    });
+
+    it('lehnt doppelte Codes, Mengen an Checkbox-Leistungen und kaputte Listen ab', async () => {
+        expect((await reject({ p_services: [{ code: 'GARAGE' }, { code: 'GARAGE' }] })).code).toBe('ungueltige_leistung');
+        expect((await reject({ p_services: [{ code: 'GARAGE', quantity: 2 }] })).code).toBe('ungueltige_leistung');
+        expect((await reject({ p_services: { code: 'GARAGE' } })).code).toBe('ungueltige_leistung');
+        expect((await reject({ p_services: [{ code: 'CHILD_BED', quantity: 0 }] })).code).toBe('ungueltige_leistung');
+    });
+
+    it('meldet eine unbekannte Leistung maskiert (E28)', async () => {
+        expect((await reject({ p_services: [{ code: 'SPA_DELUXE' }] })).code).toBe('nicht_buchbar');
+    });
+
+    it('Kinderbett nur mit Kind und höchstens eines je Zimmer', async () => {
+        expect((await reject({ p_children: 0, p_services: [{ code: 'CHILD_BED', quantity: 1 }] })).code).toBe('ungueltige_belegung');
+        // 1 Kind, 1 Zimmer → höchstens 1 Kinderbett.
+        expect((await reject({ p_children: 1, p_services: [{ code: 'CHILD_BED', quantity: 2 }] })).code).toBe('ungueltige_belegung');
+    });
+
+    it('erlaubt zwei Kinderbetten bei zwei Kindern und zwei Zimmern', async () => {
+        const { error } = await book(fixture, {
+            p_check_in: isoDay(54),
+            p_check_out: isoDay(55),
+            p_children: 2,
+            p_positions: [{ room_type_id: fixture.roomTypeId, rooms: 2 }],
+            p_services: [{ code: 'CHILD_BED', quantity: 2 }],
+        });
+        expect(error).toBeNull();
+    });
+});

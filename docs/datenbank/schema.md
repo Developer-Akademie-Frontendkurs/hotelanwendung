@@ -295,17 +295,19 @@ Zwei widersprüchliche Preise für dieselbe Nacht sind damit **unmöglich** — 
 Doku", sondern von der Datenbank abgelehnt. Lücken bleiben erlaubt und bedeuten „nicht buchbar"
 (E25).
 
-### `services` — Zusatzleistungen (E47)
+### `services` — Zusatzleistungen (E47, E49)
 
 | Spalte | Typ | Regeln |
 | --- | --- | --- |
 | `id` | `uuid` | PK |
 | `hotel_id` | `uuid` | `NOT NULL REFERENCES hotels ON DELETE RESTRICT` |
-| `code` | `text` | `NOT NULL`, `UNIQUE (hotel_id, code)` — v1 genau `BREAKFAST` |
+| `code` | `text` | `NOT NULL`, `UNIQUE (hotel_id, code)` — `BREAKFAST`, `CHILD_BED`, `GARAGE`, `PET`, `LATE_CHECKOUT`, `MASSAGE` |
 | `name` | `text` | `NOT NULL` — der Text, den der Gast liest |
-| `charge_basis` | `text` | `NOT NULL CHECK (IN ('per_person_night'))` — sagt, was **eine** Einheit in `booking_extras.quantity` ist |
-| `amount_cents` | `int` | `NOT NULL CHECK (> 0)` |
-| `child_amount_cents` | `int` | `CHECK (>= 0)` — `NULL` heißt „kein eigener Preis", Kinder zahlen dann wie Erwachsene |
+| `description` | `text` | Zeile unter dem Namen auf der Buchungsseite (E49) |
+| `sort_order` | `int` | `NOT NULL DEFAULT 0` — Reihenfolge in der Sektion „Zusatzleistungen" (E49) |
+| `charge_basis` | `text` | `NOT NULL CHECK (IN ('per_person_night', 'per_night', 'per_stay', 'per_unit'))` — sagt, was **eine** Einheit in `booking_extras.quantity` ist: Personen × Nächte, Nächte, 1, gewählte Menge |
+| `amount_cents` | `int` | `NOT NULL CHECK (>= 0)` — `0` heißt „kostenlos, aber bestellt" (Kinderbett, Late Check-out; E49) |
+| `child_amount_cents` | `int` | `CHECK (>= 0)`, nur bei `per_person_night` (`CHECK`) — `NULL` heißt „kein eigener Preis", Kinder zahlen dann wie Erwachsene |
 | `currency` | `text` | `NOT NULL DEFAULT 'EUR' CHECK (char_length(currency) = 3)` |
 | `archived_at` | `timestamptz` | |
 
@@ -436,7 +438,7 @@ beantwortbar.
 | --- | --- | --- |
 | `booking_id` | `uuid` | `REFERENCES bookings ON DELETE CASCADE`, Teil des PK |
 | `service_id` | `uuid` | `REFERENCES services ON DELETE RESTRICT`, Teil des PK |
-| `guest_kind` | `text` | `CHECK (IN ('adult', 'child'))`, Teil des PK |
+| `guest_kind` | `text` | `CHECK (IN ('adult', 'child', 'none'))`, Teil des PK — `none` genau bei Leistungen, die nicht pro Person rechnen (geprüft in `create_booking`, E49) |
 | `quantity` | `int` | `NOT NULL CHECK (> 0)` — Einheiten nach `services.charge_basis` |
 | `unit_amount_cents` | `int` | `NOT NULL CHECK (>= 0)` |
 | `amount_cents` | `int` | `NOT NULL CHECK (>= 0)` |
@@ -550,6 +552,8 @@ aus, für den Betrieb sind es entgegengesetzte Signale.
 8b. booking_extras je gewaehlter Zusatzleistung einfrieren,
     getrennt nach Erwachsenen und Kindern           -- E47
     Fruehstueck je Zimmerzeile fuer DEREN Gaeste     -- E48
+    p_services: an der ERSTEN Buchung, guest_kind 'none',
+    Menge nach charge_basis                         -- E49
 9. booking_events: 'created'                        -- E12
    -- ab der ZWEITEN Buchung (auch ueber zwei Positionen mit je einem Zimmer):
    -- booking_groups-Zeile, alles in DIESER Transaktion (E20/E27/E44)
@@ -621,8 +625,8 @@ Housekeeping-Abläufe.
 
 Die **Zusatzleistungen** standen bis 2026-09-16 ebenfalls hier. Sie sind mit E47 (`services` /
 `booking_extras`) hereingekommen — rein additiv, wie E15 es versprochen hatte: keine bestehende
-Tabelle hat dabei ihre Bedeutung geändert. Weitere Leistungen (Parkplatz, Zustellbett) sind jetzt
-Datenzeilen.
+Tabelle hat dabei ihre Bedeutung geändert. Seit E49 gibt es Leistungen je Vorgang (Kinderbett,
+Tiefgarage, Haustier, Late Check-out, Massage); weitere mit einer dieser Bezugsgrößen sind Datenzeilen.
 
 Ebenso: eine Belegung **je Position** statt je Vorgang (E45, seit E48 als Gesamtzahl) und ein abweichender Rechnungsempfänger
 (`company`/`recipient_name` an `billing_addresses`, E42).

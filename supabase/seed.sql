@@ -147,12 +147,14 @@ cross join (
 -- Das Fruehstueck ist die erste Zeile in `services` und damit der Beleg, dass der
 -- Zusatz Daten sind und keine Schemaaenderung: Ein zweiter Zusatz (Zustellbett,
 -- Kinderbett) ist ein weiteres INSERT, keine Migration.
-insert into public.services (id, hotel_id, code, name, charge_basis, amount_cents, child_amount_cents)
+insert into public.services (id, hotel_id, code, name, description, sort_order, charge_basis, amount_cents, child_amount_cents)
 values (
     '00000000-0000-4000-8000-000000000301',
     '00000000-0000-4000-8000-000000000001',
     'BREAKFAST',
     'Frühstück',
+    'Reichhaltiges Buffet mit regionalen Produkten, täglich ab 7 Uhr.',
+    10,
     -- Pro Person und Nacht: gefruehstueckt wird am Morgen nach jeder gebuchten Nacht.
     'per_person_night',
     1700,
@@ -160,3 +162,20 @@ values (
     -- der Rabatt steht hier als Zahl, nicht als Regel im Quelltext.
     850
 );
+
+-- Zusatzleistungen je Vorgang (E49). Preise sind Platzhalter und per UPDATE
+-- aenderbar - verbindlich ist, was create_booking beim Buchen einfriert (E21).
+insert into public.services (id, hotel_id, code, name, description, sort_order, charge_basis, amount_cents)
+values
+    -- Hoechstens eines je Zimmer, nur mit Kind (E49). 0 ist hier eine Konfiguration:
+    -- das Bett kostet nichts, muss aber bereitstehen.
+    ('00000000-0000-4000-8000-000000000302', '00000000-0000-4000-8000-000000000001',
+     'CHILD_BED', 'Kinderbett', 'Babybett mit Bettwäsche, höchstens eines je Zimmer.', 20, 'per_unit', 0),
+    ('00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000001',
+     'GARAGE', 'Tiefgarage', 'Ein Stellplatz in der hauseigenen Tiefgarage.', 30, 'per_night', 1500),
+    ('00000000-0000-4000-8000-000000000304', '00000000-0000-4000-8000-000000000001',
+     'PET', 'Haustier', 'Ein Hund oder eine Katze, inklusive Decke und Napf.', 40, 'per_stay', 1000),
+    ('00000000-0000-4000-8000-000000000305', '00000000-0000-4000-8000-000000000001',
+     'LATE_CHECKOUT', 'Late Check-out', 'Abreise bis 15 Uhr – nach Verfügbarkeit, wir bestätigen vor Ort.', 50, 'per_stay', 0),
+    ('00000000-0000-4000-8000-000000000306', '00000000-0000-4000-8000-000000000001',
+     'MASSAGE', 'Massage', 'Eine Ganzkörpermassage à 50 Minuten – den Termin vereinbaren wir vor Ort.', 60, 'per_stay', 7500);
