@@ -28,6 +28,7 @@ export interface RoomTypeDetail {
     name: string;
     slug: string;
     description: string | null;
+    max_occupancy: number;
     room_type_images: RoomTypeImage[];
 }
 
@@ -59,6 +60,8 @@ export interface RoomCard {
     description: string | null;
     imageUrl: string | null;
     imageAlt: string;
+    /** Betten je Zimmer – die Summe über die Auswahl muss für alle Gäste reichen (E48). */
+    maxOccupancy: number;
     /** `null`, solange kein Zeitraum gewählt ist: ohne Datum gibt es weder Preis noch Restbestand. */
     availability: RoomCardAvailability | null;
 }

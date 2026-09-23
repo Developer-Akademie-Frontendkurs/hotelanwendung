@@ -483,12 +483,13 @@ Ohne Backend ist die Datenbank die letzte Verteidigungslinie (Leitsatz 1). Alle 
 | `is_staff()` | einziger Ort, an dem Mitarbeitendenrechte geprüft werden. v1: `false` | E13 |
 | `current_customer_id()` | mappt `auth.uid()` → `customers.id`. Einziger Ort. | E13 |
 | `is_blocking_status(text)` | `IMMUTABLE`; „belegt Kapazität" = alles außer `cancelled`. Einziger Ort. | E11 |
-| `availability_nights(hotel, von, bis, erwachsene, kinder, kategorie?)` | **interner Kern** (E37): rohe Kapazitäts- und Preiszahlen pro Nacht und Kategorie, **ohne** Maskierung. Nicht für den Browser. | E17, E37 |
+| `availability_nights(hotel, von, bis, kategorie?)` | **interner Kern** (E37): rohe Kapazitäts- und Preiszahlen pro Nacht und Kategorie samt `max_occupancy`, **ohne** Belegung und **ohne** Maskierung. Nicht für den Browser. | E17, E37, E48 |
+| `group_capacity(zimmer[], betten[], zimmerlimit)` | `IMMUTABLE`; höchste Personenzahl, die in einen Bestand passt, wenn höchstens `zimmerlimit` Zimmer belegt werden (größte Zimmer zuerst). Einziger Ort dieser Regel. | E48 |
 | `mask_reason(grund)` | Zweistufigkeit an einer Stelle: `ausgebucht`/`kein_preis`/`zu_klein` → `nicht_buchbar`, sofern nicht `is_staff()` | E28 |
-| `availability_calendar(von, bis, erwachsene, kinder, kategorie?, hotel?)` | **eine Zeile pro Nacht**: `rooms_free`, `unavailable_reason`. Füttert den Kalender. | E24, E28 |
-| `search_availability(anreise, abreise, erwachsene, kinder, hotel?)` | **eine Zeile pro Kategorie**: Minimum über den Zeitraum, Gesamtpreis. Füttert die Ergebnisliste. | E17, E28 |
-| `reject_booking(code, datum)` | erzeugt die strukturierte Ablehnung; Code durch `mask_reason`, maschinenlesbare Fassung im `DETAIL` | E31 |
-| `create_booking(positionen, ...)` | Hotelweiter Advisory-Lock → Prüfung über `availability_nights` **je Position** → `customers`-Upsert → `billing_addresses` → `bookings` + `booking_nights` + `booking_events`, alles in **einer** Transaktion. Strukturierter Fehler bei Ablehnung. | E10, E26, E31, E32, E33, E42, E44 |
+| `availability_calendar(von, bis, erwachsene, kinder, kategorie?, hotel?)` | **eine Zeile pro Nacht**: `rooms_free`, `unavailable_reason`. Buchbar, wenn die **ganze** Gruppe in die freien Zimmer passt (`group_capacity`, Zimmerlimit = min(Erwachsene, 8)). Füttert den Kalender. | E24, E28, E48 |
+| `search_availability(anreise, abreise, erwachsene, kinder, hotel?)` | **eine Zeile pro Kategorie**: Minimum über den Zeitraum, Gesamtpreis. **Keine** Belegungsprüfung je Kategorie. Füttert die Ergebnisliste. | E17, E28, E48 |
+| `reject_booking(code, datum?, kategorie?)` | erzeugt die strukturierte Ablehnung; Code durch `mask_reason`, maschinenlesbare Fassung im `DETAIL` samt `room_type_id` der gescheiterten Position | E31, E44 |
+| `create_booking(positionen, ...)` | Hotelweiter Advisory-Lock → Prüfung über `availability_nights` **je Position** → Gesamtkapazität → Verteilung der Gäste auf die Zimmer → `customers`-Upsert → `billing_addresses` (noch offen) → `bookings` + `booking_nights` + `booking_extras` + `booking_events`, alles in **einer** Transaktion. Strukturierter Fehler bei Ablehnung. | E10, E26, E31, E32, E33, E42, E44, E47, E48 |
 | `billing_address_in_use(uuid)` | `true`, sobald eine Buchung auf die Adresse zeigt. Trägt die Unveränderlichkeit aus E43 in die UPDATE-Policy. | E43 |
 | `find_rate_gaps(tage)` | Admin: Nächte ohne Preiszeile | E25 |
 | `rls_audit()` | Admin: Abnahme des Schutzes als Dauerprüfung. Keine Zeilen = in Ordnung. | E40 |
@@ -531,11 +532,15 @@ aus, für den Betrieb sind es entgegengesetzte Signale.
 ```text
 0. p_positions validieren: nicht leer, keine Kategorie doppelt,
    rooms >= 1 je Position, Summe <= 8                -- E44
+   Summe der Zimmer <= Erwachsene                    -- E48: jedes Zimmer braucht einen
 1. pg_advisory_xact_lock(hashtext('booking:' || hotel_id))  -- EIN Lock fuers Hotel (E10, E33)
    -- deckt ALLE Positionen ab; genau dafuer wurde er hotelweit gewaehlt
-2. Horizont, Vergangenheit, Belegung pruefen        -- E30, E15
-   -- Belegung gilt PRO ZIMMER, nicht pro Reise      -- E45
+2. Horizont, Vergangenheit pruefen                  -- E30
 3. availability_nights() je Position und Nacht      -- eine Wahrheit, kein Copy-Paste
+3b. Summe(Zimmer x max_occupancy) >= Erwachsene + Kinder, sonst zu_klein
+   -- Belegung gilt fuer den GANZEN Vorgang          -- E48 (revidiert E45)
+3c. Gaeste verteilen: je Zimmer ein Erwachsener, dann reihum die
+    uebrigen Erwachsenen, dann die Kinder, bis max_occupancy  -- E48
 4. bei Ablehnung: strukturierter Fehler
    { code, datum, room_type_id, grund }             -- E31, E44
 5. customers: per email_normalized finden oder anlegen -- E26, E32
@@ -544,6 +549,7 @@ aus, für den Betrieb sind es entgegengesetzte Signale.
 8. booking_nights aus den Saisonpreisen einfrieren  -- E21
 8b. booking_extras je gewaehlter Zusatzleistung einfrieren,
     getrennt nach Erwachsenen und Kindern           -- E47
+    Fruehstueck je Zimmerzeile fuer DEREN Gaeste     -- E48
 9. booking_events: 'created'                        -- E12
    -- ab der ZWEITEN Buchung (auch ueber zwei Positionen mit je einem Zimmer):
    -- booking_groups-Zeile, alles in DIESER Transaktion (E20/E27/E44)
@@ -618,7 +624,7 @@ Die **Zusatzleistungen** standen bis 2026-09-16 ebenfalls hier. Sie sind mit E47
 Tabelle hat dabei ihre Bedeutung geändert. Weitere Leistungen (Parkplatz, Zustellbett) sind jetzt
 Datenzeilen.
 
-Ebenso: eine Belegung **je Position** statt je Vorgang (E45) und ein abweichender Rechnungsempfänger
+Ebenso: eine Belegung **je Position** statt je Vorgang (E45, seit E48 als Gesamtzahl) und ein abweichender Rechnungsempfänger
 (`company`/`recipient_name` an `billing_addresses`, E42).
 
 Alle **additiv** nachrüstbar. Die einzige Erweiterung mit strukturellen Kosten ist

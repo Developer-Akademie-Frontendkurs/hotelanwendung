@@ -18,7 +18,7 @@ import { createFixture, isoDay, type Fixture } from './helpers/fixtures';
 type NightRow = {
     night: string;
     room_type_id: string;
-    fits: boolean;
+    max_occupancy: number;
     capacity: number;
     rooms_free: number;
     rate_cents: number | null;
@@ -78,7 +78,6 @@ describe('Kapazitätsformel (E11, E18)', () => {
             p_hotel_id: fixture.hotelId,
             p_from: NIGHT,
             p_to: NEXT,
-            p_adults: 2,
             p_room_type_id: fixture.roomTypeId,
         });
         expect(error).toBeNull();
@@ -186,7 +185,6 @@ describe('Fall 4: Nacht ohne Preiszeile (E25)', () => {
             p_hotel_id: fixture.hotelId,
             p_from: NIGHT,
             p_to: NEXT,
-            p_adults: 2,
             p_room_type_id: fixture.roomTypeId,
         });
         const row = (data as NightRow[])[0] as NightRow;
@@ -321,16 +319,19 @@ describe('search_availability: Aggregation und Zugang', () => {
         expect(row?.is_bookable).toBe(true);
     });
 
-    it('meldet `zu_klein` maskiert, wenn die Belegung nicht passt (E15/E28)', async () => {
+    it('sortiert keine Kategorie als `zu_klein` aus — vier Personen brauchen zwei Zimmer (E48)', async () => {
+        // Die Belegung ist eine Gesamtzahl. Eine Kategorie für zwei Personen ist für
+        // vier nicht zu klein; ob die gewählten Zimmer reichen, entscheidet sich erst
+        // an der Auswahl (create_booking).
         const { data } = await anonClient.rpc('search_availability', {
             p_check_in: isoDay(40),
             p_check_out: isoDay(42),
             p_adults: 4,
             p_hotel_id: fixture.hotelId,
         });
-        const row = (data as { is_bookable: boolean; unavailable_reason: string }[])[0];
-        expect(row?.is_bookable).toBe(false);
-        expect(row?.unavailable_reason).toBe('nicht_buchbar');
+        const row = (data as { is_bookable: boolean; unavailable_reason: string | null }[])[0];
+        expect(row?.is_bookable).toBe(true);
+        expect(row?.unavailable_reason).toBeNull();
     });
 
     it('LEHNT einen leeren Zeitraum AB, statt still nichts zu liefern', async () => {
@@ -351,9 +352,60 @@ describe('search_availability: Aggregation und Zugang', () => {
             p_hotel_id: fixture.hotelId,
             p_from: isoDay(30),
             p_to: isoDay(31),
-            p_adults: 2,
         });
         expect(error).not.toBeNull();
         expect(error?.code).toBe('42501');
+    });
+});
+
+describe('Kalender: passt die ganze Gruppe ins Hotel? (E48)', () => {
+    let fixture: Fixture;
+    const NIGHT = isoDay(25);
+    const NEXT = isoDay(26);
+
+    beforeAll(async () => {
+        // 2 Zimmer à 2 Personen: das Hotel fasst 4 Personen — aber nur, wenn
+        // mindestens zwei davon Erwachsene sind (ein Erwachsener je Zimmer).
+        fixture = await createFixture({ roomCount: 2, maxOccupancy: 2, withRatePlan: true });
+        await serviceClient.from('room_type_rates').insert({
+            room_type_id: fixture.roomTypeId,
+            rate_plan_id: fixture.ratePlanId,
+            valid_from: isoDay(0),
+            valid_to: isoDay(60),
+            amount_cents: 10000,
+        });
+    });
+
+    afterAll(async () => {
+        await fixture.cleanup();
+    });
+
+    async function calendar(adults: number, children: number): Promise<CalendarRow> {
+        const { data, error } = await anonClient.rpc('availability_calendar', {
+            p_from: NIGHT,
+            p_to: NEXT,
+            p_adults: adults,
+            p_children: children,
+            p_hotel_id: fixture.hotelId,
+        });
+        expect(error).toBeNull();
+        return (data as CalendarRow[])[0] as CalendarRow;
+    }
+
+    it('vier Erwachsene passen in zwei Zimmer', async () => {
+        expect((await calendar(4, 0)).is_available).toBe(true);
+    });
+
+    it('fünf Personen passen nicht — maskiert', async () => {
+        const row = await calendar(4, 1);
+        expect(row.is_available).toBe(false);
+        expect(row.unavailable_reason).toBe('nicht_buchbar');
+    });
+
+    it('ein Erwachsener mit drei Kindern passt nicht: nur ein Zimmer ist belegbar', async () => {
+        // Vier Betten sind frei, aber ein Kind wird nie allein in ein Zimmer
+        // eingetragen — mit einem Erwachsenen bleibt es bei einem Zimmer à 2.
+        expect((await calendar(1, 3)).is_available).toBe(false);
+        expect((await calendar(2, 2)).is_available).toBe(true);
     });
 });

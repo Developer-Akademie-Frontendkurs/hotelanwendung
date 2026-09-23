@@ -1013,6 +1013,9 @@ sonst weiß die Oberfläche das Datum, aber nicht die Karte, an der sie es anzei
 
 ### E45 — Die Belegung gilt **pro Zimmer**, nicht pro Reise
 
+> **Revidiert am 2026-09-23 durch E48.** Die Belegung ist seitdem eine Gesamtzahl des Vorgangs.
+> Der Text bleibt stehen, weil E48 ohne ihn nicht verständlich ist.
+
 **Entscheidung:** `p_adults`/`p_children` beschreiben die Belegung **eines** Zimmers. „2 Erwachsene"
 mit 3 Zimmern sind sechs Personen. Die Oberfläche beschriftet das Feld entsprechend („Gäste pro
 Zimmer"). Eine Belegung **je Position** (Doppelzimmer 2 Erwachsene, Einzelzimmer 1 Erwachsener) gibt
@@ -1108,6 +1111,50 @@ Position; das ist derselbe Weg, den E45 für die Belegung je Position beschreibt
 bestehende Tabelle ändert ihre Bedeutung, und der nächste Zusatz (Zustellbett, Kinderbett) ist ein
 `INSERT` in `services`, keine Migration.
 
+## 4j. Entschieden (Runde 10) — Belegung als Gesamtzahl
+
+Ausgangslage: Beim Entwurf der Zusatzleistungen (Kinderbett „höchstens eines je Zimmer, aber als
+Gesamtzahl") stellte sich heraus, dass die Oberfläche die Gästezahl als **Gesamtzahl** meint — „1 Kind"
+heißt ein Kind, nicht eines pro Zimmer. E45 hatte das Gegenteil festgelegt.
+
+### E48 — Die Belegung ist eine **Gesamtzahl** des Vorgangs (revidiert E45)
+
+**Entscheidung:** `p_adults`/`p_children` beschreiben den **ganzen** Vorgang. Umgesetzt zusammen mit
+E44 in `20260923101000_occupancy_total.sql`:
+
+1. **Prüfung erst an der Auswahl.** Eine Gruppe passt, wenn die Summe aus Zimmer × `max_occupancy`
+   über **alle** gewählten Positionen mindestens Erwachsene + Kinder ist. `search_availability`
+   sortiert deshalb keine Kategorie mehr als `zu_klein` aus — eine Double Suite ist für vier
+   Personen nicht zu klein, sie braucht zwei Zimmer. Verbindlich prüft `create_booking`; die
+   Oberfläche zeigt vorher „Noch n Personen ohne Bett".
+2. **Jedes Zimmer braucht einen Erwachsenen.** Zimmer ≤ Erwachsene, sonst `ungueltige_belegung`. Der
+   Mengenwähler deckelt entsprechend und nennt den Grund.
+3. **Der Kalender fragt das ganze Hotel.** Eine Nacht ist buchbar, wenn die Gruppe in die freien
+   Zimmer mit Preis passt — gerechnet von `group_capacity()` mit den größten Zimmern zuerst und
+   höchstens min(Erwachsene, 8) Zimmern. `zu_klein` heißt jetzt: auch leer reicht das Hotel nicht.
+4. **Die Datenbank verteilt die Gäste auf die Zimmer**, weil `bookings.adults/children` weiterhin
+   je Zimmerzeile gelten und `max_occupancy` dort die harte Grenze bleibt. Regel: Zimmer in der
+   Reihenfolge der Positionen; jedes bekommt einen Erwachsenen, dann die übrigen Erwachsenen
+   reihum, dann die Kinder reihum, jeweils bis `max_occupancy`. Die Aufteilung ist vorläufig — die
+   Rezeption kann sie ändern. Die Gesamtbelegung steht zusätzlich im `created`-Ereignis.
+5. **Frühstück gilt für alle Gäste des Vorgangs**, nicht je Kategorie: `p_with_breakfast` ist ein
+   Parameter des Vorgangs. Jede Zimmerzeile trägt das Frühstück **ihrer** Gäste; die Summe ist
+   genau der Betrag, den der Gast vorher gesehen hat. Die Checkbox wandert von der Zimmerkarte unter
+   die Liste.
+
+**Begründung:** Eine Gästezahl, die mit der Zimmerzahl multipliziert wird, lädt zu falschen
+Suchergebnissen und falschen Preisen ein (sechs Frühstücke für drei Personen). Die in E45 benannte
+Lücke — „ein Doppel- und ein Einzelzimmer für eine Familie" — ist mit Gesamtzahlen der Normalfall
+statt der Ausnahme.
+
+**Ausdrücklich verworfen:** die Gesamtbelegung nur an `booking_groups` zu speichern (größerer
+Schemaeingriff, und `max_occupancy` wäre je Zeile nicht mehr prüfbar) sowie eine Aufteilung durch den
+Gast (ein neues Bedienelement für eine Frage, die die Rezeption ohnehin klärt).
+
+**Preis, benannt:** Die Verteilung ist eine Regel der Datenbank, keine Aussage des Gastes. Wer genau
+in welchem Zimmer schläft, weiß die Buchung nicht. Und E44 ist damit ohne die Rechnungsadresse aus V13
+umgesetzt: `create_booking` wird für `billing_addresses` noch einmal ersetzt.
+
 ---
 
 ## 5. Offene Punkte
@@ -1115,7 +1162,7 @@ bestehende Tabelle ändert ihre Bedeutung, und der nächste Zusatz (Zustellbett,
 | #   | Frage | hängt an |
 | --- | ----- | -------- |
 
-**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E46).
+**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E48).
 
 Der zuvor offene Punkt ist erledigt: Die **Umsetzungsinterpretation in E28** (feine Sperrgründe nur
 für `is_staff()`) wurde in der Grilling-Runde vom 2026-09-02 ausdrücklich bestätigt. Ebenfalls dort

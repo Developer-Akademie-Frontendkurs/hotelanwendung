@@ -12,23 +12,28 @@ import { createFixture, isoDay, type Fixture } from './helpers/fixtures';
 
 type BookingResult = {
     booking_group_id: string | null;
-    bookings: { id: string; booking_reference: string; total_amount_cents: number; nights: number }[];
+    bookings: { id: string; booking_reference: string; room_type_id: string; adults: number; children: number; total_amount_cents: number; nights: number }[];
     total_amount_cents: number;
     nights: number;
 };
 
-type RejectDetail = { code: string; datum: string | null; grund: string };
+type RejectDetail = { code: string; datum: string | null; room_type_id: string | null; grund: string };
 
 /** Liest den strukturierten Fehler aus E31 aus dem PostgREST-Fehler. */
 function detailOf(error: { details?: string | null } | null): RejectDetail {
     return JSON.parse(error?.details ?? '{}') as RejectDetail;
 }
 
+/** Eine Position (E44): `rooms` Zimmer der Kategorie der Fixture. */
+function position(roomTypeId: string, rooms = 1): { room_type_id: string; rooms: number } {
+    return { room_type_id: roomTypeId, rooms };
+}
+
 async function book(fixture: Fixture, overrides: Record<string, unknown> = {}) {
     return anonClient.rpc('create_booking', {
         p_check_in: isoDay(30),
         p_check_out: isoDay(33),
-        p_room_type_id: fixture.roomTypeId,
+        p_positions: [position(fixture.roomTypeId)],
         p_adults: 2,
         p_email: `gast.${fixture.roomTypeId.slice(0, 8)}@muster.test`,
         p_first_name: 'Anna',
@@ -114,7 +119,7 @@ describe('create_booking: der glückliche Pfad', () => {
         const { data, error } = await book(fixture, {
             p_check_in: isoDay(50),
             p_check_out: isoDay(52),
-            p_rooms: 2,
+            p_positions: [position(fixture.roomTypeId, 2)],
         });
         expect(error).toBeNull();
         const gruppe = data as BookingResult;
@@ -300,7 +305,9 @@ describe('create_booking: Ablehnungen (E31)', () => {
         expect(detail.code).toBe('ausserhalb_horizont');
     });
 
-    it('Belegung zu groß für die Kategorie — maskiert', async () => {
+    it('Belegung zu groß für die gewählten Zimmer — maskiert (E48)', async () => {
+        // Vier Personen, ein Zimmer für zwei: nicht die Kategorie ist zu klein, sondern
+        // die Auswahl.
         const detail = await reject({ p_check_in: isoDay(31), p_check_out: isoDay(33), p_adults: 4 });
         expect(detail.code).toBe('nicht_buchbar');
         expect(detail.datum).toBe(isoDay(31));
@@ -317,14 +324,45 @@ describe('create_booking: Ablehnungen (E31)', () => {
         expect(detail.code).toBe('ungueltiger_zeitraum');
     });
 
-    it('unbekannte Kategorie', async () => {
-        const detail = await reject({ p_room_type_id: '00000000-0000-4000-8000-0000000000ff' });
+    it('unbekannte Kategorie — und der Fehler nennt die Position (E44)', async () => {
+        const unbekannt = '00000000-0000-4000-8000-0000000000ff';
+        const detail = await reject({ p_positions: [position(unbekannt)] });
         expect(detail.code).toBe('kategorie_unbekannt');
+        expect(detail.room_type_id).toBe(unbekannt);
     });
 
-    it('mehr Zimmer als frei', async () => {
-        const detail = await reject({ p_check_in: isoDay(31), p_check_out: isoDay(33), p_rooms: 5 });
+    it('mehr Zimmer als frei — mit Position', async () => {
+        const detail = await reject({ p_check_in: isoDay(31), p_check_out: isoDay(33), p_adults: 5, p_positions: [position(fixture.roomTypeId, 5)] });
         expect(detail.code).toBe('nicht_buchbar');
+        expect(detail.room_type_id).toBe(fixture.roomTypeId);
+    });
+
+    it('mehr Zimmer als Erwachsene — jedes Zimmer braucht einen (E48)', async () => {
+        const detail = await reject({ p_adults: 1, p_children: 1, p_positions: [position(fixture.roomTypeId, 2)] });
+        expect(detail.code).toBe('ungueltige_belegung');
+    });
+
+    it('mehr als 8 Zimmer je Vorgang (E44)', async () => {
+        const detail = await reject({ p_adults: 9, p_positions: [position(fixture.roomTypeId, 9)] });
+        expect(detail.code).toBe('ungueltige_belegung');
+    });
+
+    it('dieselbe Kategorie zweimal', async () => {
+        const detail = await reject({ p_positions: [position(fixture.roomTypeId), position(fixture.roomTypeId)] });
+        expect(detail.code).toBe('ungueltige_belegung');
+    });
+
+    it('kaputte Positionen sind ein strukturierter Fehler, kein Cast-Fehler', async () => {
+        for (const p_positions of [
+            [],
+            [{ room_type_id: 'kein-uuid', rooms: 1 }],
+            [{ room_type_id: fixture.roomTypeId, rooms: 1.5 }],
+            [{ room_type_id: fixture.roomTypeId, rooms: '1' }],
+            {},
+        ]) {
+            const detail = await reject({ p_positions });
+            expect(detail.code, JSON.stringify(p_positions)).toBe('ungueltige_belegung');
+        }
     });
 
     it('legt bei einer Ablehnung KEINEN Kunden an — die Transaktion rollt komplett zurück', async () => {
@@ -342,5 +380,118 @@ describe('create_booking: Ablehnungen (E31)', () => {
         const { error } = await anonClient.rpc('reject_booking', { p_code: 'ausgebucht' });
         expect(error).not.toBeNull();
         expect(error?.code).toBe('42501');
+    });
+});
+
+/**
+ * Mehrere Kategorien in einem Vorgang (E44) und die Belegung als Gesamtzahl (E48).
+ *
+ * Die Fixture hat eine Kategorie; die zweite wird hier im selben Hotel angelegt,
+ * denn ein Vorgang über zwei Hotels ist ausdrücklich keiner.
+ */
+describe('create_booking: mehrere Kategorien, Personen als Gesamtzahl (E44, E48)', () => {
+    let fixture: Fixture;
+    let suiteId: string;
+
+    beforeAll(async () => {
+        // Kategorie A: 2 Zimmer à 2 Personen. Kategorie B: 1 Zimmer à 4 Personen.
+        fixture = await createFixture({ roomCount: 2, maxOccupancy: 2, withRatePlan: true });
+        await withRates(fixture, 10000);
+
+        const { data: suite, error } = await serviceClient
+            .from('room_types')
+            .insert({ hotel_id: fixture.hotelId, name: `Suite ${fixture.roomTypeId.slice(0, 8)}`, slug: `suite-${fixture.roomTypeId.slice(0, 8)}`, max_occupancy: 4 })
+            .select('id')
+            .single();
+        expect(error).toBeNull();
+        suiteId = (suite as { id: string }).id;
+
+        await serviceClient.from('rooms').insert({ hotel_id: fixture.hotelId, room_type_id: suiteId, room_number: `S-${suiteId.slice(0, 8)}` });
+        await serviceClient.from('room_type_rates').insert({
+            room_type_id: suiteId,
+            rate_plan_id: fixture.ratePlanId,
+            valid_from: isoDay(0),
+            valid_to: isoDay(60),
+            amount_cents: 25000,
+        });
+    });
+
+    afterAll(async () => {
+        await serviceClient
+            .from('customers')
+            .delete()
+            .eq('email_normalized', `gast.${fixture.roomTypeId.slice(0, 8)}@muster.test`);
+        await serviceClient.from('room_type_rates').delete().eq('room_type_id', suiteId);
+        await serviceClient.from('rooms').delete().eq('room_type_id', suiteId);
+        await serviceClient.from('room_types').delete().eq('id', suiteId);
+        await fixture.cleanup();
+    });
+
+    it('bucht zwei Kategorien in EINEM Vorgang, mit einer Gruppe', async () => {
+        const { data, error } = await book(fixture, {
+            p_check_in: isoDay(30),
+            p_check_out: isoDay(32),
+            p_adults: 3,
+            p_children: 2,
+            p_positions: [position(suiteId), position(fixture.roomTypeId)],
+        });
+        expect(error).toBeNull();
+        const result = data as BookingResult;
+
+        expect(result.booking_group_id).not.toBeNull();
+        expect(result.bookings.map((b) => b.room_type_id)).toEqual([suiteId, fixture.roomTypeId]);
+        // 2 Nächte × (25 000 + 10 000)
+        expect(result.total_amount_cents).toBe(70000);
+    });
+
+    it('verteilt die Personen nach der Regel aus E48', async () => {
+        // 5 Erwachsene, 2 Kinder, Suite (4) + 2 × Doppel (2), Reihenfolge wie übergeben:
+        //   1. je Zimmer ein Erwachsener      → Suite 1, D1 1, D2 1   (Rest 2)
+        //   2. übrige Erwachsene reihum       → Suite 2, D1 2         (Rest 0)
+        //   3. Kinder reihum, wo Platz ist    → Suite 2+1, D2 1+1
+        const { data, error } = await book(fixture, {
+            p_check_in: isoDay(40),
+            p_check_out: isoDay(41),
+            p_adults: 5,
+            p_children: 2,
+            p_positions: [position(suiteId), position(fixture.roomTypeId, 2)],
+        });
+        expect(error).toBeNull();
+        const belegung = (data as BookingResult).bookings.map((b) => [b.adults, b.children]);
+        expect(belegung).toEqual([
+            [2, 1],
+            [2, 0],
+            [1, 1],
+        ]);
+    });
+
+    it('lehnt ab, wenn die gewählten Zimmer ZUSAMMEN zu klein sind', async () => {
+        // 2 × Doppel = 4 Betten für 5 Personen. Die Suite wäre frei, ist aber nicht gewählt.
+        const { error } = await book(fixture, {
+            p_check_in: isoDay(44),
+            p_check_out: isoDay(45),
+            p_adults: 3,
+            p_children: 2,
+            p_positions: [position(fixture.roomTypeId, 2)],
+        });
+        expect(error).not.toBeNull();
+        expect(detailOf(error).code).toBe('nicht_buchbar');
+    });
+
+    it('rollt ALLE Positionen zurück, wenn eine scheitert', async () => {
+        // Die Suite hat nur ein Zimmer; zwei davon scheitern. Die Doppelzimmer-Position
+        // davor darf dann nicht allein stehen bleiben — genau das Argument gegen zwei
+        // Aufrufe aus dem Frontend (E44).
+        const { error } = await book(fixture, {
+            p_check_in: isoDay(47),
+            p_check_out: isoDay(48),
+            p_adults: 4,
+            p_positions: [position(fixture.roomTypeId, 2), position(suiteId, 2)],
+        });
+        expect(error).not.toBeNull();
+        expect(detailOf(error).room_type_id).toBe(suiteId);
+
+        const { data } = await serviceClient.from('bookings').select('id').eq('room_type_id', fixture.roomTypeId).eq('check_in', isoDay(47));
+        expect(data).toHaveLength(0);
     });
 });

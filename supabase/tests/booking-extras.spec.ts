@@ -37,7 +37,7 @@ async function book(fixture: Fixture, overrides: Record<string, unknown> = {}) {
     return anonClient.rpc('create_booking', {
         p_check_in: isoDay(30),
         p_check_out: isoDay(33),
-        p_room_type_id: fixture.roomTypeId,
+        p_positions: [{ room_type_id: fixture.roomTypeId, rooms: 1 }],
         p_adults: 2,
         p_children: 1,
         p_email: mailOf(fixture),
@@ -202,16 +202,23 @@ describe('Frühstück: die Fälle ohne Aufschlag (E47)', () => {
         expect(gebucht.extras_amount_cents).toBe(2 * 2 * BREAKFAST_CENTS);
     });
 
-    it('schlägt den Aufschlag auf JEDES Zimmer des Vorgangs (E45)', async () => {
-        const { data, error } = await book(fixture, { p_check_in: isoDay(48), p_check_out: isoDay(50), p_rooms: 2, p_with_breakfast: true });
+    it('rechnet das Frühstück für die GÄSTE, nicht für die Zimmer (E48)', async () => {
+        const { data, error } = await book(fixture, {
+            p_check_in: isoDay(48),
+            p_check_out: isoDay(50),
+            p_positions: [{ room_type_id: fixture.roomTypeId, rooms: 2 }],
+            p_with_breakfast: true,
+        });
         expect(error).toBeNull();
         const gebucht = data as BookingResult;
 
-        // Die Belegung gilt pro Zimmer, also auch das Frühstück: zwei Zimmer mit je
-        // 2 Erwachsenen und 1 Kind sind sechs Personen am Buffet.
-        const jeZimmer = 2 * 2 * BREAKFAST_CENTS + 2 * 1 * BREAKFAST_CHILD_CENTS;
-        expect(gebucht.bookings[0]?.extras_amount_cents).toBe(jeZimmer);
-        expect(gebucht.extras_amount_cents).toBe(2 * jeZimmer);
+        // 2 Erwachsene und 1 Kind sind drei Personen am Buffet — auch mit zwei Zimmern.
+        // Unter E45 wären es sechs gewesen.
+        expect(gebucht.extras_amount_cents).toBe(2 * 2 * BREAKFAST_CENTS + 2 * 1 * BREAKFAST_CHILD_CENTS);
+
+        // Jede Zimmerzeile trägt das Frühstück IHRER Gäste: Zimmer 1 bekommt einen
+        // Erwachsenen und das Kind, Zimmer 2 den zweiten Erwachsenen.
+        expect(gebucht.bookings.map((b) => b.extras_amount_cents)).toEqual([2 * (BREAKFAST_CENTS + BREAKFAST_CHILD_CENTS), 2 * BREAKFAST_CENTS]);
     });
 });
 

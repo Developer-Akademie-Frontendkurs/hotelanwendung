@@ -28,21 +28,21 @@ export interface BreakfastService {
     currency: string;
 }
 
-/** Belegung **eines** Zimmers (E45) – „2 Erwachsene" mal 3 Zimmer sind sechs Personen. */
+/** Belegung des **ganzen** Vorgangs (E48) – „2 Erwachsene" sind zwei, egal bei wie vielen Zimmern. */
 export type Occupancy = {
     adults: number;
     children: number;
 };
 
 /**
- * Was das Frühstück für eine Kategorie kostet.
+ * Was das Frühstück für alle Gäste kostet.
  *
  * Die Zahl der Frühstücke ist die Zahl der **Nächte**: gefrühstückt wird am Morgen nach
- * jeder gebuchten Nacht, das letzte am Abreisetag. Genau so rechnet `create_booking`.
+ * jeder gebuchten Nacht, das letzte am Abreisetag. `create_booking` verteilt denselben
+ * Betrag auf die Zimmerzeilen – die Summe bleibt dieselbe.
  */
-export function getBreakfastAmountCents(service: BreakfastService, occupancy: Occupancy, nights: number, rooms: number): number {
-    const perRoom = nights * (occupancy.adults * service.unitAmountCents + occupancy.children * service.childUnitAmountCents);
-    return perRoom * rooms;
+export function getBreakfastAmountCents(service: BreakfastService, occupancy: Occupancy, nights: number): number {
+    return nights * (occupancy.adults * service.unitAmountCents + occupancy.children * service.childUnitAmountCents);
 }
 
 /**

@@ -412,6 +412,12 @@ Transaktion".
 > **Achtung bei Commit 2:** Hier wird die Funktion angefasst, an der die Kernaussage von E10 hängt.
 > Wer den Nebenläufigkeitstest nach dem Umbau nicht laufen lässt, hat die Entscheidung nur noch
 > behauptet.
+>
+> **Nachtrag 2026-09-23 — Commit 2 ohne Rechnungsadresse, dafür mit E48.** Die Positionen (Punkte
+> 1–6, 8–10) sind in `20260923101000_occupancy_total.sql` umgesetzt, zusammen mit der Belegung als
+> Gesamtzahl (E48, revidiert E45 — Punkt 5 oben gilt damit nicht mehr). Punkt 7 und damit Commit 1
+> (`billing_addresses`) stehen noch aus; `create_booking` wird dafür noch einmal ersetzt. Die
+> Nebenläufigkeitstests sind nach dem Umbau gelaufen und grün.
 
 ---
 

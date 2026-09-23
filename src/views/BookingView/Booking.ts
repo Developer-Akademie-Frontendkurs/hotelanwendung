@@ -2,13 +2,13 @@ import AbstractView from '../AbstractView';
 import { bookingState } from '../../shared/state/bookingState';
 import { supabase } from '../../shared/services/supabase';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
-import { clampQuantity, getLimitMessage, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
+import { clampQuantity, getLimitMessage, getMissingBeds, getRoomLimit, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
 import './booking.css';
 
 /*
     *** Vorbereitung und Verknüpfung BookingView zu Datenbank ***
-        TODO: Unter Zimmerauswahl neue Section Zusätze (Zustellbestten, Kinderbett)
+        TODO: Unter Zimmerauswahl neue Section Zusätze (Zustellbetten, Kinderbett)
         TODO: Buchungssteps verknüpfen
         TODO: Console Logs json Buchung
         TODO: Migrations notwending? Eventuelle Änderungen an der Datenbank?
@@ -30,9 +30,9 @@ type DayCell = {
 type BookingPosition = {
     roomTypeId: string;
     rooms: number;
-    withBreakfast: boolean;
 };
 
+/** Gäste als Gesamtzahl des Vorgangs (E48) – verteilt werden sie in `create_booking`. */
 type Booking = {
     checkIn: string;
     checkOut: string;
@@ -40,6 +40,7 @@ type Booking = {
     adults: number;
     children: number;
     positions: BookingPosition[];
+    withBreakfast: boolean;
 };
 
 type GuestField = 'adults' | 'children';
@@ -305,6 +306,8 @@ export class BookingView extends AbstractView {
                     <div class="flex flex-col gap-8 768:gap-11">
                         ${this.rooms.map((room: RoomCard): string => this.getRoomCardHtml(room)).join('')}
                     </div>
+                    <p data-capacity-notice role="status" aria-live="polite" class="${this.getCapacityText() === '' ? 'hidden' : ''} mt-8 768:mt-11 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-4 py-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">${this.getCapacityText()}</p>
+                    ${this.getBreakfastHtml()}
                 `;
         }
     }
@@ -382,7 +385,7 @@ export class BookingView extends AbstractView {
 
         const quantity = bookingState.getRoomQuantity(room.roomTypeId);
         const otherRooms = getTotalRooms(bookingState.getRoomQuantities()) - quantity;
-        const max = getRoomMax(availability.roomsFree, otherRooms);
+        const max = getRoomMax(availability.roomsFree, otherRooms, getRoomLimit(this.guests.adults));
         const inputId = `booking-rooms-${room.slug}`;
 
         return /*html*/ `
@@ -406,40 +409,38 @@ export class BookingView extends AbstractView {
                     </div>
                 </div>
                 <p data-room-quantity-notice="${room.roomTypeId}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze text-right"></p>
-                ${this.getBreakfastHtml(room)}
             </div>
         `;
     }
 
     /**
-     * Frühstück je Kategorie (E47).
+     * Frühstück für alle Gäste (E47, E48).
      *
-     * Die Checkbox sitzt an der Kategorie und nicht am einzelnen Zimmer, weil
-     * `create_booking` genau diese Granularität kennt: alle Zimmer einer Position
-     * bekommen dieselbe Buchung. Frühstück je einzelnem Zimmer wäre der Umbau nach
-     * `booking_items` (E20/E27).
+     * Unter der Zimmerliste statt auf einer Karte: Seit die Belegung eine Gesamtzahl ist
+     * und `create_booking` die Personen selbst auf die Zimmer verteilt, gibt es keine
+     * „Gäste dieser Kategorie" mehr, für die ein Häkchen auf einer Karte gelten könnte.
      */
-    private getBreakfastHtml(room: RoomCard): string {
+    private getBreakfastHtml(): string {
         const service = this.breakfastService;
         if (service === null) return '';
 
-        const inputId = `booking-breakfast-${room.slug}`;
-        const rooms = bookingState.getRoomQuantity(room.roomTypeId);
+        const hasRooms = getTotalRooms(bookingState.getRoomQuantities()) > 0;
+        const checked = bookingState.getBreakfast();
 
         return /*html*/ `
-            <div class="flex flex-col gap-1 border-t border-purple-haze/25 pt-3">
-                <label for="${inputId}" class="flex items-center justify-between gap-4 cursor-pointer">
-                    <span class="font-playfair-display font-medium text-16 768:text-18 leading-tight text-purple-haze-dark">mit ${service.name}</span>
+            <div data-breakfast-card class="mt-8 768:mt-11 flex flex-col gap-1 bg-purple-haze-light px-5 py-5 768:px-8 ${checked ? 'ring-2 ring-purple-haze' : ''}">
+                <label for="booking-breakfast" class="flex items-center justify-between gap-4 cursor-pointer">
+                    <span class="font-playfair-display font-medium text-16 768:text-18 leading-tight text-purple-haze-dark">${service.name} für alle Gäste</span>
                     <input
-                        id="${inputId}"
-                        data-room-breakfast="${room.roomTypeId}"
+                        id="booking-breakfast"
+                        data-breakfast
                         type="checkbox"
-                        ${bookingState.getBreakfast(room.roomTypeId) ? 'checked' : ''}
-                        ${rooms === 0 ? 'disabled' : ''}
+                        ${checked ? 'checked' : ''}
+                        ${hasRooms ? '' : 'disabled'}
                         class="shrink-0 w-5 h-5 accent-purple-haze cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
                     />
                 </label>
-                <p data-room-breakfast-amount="${room.roomTypeId}" class="font-antic-didone text-14 leading-tight text-purple-haze text-right">${this.getBreakfastLabel(room)}</p>
+                <p data-breakfast-amount class="font-antic-didone text-14 leading-tight text-purple-haze text-right">${this.getBreakfastLabel()}</p>
             </div>
         `;
     }
@@ -451,21 +452,39 @@ export class BookingView extends AbstractView {
      * Ein Aufschlag, den der Gast erst auf der Bestätigung als Zahl sieht, ist kein
      * Angebot, sondern eine Überraschung.
      */
-    private getBreakfastLabel(room: RoomCard): string {
+    private getBreakfastLabel(): string {
         const service = this.breakfastService;
-        const availability = room.availability;
         if (service === null) return '';
 
         const perAdult = formatPrice(service.unitAmountCents, service.currency);
         const perChild = formatPrice(service.childUnitAmountCents, service.currency);
         const preise = `${perAdult} pro Erwachsenem, ${perChild} pro Kind und Nacht`;
 
-        const rooms = bookingState.getRoomQuantity(room.roomTypeId);
-        if (availability === null || rooms === 0 || !bookingState.getBreakfast(room.roomTypeId)) return preise;
+        if (getTotalRooms(bookingState.getRoomQuantities()) === 0) return `${preise} · Bitte zuerst ein Zimmer wählen`;
+
+        // Alle Kategorien haben denselben Zeitraum und damit dieselbe Zahl an Nächten.
+        const nights = this.rooms.find((room: RoomCard): boolean => room.availability !== null)?.availability?.nights;
+        if (nights === undefined || !bookingState.getBreakfast()) return preise;
 
         const occupancy = { adults: this.guests.adults ?? 0, children: this.guests.children ?? 0 };
-        const amount = getBreakfastAmountCents(service, occupancy, availability.nights, rooms);
+        const amount = getBreakfastAmountCents(service, occupancy, nights);
         return `+ ${formatPrice(amount, service.currency)} · ${preise}`;
+    }
+
+    /**
+     * Hinweis unter der Liste, solange die gewählten Zimmer nicht für alle Gäste reichen (E48).
+     *
+     * Kein Fehler, sondern der nächste Schritt: Wer zwei Zimmer braucht, wählt erst eines
+     * und dann das zweite – dazwischen soll dort stehen, was noch fehlt.
+     */
+    private getCapacityText(): string {
+        const adults = this.guests.adults;
+        const quantities = bookingState.getRoomQuantities();
+        if (adults === null || getTotalRooms(quantities) === 0) return '';
+
+        const missing = getMissingBeds(quantities, this.rooms, adults + (this.guests.children ?? 0));
+        if (missing === 0) return '';
+        return missing === 1 ? 'Noch 1 Person ohne Bett – bitte ein weiteres Zimmer wählen.' : `Noch ${missing.toString()} Personen ohne Bett – bitte weitere Zimmer wählen.`;
     }
 
     /** Der Wähler hat zwei Vorbedingungen: einen Zeitraum und eine Belegung (V16.7 — kein stiller Suchdefault). */
@@ -518,9 +537,8 @@ export class BookingView extends AbstractView {
         const target = event.target;
         if (!(target instanceof HTMLInputElement)) return;
 
-        const breakfastId = target.dataset.roomBreakfast;
-        if (breakfastId !== undefined) {
-            bookingState.setBreakfast(breakfastId, target.checked);
+        if (target.dataset.breakfast !== undefined) {
+            bookingState.setBreakfast(target.checked);
             this.updateQuantityUi(null);
             return;
         }
@@ -537,11 +555,12 @@ export class BookingView extends AbstractView {
         if (!availability?.isBookable) return;
 
         const otherRooms = getTotalRooms(bookingState.getRoomQuantities()) - bookingState.getRoomQuantity(roomTypeId);
-        const clamped = clampQuantity(desired, availability.roomsFree, otherRooms);
+        const roomLimit = getRoomLimit(this.guests.adults);
+        const clamped = clampQuantity(desired, availability.roomsFree, otherRooms, roomLimit);
         bookingState.setRoomQuantity(roomTypeId, clamped.value);
 
         // Der Gast soll sofort erfahren, warum es nicht weitergeht — nicht erst beim Absenden.
-        const message = desired > clamped.value ? getLimitMessage(clamped.limitedBy, availability.roomsFree) : null;
+        const message = desired > clamped.value ? getLimitMessage(clamped.limitedBy, availability.roomsFree, roomLimit) : null;
         this.updateQuantityUi(message === null ? null : { roomTypeId, message });
     }
 
@@ -556,6 +575,7 @@ export class BookingView extends AbstractView {
 
         const quantities = bookingState.getRoomQuantities();
         const totalRooms = getTotalRooms(quantities);
+        const roomLimit = getRoomLimit(this.guests.adults);
 
         this.rooms.forEach((room: RoomCard): void => {
             const quantity = quantities[room.roomTypeId] ?? 0;
@@ -568,7 +588,7 @@ export class BookingView extends AbstractView {
             const input = roomsEl.querySelector<HTMLInputElement>(`[data-room-quantity="${room.roomTypeId}"]`);
             if (input) {
                 input.value = quantity.toString();
-                input.max = getRoomMax(roomsFree, totalRooms - quantity).toString();
+                input.max = getRoomMax(roomsFree, totalRooms - quantity, roomLimit).toString();
             }
 
             const minus = roomsEl.querySelector<HTMLButtonElement>(`[data-room-step="-1"][data-room-type="${room.roomTypeId}"]`);
@@ -579,19 +599,30 @@ export class BookingView extends AbstractView {
 
             const noticeEl = roomsEl.querySelector<HTMLElement>(`[data-room-quantity-notice="${room.roomTypeId}"]`);
             if (noticeEl) noticeEl.textContent = notice !== null && notice.roomTypeId === room.roomTypeId ? notice.message : '';
-
-            // Das Häkchen wird aus dem Zustand nachgezogen, nicht nur vom Klick gesetzt:
-            // Eine Menge von 0 räumt es weg (siehe `bookingState`), und dann muss es auch
-            // im DOM verschwinden.
-            const breakfastEl = roomsEl.querySelector<HTMLInputElement>(`[data-room-breakfast="${room.roomTypeId}"]`);
-            if (breakfastEl) {
-                breakfastEl.checked = bookingState.getBreakfast(room.roomTypeId);
-                breakfastEl.disabled = quantity === 0;
-            }
-
-            const breakfastAmountEl = roomsEl.querySelector<HTMLElement>(`[data-room-breakfast-amount="${room.roomTypeId}"]`);
-            if (breakfastAmountEl) breakfastAmountEl.textContent = this.getBreakfastLabel(room);
         });
+
+        const capacityEl = roomsEl.querySelector<HTMLElement>('[data-capacity-notice]');
+        if (capacityEl) {
+            const text = this.getCapacityText();
+            capacityEl.textContent = text;
+            capacityEl.classList.toggle('hidden', text === '');
+        }
+
+        // Das Häkchen wird aus dem Zustand nachgezogen, nicht nur vom Klick gesetzt: Sind
+        // alle Mengen wieder 0, räumt `bookingState` es weg, und dann muss es auch im DOM
+        // verschwinden.
+        const checked = bookingState.getBreakfast();
+        const breakfastEl = roomsEl.querySelector<HTMLInputElement>('[data-breakfast]');
+        if (breakfastEl) {
+            breakfastEl.checked = checked;
+            breakfastEl.disabled = totalRooms === 0;
+        }
+        const breakfastCard = roomsEl.querySelector<HTMLElement>('[data-breakfast-card]');
+        breakfastCard?.classList.toggle('ring-2', checked);
+        breakfastCard?.classList.toggle('ring-purple-haze', checked);
+
+        const breakfastAmountEl = roomsEl.querySelector<HTMLElement>('[data-breakfast-amount]');
+        if (breakfastAmountEl) breakfastAmountEl.textContent = this.getBreakfastLabel();
     }
 
     private getRoomImageHtml(room: RoomCard): string {
@@ -783,7 +814,7 @@ export class BookingView extends AbstractView {
 
         try {
             const [details, breakfast, availability] = await Promise.all([
-                supabase.from('room_types').select('id, name, slug, description, room_type_images(storage_path, alt_text, sort_order)').order('name'),
+                supabase.from('room_types').select('id, name, slug, description, max_occupancy, room_type_images(storage_path, alt_text, sort_order)').order('name'),
                 // Der Frühstückspreis kommt aus der Datenbank, nicht als Konstante aus
                 // dem Frontend – dasselbe Argument wie beim Buchungshorizont (E30). Ohne
                 // `hotel_id`-Filter, weil es genau ein Hotel gibt; `search_availability`
@@ -814,7 +845,7 @@ export class BookingView extends AbstractView {
             this.breakfastService = buildBreakfastService(breakfast.data);
 
             // Ein neues Suchergebnis kann gewählte Mengen unmöglich gemacht haben (V16.6).
-            const reconciled = reconcileQuantities(bookingState.getRoomQuantities(), this.rooms);
+            const reconciled = reconcileQuantities(bookingState.getRoomQuantities(), this.rooms, getRoomLimit(this.guests.adults));
             bookingState.setRoomQuantities(reconciled.quantities);
             this.quantityNotice = reconciled.notice;
 
@@ -1053,7 +1084,6 @@ export class BookingView extends AbstractView {
 
         const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY);
         const quantities = bookingState.getRoomQuantities();
-        const breakfast = bookingState.getRoomBreakfast();
 
         const booking: Booking = {
             checkIn: toISODate(checkIn),
@@ -1061,15 +1091,10 @@ export class BookingView extends AbstractView {
             nights,
             adults,
             children: this.guests.children ?? 0,
-            // Eine Position je Kategorie – genau die Form, die `create_booking` je Aufruf
-            // erwartet (`p_room_type_id`, `p_rooms`, `p_with_breakfast`).
-            positions: Object.entries(quantities).map(
-                ([roomTypeId, rooms]: [string, number]): BookingPosition => ({
-                    roomTypeId,
-                    rooms,
-                    withBreakfast: breakfast[roomTypeId] ?? false,
-                }),
-            ),
+            // Eine Position je Kategorie – die Form von `p_positions` in `create_booking`
+            // (E44). Frühstück und Gäste gelten für den ganzen Vorgang (E48).
+            positions: Object.entries(quantities).map(([roomTypeId, rooms]: [string, number]): BookingPosition => ({ roomTypeId, rooms })),
+            withBreakfast: bookingState.getBreakfast(),
         };
 
         // TODO: Buchungsdaten später an das Backend senden (fetch / Supabase).
@@ -1097,6 +1122,7 @@ function buildRoomCards(details: RoomTypeDetail[], availability: RoomAvailabilit
             description: detail.description,
             imageUrl: image === null ? null : supabase.storage.from(ROOM_IMAGE_BUCKET).getPublicUrl(image.storage_path).data.publicUrl,
             imageAlt: image?.alt_text ?? '',
+            maxOccupancy: detail.max_occupancy,
             availability:
                 room === undefined
                     ? null
