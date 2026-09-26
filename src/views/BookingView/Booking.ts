@@ -1,6 +1,9 @@
 import AbstractView from '../AbstractView';
 import { bookingState } from '../../shared/state/bookingState';
 import { supabase } from '../../shared/services/supabase';
+import { createBooking, type BookingRejection, type CreatedBooking } from '../../shared/services/booking.service';
+import { openModal } from '../../shared/ui/modal';
+import logo from '../../assets/img/logo-small.svg';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
 import { clampQuantity, getLimitMessage, getMissingBeds, getRoomLimit, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
@@ -25,7 +28,6 @@ import './booking.css';
     *** Vorbereitung und Verknüpfung BookingView zu Datenbank ***
         TODO: Buchungssteps verknüpfen
         TODO: Migrations notwending? Eventuelle Änderungen an der Datenbank?
-        TODO: Integration Datenbank Buchungspeichern
 */
 
 type DayCell = {
@@ -204,6 +206,8 @@ const ROOM_AMENITIES: Readonly<Record<string, readonly RoomAmenity[]>> = {
 const ROOM_IMAGE_BUCKET = 'room-images';
 
 const FORM_INCOMPLETE = 'Bitte tragen Sie alle notwendigen Informationen ein.';
+const CHECKOUT_LABEL = 'zahlungspflichtig buchen';
+const CHECKOUT_BUSY_LABEL = 'Buchung wird gesendet …';
 
 // Eingabefelder und Auswahl im Adressformular – `aria-invalid` markiert, was beim Klick
 // auf „zahlungspflichtig buchen" fehlte.
@@ -266,8 +270,9 @@ export class BookingView extends AbstractView {
     private hotel: HotelRow | null = null;
     private summaryEl: HTMLElement | null = null;
     private unsubscribeSummary: (() => void) | null = null;
-    // TODO: Übergangsweise – entfernen, sobald die Buchung gespeichert wird.
-    private unsubscribeBookingLog: (() => void) | null = null;
+    // Solange `create_booking` läuft, zählt kein weiterer Klick: ein Doppelklick wären
+    // sonst zwei verbindliche Buchungen.
+    private submitting = false;
 
     constructor() {
         super();
@@ -325,11 +330,6 @@ export class BookingView extends AbstractView {
             this.handleClick(event);
         });
         this.renderCalendar();
-
-        this.unsubscribeBookingLog?.();
-        this.unsubscribeBookingLog = bookingState.subscribe((): void => {
-            this.logBooking();
-        });
     }
 
     private getGuestsHtml(): string {
@@ -406,8 +406,6 @@ export class BookingView extends AbstractView {
         if (field !== 'adults' && field !== 'children') return;
 
         this.guests[field] = target.value === '' ? null : Number(target.value);
-        // Die Gäste liegen in der View, nicht in `bookingState` – deshalb hier von Hand.
-        this.logBooking();
         this.renderGuestsNotice();
         // Der weiter-Knopf hängt jetzt mit an der Belegung.
         this.renderCalendar();
@@ -1060,7 +1058,7 @@ export class BookingView extends AbstractView {
                     </div>
                     <div class="flex flex-col gap-2">
                         <button type="button" data-action="checkout" class="w-full bg-purple-haze px-5 py-2.5 font-lato font-bold text-20 768:text-24 text-white opacity-85 hover:opacity-100 cursor-pointer">
-                            zahlungspflichtig buchen
+                            ${CHECKOUT_LABEL}
                         </button>
                         <div class="flex flex-col gap-4 text-center">
                             <p class="font-antic-didone text-14 leading-tight text-[#74687e]">Ich bestätige, dass ich die Datenschutzvereinbarung gelesen habe.</p>
@@ -1520,7 +1518,7 @@ export class BookingView extends AbstractView {
                     this.clearSelection();
                     return;
                 case 'submit':
-                    this.submit();
+                    void this.submit();
                     return;
                 default:
                     return;
@@ -1573,9 +1571,12 @@ export class BookingView extends AbstractView {
 
     /**
      * Geprüft wird beim Klick, nicht während der Eingabe (V16): Der Knopf ist immer aktiv,
-     * und erst dann werden die fehlenden Felder markiert.
+     * und erst dann werden die fehlenden Felder markiert. Ist alles da, bucht
+     * `create_booking` (Phase 9b, Punkte 8–9).
      */
-    private submit(): void {
+    private async submit(): Promise<void> {
+        if (this.submitting) return;
+
         const draft = this.getBookingDraft();
         const { checkIn, checkOut, nights, adults } = draft;
         const invalid = getInvalidFields(draft);
@@ -1583,18 +1584,136 @@ export class BookingView extends AbstractView {
         // In das Formular springen nur, wenn dort auch das Problem liegt – nicht, wenn
         // noch das Zimmer fehlt.
         this.markInvalidFields(invalid, message === FORM_INCOMPLETE);
-
-        const errorEl = document.getElementById('booking-checkout-error');
-        if (errorEl) {
-            errorEl.hidden = message === null;
-            errorEl.textContent = message ?? '';
-        }
+        this.showCheckoutError(message);
         if (message !== null || checkIn === null || checkOut === null || nights === null || adults === null) return;
 
         const booking: Booking = { ...draft, checkIn, checkOut, nights, adults };
 
-        // TODO: Buchungsdaten später an das Backend senden (fetch / Supabase).
-        console.log('Buchungsdaten', booking);
+        this.setSubmitting(true);
+        let result: Awaited<ReturnType<typeof createBooking>>;
+        try {
+            result = await createBooking(booking);
+        } catch {
+            // Nur bei einer unlesbaren Antwort – die Buchung kann trotzdem angelegt sein.
+            // Deshalb kein „bitte erneut versuchen" und der Knopf bleibt gesperrt.
+            this.showCheckoutError('Bei der Buchung ist ein unerwarteter Fehler aufgetreten. Bitte buchen Sie nicht erneut, sondern kontaktieren Sie uns.');
+            return;
+        }
+
+        if (!result.ok) {
+            this.setSubmitting(false);
+            this.showCheckoutError(this.getRejectionMessage(result.error));
+            // Eine Ablehnung heißt fast immer: Die Verfügbarkeit hat sich geändert. Die
+            // neue Liste passt unmögliche Mengen an und sagt es über der Liste.
+            void this.loadRooms();
+            return;
+        }
+
+        // Der Knopf bleibt gesperrt – die Buchung ist getätigt, und das Popup führt nur
+        // noch zur Startseite.
+        bookingState.reset();
+        this.showConfirmation(booking, result.data);
+    }
+
+    private showCheckoutError(message: string | null): void {
+        const errorEl = document.getElementById('booking-checkout-error');
+        if (!errorEl) return;
+        errorEl.hidden = message === null;
+        errorEl.textContent = message ?? '';
+    }
+
+    private setSubmitting(submitting: boolean): void {
+        this.submitting = submitting;
+        const button = document.querySelector<HTMLButtonElement>('[data-action="checkout"]');
+        if (!button) return;
+        button.disabled = submitting;
+        button.setAttribute('aria-busy', String(submitting));
+        button.textContent = submitting ? CHECKOUT_BUSY_LABEL : CHECKOUT_LABEL;
+    }
+
+    /**
+     * Übersetzt die Ablehnung aus `create_booking` in einen Satz mit Datum und Kategorie
+     * (E31). Gäste bekommen die feinen Gründe maskiert als `nicht_buchbar` (E28).
+     */
+    private getRejectionMessage(error: BookingRejection): string {
+        const room = this.rooms.find((card: RoomCard): boolean => card.roomTypeId === error.roomTypeId)?.name ?? null;
+        const date = error.date === null ? null : formatStayDate(parseISODate(error.date), '', null);
+
+        switch (error.code) {
+            case 'nicht_buchbar':
+            case 'ausgebucht':
+            case 'kein_preis':
+            case 'zu_klein': {
+                const what = room ?? 'Ihre Auswahl';
+                const when = date === null ? '' : ` für die Nacht vom ${date}`;
+                return `${what} ist${when} leider nicht mehr buchbar. Wir haben die Verfügbarkeit aktualisiert – bitte prüfen Sie Ihre Auswahl.`;
+            }
+            case 'vergangenheit':
+            case 'ausserhalb_horizont':
+                return formatUnavailableReason(error.code);
+            case 'ungueltiger_zeitraum':
+                return 'Die Abreise muss nach der Anreise liegen.';
+            case 'kategorie_unbekannt':
+                return `${room ?? 'Diese Zimmerkategorie'} kann derzeit nicht gebucht werden.`;
+            case 'ungueltige_belegung':
+                return 'Die gewählten Zimmer passen nicht zur Anzahl der Gäste.';
+            case 'ungueltige_leistung':
+            case 'leistung_unbekannt':
+                return 'Die gewählten Zusatzleistungen können so nicht gebucht werden.';
+            case 'ungueltige_adresse':
+                return 'Bitte prüfen Sie Ihre Adresse – sie ist unvollständig oder das Land wird nicht unterstützt.';
+            default:
+                return 'Die Buchung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.';
+        }
+    }
+
+    /**
+     * Bestätigungs-Popup nach E46. Genau ein Ausgang (V16): Button, Escape und Klick auf
+     * den Hintergrund führen zur Startseite – ein Weg, der nur schließt, ließe den Gast
+     * auf einem Formular zurück, dessen Buchung bereits getätigt ist.
+     */
+    private showConfirmation(booking: Booking, created: CreatedBooking): void {
+        const references = created.bookings.map((room: { bookingReference: string }): string => room.bookingReference);
+        const currency = created.bookings[0]?.currency ?? 'EUR';
+        const stay = `${formatStayDate(parseISODate(booking.checkIn), '', null)} – ${formatStayDate(parseISODate(booking.checkOut), '', null)}`;
+
+        openModal({
+            labelledBy: 'booking-confirmation-title',
+            // E46: Der Entwurf sagt hier „Bitte bestätigen Sie diese via erhaltener Email."
+            // Eine Buchung ist aber sofort `confirmed` (E11), und eine Mail verschickt noch
+            // niemand. Der Satz kommt zurück, sobald es die Bestätigungsmail gibt.
+            html: /*html*/ `
+                <div class="flex flex-col items-center gap-6 text-center text-purple-haze-dark">
+                    <img src="${logo}" alt="" class="h-24 w-auto">
+                    <h2 id="booking-confirmation-title" class="font-playfair-display text-28 768:text-36 leading-tight">Vielen Dank für Ihre Buchung.</h2>
+                    <p class="font-antic-didone text-18 768:text-20 leading-snug">Ihre Buchung ist bestätigt.<br>Wir freuen uns auf Sie.</p>
+                    <dl class="w-full flex flex-col gap-3 border-y-[0.5px] border-purple-haze/45 py-4 font-antic-didone text-16 768:text-18">
+                        ${this.getConfirmationRowHtml(references.length === 1 ? 'Buchungsnummer' : 'Buchungsnummern', references.join('<br>'))}
+                        ${this.getConfirmationRowHtml('Zeitraum', `${stay}<br>${formatNights(created.nights)}`)}
+                        ${this.getConfirmationRowHtml('Gesamtpreis', formatPrice(created.grandTotalCents, currency))}
+                    </dl>
+                    <button type="button" data-modal-close class="w-full bg-purple-haze px-5 py-2.5 font-lato font-bold text-20 768:text-24 text-white opacity-85 hover:opacity-100 cursor-pointer">
+                        zurück zur Homepage
+                    </button>
+                </div>
+            `,
+            onClose: (): void => {
+                // Der Router hört auf `popstate` und rendert dann den neuen Pfad – derselbe
+                // Weg wie beim Zurück-Knopf des Browsers, ohne den Router hierher zu reichen.
+                history.pushState(null, '', '/');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+            },
+        });
+    }
+
+    /** Werte kommen aus `create_booking` bzw. sind formatierte Zahlen – keine Eingaben des Gastes. */
+    private getConfirmationRowHtml(label: string, value: string): string {
+        return /*html*/ `
+            <div class="flex items-start justify-between gap-4">
+                <dt>${label}</dt>
+                <dd class="text-right font-lato font-bold tracking-wide">${value}</dd>
+            </div>
+        `;
     }
 
     /**
@@ -1610,21 +1729,6 @@ export class BookingView extends AbstractView {
         if (capacity !== '') return capacity;
 
         return invalid.length === 0 ? null : FORM_INCOMPLETE;
-    }
-
-    /**
-     * TODO: Übergangsweise – loggt bei jeder Änderung den aktuellen Stand als JSON.
-     *
-     * Die View bleibt nach einem Seitenwechsel im Listener von `bookingState` hängen (es
-     * gibt keinen Destroy-Hook); ist ihr DOM weg, meldet sie sich hier selbst ab.
-     */
-    private logBooking(): void {
-        if (this.calendarEl?.isConnected !== true) {
-            this.unsubscribeBookingLog?.();
-            this.unsubscribeBookingLog = null;
-            return;
-        }
-        console.log(JSON.stringify(this.getBookingDraft(), null, 2));
     }
 
     private getBookingDraft(): BookingDraft {
@@ -1657,7 +1761,6 @@ export class BookingView extends AbstractView {
             // nächsten Klick behalten.
             (event.target as HTMLElement).removeAttribute('aria-invalid');
             this.renderCustomerSummary();
-            this.logBooking();
         });
         form.addEventListener('change', (event: Event): void => {
             const target = event.target as HTMLElement;
@@ -1666,7 +1769,6 @@ export class BookingView extends AbstractView {
             const billingEl = document.getElementById('booking-billing');
             if (billingEl) billingEl.hidden = !(target as HTMLInputElement).checked;
             this.renderCustomerSummary();
-            this.logBooking();
         });
         form.addEventListener('submit', (event: Event): void => {
             // Enter in einem Feld soll nicht die Seite neu laden.
@@ -1674,7 +1776,7 @@ export class BookingView extends AbstractView {
         });
 
         document.querySelector('[data-action="checkout"]')?.addEventListener('click', (): void => {
-            this.submit();
+            void this.submit();
         });
 
         this.renderCustomerSummary();
