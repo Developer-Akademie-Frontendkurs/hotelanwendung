@@ -391,4 +391,4 @@ Der Branch ist **noch nicht in `main` gemergt**; die Commits 2 bis 5 aus dem Pla
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md) · [Nächster Commit →](002_2026-09-09_projekttagebuch-aktualisiert.md)
