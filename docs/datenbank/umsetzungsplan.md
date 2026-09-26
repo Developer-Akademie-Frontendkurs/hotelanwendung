@@ -499,7 +499,8 @@ Anschlussnächte. Zweitens: Der Kalender lässt sich nicht über den Horizont hi
    die billigere — also fällt die billigere.
 7. **Prüfung beim Klick**, nicht per deaktiviertem Button: Pflicht sind Zeitraum, mindestens ein
    Zimmer, Belegung (verpflichtend, kein stiller Suchdefault), Vorname, Nachname, E-Mail sowie
-   Straße, Hausnummer, PLZ, Ort, Land (wegen `billing_address_id not null`). Telefon bleibt optional.
+   Straße, Hausnummer, PLZ, Ort, Land der **Wohnadresse** (E51). Die Rechnungsadresse ist optional,
+   aber wenn die Checkbox an ist, gilt für sie dasselbe (Firma bleibt optional). Telefon bleibt optional.
    Bei Verstoß: die rote Zeile aus dem Entwurf anzeigen und in das erste ungültige Feld springen.
    Der Datenschutzhinweis bleibt Text — eine echte Einwilligung bräuchte Checkbox **und** eine
    Spalte mit Zeitpunkt und ist ein eigener Vorgang, kein Nebenprodukt.
@@ -535,6 +536,27 @@ keine ist versehentlich.
 > Offen bleibt an dieser Stelle die **Anbindung des Checkouts** selbst (Punkte 4–9): Die
 > Zusammenfassung rechts ist weiterhin die Figma-Attrappe. Die Checkbox schreibt in `bookingState`,
 > und `submit()` gibt die Positionen inklusive `withBreakfast` aus — verbunden ist noch nichts.
+>
+> **Nachtrag 2026-09-26 (E50, E51):** Das Adressformular links ist angebunden, zumindest bis zum
+> Entwurf:
+>
+> - **Aufbau:** „Ihre Daten“ mit Kontaktdaten und **Wohnadresse**. Die Checkbox „Rechnungsadresse
+>   weicht von der Wohnadresse ab“ blendet den Block **Rechnungsadresse** mit „Firma / z. Hd.“ ein.
+>   Das Land ist ein `<select>` mit AT/DE/CH/IT/SI, vorausgewählt ist AT.
+> - **Prüfung** nach Punkt 7 in `address.ts` (`getInvalidFields()`): Fehlende Felder werden per
+>   `aria-invalid` rot markiert, das erste bekommt den Fokus, und die rote Zeile erscheint.
+> - **Zusammenfassung:** Name und Wohnadresse, dazu die Rechnungsadresse, wenn es eine gibt. Die Werte
+>   werden per `textContent` gesetzt, nicht als HTML, weil es Eingaben des Gastes sind.
+> - **Platzhalter:** Das Beispiel steht als `placeholder`, nicht als `value`. Es ist **grau**
+>   (`placeholder:text-gray-500`) statt in der Schriftfarbe der Eingabe. Mit den Figma-Werten in
+>   Eingabefarbe sah ein leeres Formular ausgefüllt aus. Die Beispiele sind kurz genug für die
+>   schmalen Felder (PLZ, Hausnummer) und erkennbar erfunden: „Maria Huber“,
+>   `maria.huber@beispiel.at`, „Hauptplatz 12a, 9500 Villach“, für die Rechnungsadresse
+>   „Beispiel GmbH, Ringstraße 5, 1010 Wien“. „Ihr Vorname“ o. ä. hätte nur die Beschriftung
+>   wiederholt und wäre in den schmalen Feldern abgeschnitten worden.
+>
+> `submit()` gibt Kontaktdaten und Adressen in der Form der `create_booking`-Parameter aus
+> (`customer`, `residence`, `billing`). Gebucht wird weiterhin nicht (Punkt 8).
 
 ---
 

@@ -195,6 +195,18 @@ const ROOM_IMAGE_BUCKET = 'room-images';
 const FIELD_CLASSES =
     'w-full min-w-0 rounded-[0.3125rem] border-[0.5px] border-purple-haze bg-purple-haze-light/45 p-2 font-antic-didone text-18 456:text-20 leading-tight text-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 aria-[invalid=true]:border-red-600 aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-red-600';
 
+type AddressSample = {
+    street: string;
+    houseNumber: string;
+    postalCode: string;
+    city: string;
+};
+
+// Beispielwerte für die Platzhalter: kurz genug für die schmalen Felder (PLZ, Hausnummer)
+// und erkennbar erfunden (`beispiel.at`, „Beispiel GmbH").
+const RESIDENCE_SAMPLE: AddressSample = { street: 'Hauptplatz', houseNumber: '12a', postalCode: '9500', city: 'Villach' };
+const BILLING_SAMPLE: AddressSample = { street: 'Ringstraße', houseNumber: '5', postalCode: '1010', city: 'Wien' };
+
 /** Welches Formularfeld zu welchem Eintrag aus `getInvalidFields()` gehört. */
 const FIELD_NAMES: Record<InvalidField, string> = {
     'customer.firstName': 'vorname',
@@ -910,16 +922,16 @@ export class BookingView extends AbstractView {
                 </div>
                 <form id="booking-customer" novalidate class="flex flex-col gap-8 rounded-[0.625rem] border-[0.5px] border-purple-haze bg-[#fbfbfb] px-5 py-4">
                     <div class="flex flex-col gap-3">
-                        ${this.getBillingFieldHtml('vorname', 'Vorname', 'Maxime', 'given-name', 'text', 'w-full')}
-                        ${this.getBillingFieldHtml('nachname', 'Nachname', 'Musterfrau', 'family-name', 'text', 'w-full')}
+                        ${this.getBillingFieldHtml('vorname', 'Vorname', 'Maria', 'given-name', 'text', 'w-full')}
+                        ${this.getBillingFieldHtml('nachname', 'Nachname', 'Huber', 'family-name', 'text', 'w-full')}
                     </div>
                     <div class="flex flex-col gap-3">
-                        ${this.getBillingFieldHtml('email', 'E-Mail', 'maxime@musterfrau.at', 'email', 'email', 'w-full')}
-                        ${this.getBillingFieldHtml('telefon', 'Telefon (optional)', '+43 664 3226628', 'tel', 'tel', 'w-full', false)}
+                        ${this.getBillingFieldHtml('email', 'E-Mail', 'maria.huber@beispiel.at', 'email', 'email', 'w-full')}
+                        ${this.getBillingFieldHtml('telefon', 'Telefon (optional)', '+43 660 1234567', 'tel', 'tel', 'w-full', false)}
                     </div>
                     <fieldset class="flex flex-col gap-3">
                         <legend class="mb-3 font-playfair-display font-medium text-20 leading-tight text-purple-haze-dark">Wohnadresse</legend>
-                        ${this.getAddressFieldsHtml('', '')}
+                        ${this.getAddressFieldsHtml('', '', RESIDENCE_SAMPLE)}
                     </fieldset>
 
                     <label class="flex items-center gap-3 cursor-pointer font-antic-didone text-16 leading-tight text-purple-haze-dark">
@@ -929,28 +941,35 @@ export class BookingView extends AbstractView {
 
                     <fieldset id="booking-billing" hidden class="flex flex-col gap-3">
                         <legend class="mb-3 font-playfair-display font-medium text-20 leading-tight text-purple-haze-dark">Rechnungsadresse</legend>
-                        ${this.getBillingFieldHtml('rechnung-firma', 'Firma / z. Hd. (optional)', 'Musterfirma GmbH', 'billing organization', 'text', 'w-full', false)}
-                        ${this.getAddressFieldsHtml('rechnung-', 'billing ')}
+                        ${this.getBillingFieldHtml('rechnung-firma', 'Firma / z. Hd. (optional)', 'Beispiel GmbH', 'billing organization', 'text', 'w-full', false)}
+                        ${this.getAddressFieldsHtml('rechnung-', 'billing ', BILLING_SAMPLE)}
                     </fieldset>
                 </form>
             </div>
         `;
     }
 
-    /** Straße bis Land – für Wohn- und Rechnungsadresse dieselben Felder, nur mit Präfix. */
-    private getAddressFieldsHtml(prefix: string, autocompleteSection: string): string {
+    /**
+     * Straße bis Land – für Wohn- und Rechnungsadresse dieselben Felder, nur mit Präfix.
+     * Die Beispiele unterscheiden sich, damit die beiden Blöcke nicht wie eine Kopie wirken.
+     */
+    private getAddressFieldsHtml(prefix: string, autocompleteSection: string, sample: AddressSample): string {
         return /*html*/ `
-            ${this.getBillingFieldHtml(`${prefix}strasse`, 'Straße', 'Musterstraße', `${autocompleteSection}address-line1`, 'text', 'w-full')}
+            ${this.getBillingFieldHtml(`${prefix}strasse`, 'Straße', sample.street, `${autocompleteSection}address-line1`, 'text', 'w-full')}
             <div class="flex gap-3 576:gap-8">
-                ${this.getBillingFieldHtml(`${prefix}hausnummer`, 'Hausnummer', '67', `${autocompleteSection}address-line2`, 'text', 'flex-1 min-w-0 576:w-46 576:flex-none')}
-                ${this.getBillingFieldHtml(`${prefix}plz`, 'PLZ', '9872', `${autocompleteSection}postal-code`, 'text', 'w-20 shrink-0 576:w-[4.3125rem]')}
-                ${this.getBillingFieldHtml(`${prefix}ort`, 'Ort', 'Villach', `${autocompleteSection}address-level2`, 'text', 'flex-1 min-w-0')}
+                ${this.getBillingFieldHtml(`${prefix}hausnummer`, 'Hausnummer', sample.houseNumber, `${autocompleteSection}address-line2`, 'text', 'flex-1 min-w-0 576:w-46 576:flex-none')}
+                ${this.getBillingFieldHtml(`${prefix}plz`, 'PLZ', sample.postalCode, `${autocompleteSection}postal-code`, 'text', 'w-20 shrink-0 576:w-[4.3125rem]')}
+                ${this.getBillingFieldHtml(`${prefix}ort`, 'Ort', sample.city, `${autocompleteSection}address-level2`, 'text', 'flex-1 min-w-0')}
             </div>
             ${this.getCountryFieldHtml(`${prefix}land`, `${autocompleteSection}country`)}
         `;
     }
 
-    /** Die Werte aus dem Design stehen als `placeholder` im Feld – die Eingabe bleibt leer. */
+    /**
+     * Das Beispiel steht als `placeholder` im Feld, nicht als `value` – die Eingabe bleibt
+     * leer, und der Gast muss nichts löschen. Grau statt in der Schriftfarbe der Eingabe,
+     * damit ein leeres Feld nicht wie ein ausgefülltes aussieht.
+     */
     private getBillingFieldHtml(id: string, label: string, sample: string, autocomplete: string, type: string, widthClass: string, required = true): string {
         return /*html*/ `
             <div class="flex flex-col ${widthClass}">
@@ -962,7 +981,7 @@ export class BookingView extends AbstractView {
                     autocomplete="${autocomplete}"
                     placeholder="${sample}"
                     ${required ? 'aria-required="true"' : ''}
-                    class="${FIELD_CLASSES} placeholder:text-purple-haze-dark"
+                    class="${FIELD_CLASSES} placeholder:text-gray-500"
                 />
             </div>
         `;
@@ -1497,6 +1516,10 @@ export class BookingView extends AbstractView {
                 element.removeAttribute('aria-invalid');
             }
         }
+
+        // In das erste ungültige Feld springen (Phase 9b, Punkt 7) – in Formularreihenfolge,
+        // nicht in der von `FIELD_NAMES`.
+        form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
     }
 
     /**
