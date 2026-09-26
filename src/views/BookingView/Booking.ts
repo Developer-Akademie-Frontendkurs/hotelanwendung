@@ -1,5 +1,5 @@
 import AbstractView from '../AbstractView';
-import { bookingState } from '../../shared/state/bookingState';
+import { bookingState, type BookingStep } from '../../shared/state/bookingState';
 import { supabase } from '../../shared/services/supabase';
 import { createBooking, type BookingRejection, type CreatedBooking } from '../../shared/services/booking.service';
 import { openModal } from '../../shared/ui/modal';
@@ -26,7 +26,6 @@ import './booking.css';
 
 /*
     *** Vorbereitung und Verknüpfung BookingView zu Datenbank ***
-        TODO: Buchungssteps verknüpfen
         TODO: Migrations notwending? Eventuelle Änderungen an der Datenbank?
 */
 
@@ -89,6 +88,10 @@ const WEEKDAYS: readonly string[] = ['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO'];
 const MONTHS: readonly string[] = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 
 const MS_PER_DAY = 86_400_000;
+
+// Sprungziele der Steps im Sticky-Header: Abstand nach oben, damit der Header den
+// Anfang des Bereichs nicht verdeckt (mobil ist er zweizeilig und höher).
+const STEP_TARGET_CLASSES = 'scroll-mt-40 768:scroll-mt-28';
 
 const MAX_ADULTS = 6;
 const MAX_CHILDREN = 4;
@@ -286,11 +289,11 @@ export class BookingView extends AbstractView {
     async getHtml(): Promise<string> {
         return /*html*/ `
             <section class="px-3 py-10 768:py-16">
-                <div class="w-full max-w-300 mx-auto bg-eggshell rounded-3xl shadow-pic p-4 456:p-6 768:p-10">
+                <div id="booking-dates" class="${STEP_TARGET_CLASSES} w-full max-w-300 mx-auto bg-eggshell rounded-3xl shadow-pic p-4 456:p-6 768:p-10">
                     ${this.getGuestsHtml()}
                     <div id="booking-calendar"></div>
                 </div>
-                <div id="booking-rooms" class="w-full max-w-212 mx-auto mt-10 768:mt-16"></div>
+                <div id="booking-rooms" class="${STEP_TARGET_CLASSES} w-full max-w-212 mx-auto mt-10 768:mt-16"></div>
             </section>
             ${this.getCheckoutHtml()}
         `;
@@ -320,8 +323,10 @@ export class BookingView extends AbstractView {
         this.unsubscribeSummary?.();
         this.unsubscribeSummary = bookingState.subscribe((): void => {
             this.renderSummary();
+            this.updateBookingSteps();
         });
         this.renderSummary();
+        this.updateBookingSteps();
         void this.loadHotel();
 
         this.calendarEl = document.getElementById('booking-calendar');
@@ -407,6 +412,7 @@ export class BookingView extends AbstractView {
 
         this.guests[field] = target.value === '' ? null : Number(target.value);
         this.renderGuestsNotice();
+        this.updateBookingSteps();
         // Der weiter-Knopf hängt jetzt mit an der Belegung.
         this.renderCalendar();
         void this.loadRooms();
@@ -930,7 +936,7 @@ export class BookingView extends AbstractView {
      */
     private getCheckoutHtml(): string {
         return /*html*/ `
-            <section class="bg-purple-haze-light px-3 py-10 768:py-16">
+            <section id="booking-details" class="${STEP_TARGET_CLASSES} bg-purple-haze-light px-3 py-10 768:py-16">
                 <div class="w-full max-w-268 mx-auto flex flex-col gap-10 992:flex-row 992:items-start 992:justify-between 992:gap-8">
                     ${this.getCustomerFormHtml()}
                     ${this.getBookingSummaryHtml()}
@@ -1731,6 +1737,24 @@ export class BookingView extends AbstractView {
         return invalid.length === 0 ? null : FORM_INCOMPLETE;
     }
 
+    /**
+     * Meldet dem Header, welche Buchungsschritte erledigt sind – mit denselben Bedingungen,
+     * die `getCheckoutError` vor dem Buchen prüft:
+     * 1 = Zeitraum und Erwachsene, 2 = Zimmer mit genug Betten, 3 = Formular vollständig.
+     */
+    private updateBookingSteps(): void {
+        // Nach einem Seitenwechsel nichts mehr melden – der Zustand gehört dann nicht mehr dieser View.
+        if (this.summaryEl?.isConnected !== true) return;
+
+        const draft = this.getBookingDraft();
+        const steps: BookingStep[] = [];
+        if (draft.checkIn !== null && draft.checkOut !== null && draft.adults !== null) steps.push(1);
+        if (draft.positions.length > 0 && this.getCapacityText() === '') steps.push(2);
+        if (getInvalidFields(draft).length === 0) steps.push(3);
+
+        bookingState.setCompletedSteps(steps);
+    }
+
     private getBookingDraft(): BookingDraft {
         const { checkIn, checkOut } = bookingState.getDates();
         const quantities = bookingState.getRoomQuantities();
@@ -1761,6 +1785,7 @@ export class BookingView extends AbstractView {
             // nächsten Klick behalten.
             (event.target as HTMLElement).removeAttribute('aria-invalid');
             this.renderCustomerSummary();
+            this.updateBookingSteps();
         });
         form.addEventListener('change', (event: Event): void => {
             const target = event.target as HTMLElement;
@@ -1769,6 +1794,7 @@ export class BookingView extends AbstractView {
             const billingEl = document.getElementById('booking-billing');
             if (billingEl) billingEl.hidden = !(target as HTMLInputElement).checked;
             this.renderCustomerSummary();
+            this.updateBookingSteps();
         });
         form.addEventListener('submit', (event: Event): void => {
             // Enter in einem Feld soll nicht die Seite neu laden.

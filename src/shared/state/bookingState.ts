@@ -1,5 +1,7 @@
 export type BookingStep = 1 | 2 | 3;
 
+export const BOOKING_STEP_ORDER: readonly BookingStep[] = [1, 2, 3];
+
 export type BookingDates = {
     checkIn: Date | null;
     checkOut: Date | null;
@@ -30,6 +32,9 @@ let roomQuantities: Record<string, number> = {};
 // ist, gibt es keine Gäste „einer Kategorie" mehr, an die ein Häkchen gebunden wäre.
 let breakfast = false;
 let services: Record<string, number> = {};
+// Welche Schritte erledigt sind, meldet die BookingView: Die Bedingungen hängen an Daten,
+// die nur sie kennt (Belegung, Bettenzahl der Kategorien, Formular).
+let completedSteps: ReadonlySet<BookingStep> = new Set();
 
 const listeners = new Set<Listener>();
 
@@ -110,17 +115,30 @@ function reset(): void {
     roomQuantities = {};
     breakfast = false;
     services = {};
+    completedSteps = new Set();
     setDates(null, null);
 }
 
 function isStepComplete(step: BookingStep): boolean {
-    if (step === 1) {
-        return checkIn !== null && checkOut !== null;
-    }
+    return completedSteps.has(step);
+}
 
-    // Step 2 (Zimmerauswahl) und Step 3 (persönliche Daten) haben noch keine View.
-    // Sobald sie existieren, kommt ihre Abschluss-Bedingung hier dazu.
-    return false;
+/**
+ * Nur bei einer echten Änderung benachrichtigen – die View ruft das auch aus einem
+ * eigenen `subscribe` heraus auf, ohne diese Bremse gäbe es eine Endlosschleife.
+ */
+function setCompletedSteps(steps: readonly BookingStep[]): void {
+    const next = new Set(steps);
+    const unchanged = next.size === completedSteps.size && steps.every((step: BookingStep): boolean => completedSteps.has(step));
+    if (unchanged) return;
+
+    completedSteps = next;
+    notify();
+}
+
+/** Der fällige Schritt ist der erste, der noch nicht erledigt ist – `null`, wenn alles erledigt ist. */
+function getCurrentStep(): BookingStep | null {
+    return BOOKING_STEP_ORDER.find((step: BookingStep): boolean => !completedSteps.has(step)) ?? null;
 }
 
 function subscribe(listener: Listener): () => void {
@@ -146,5 +164,7 @@ export const bookingState = {
     setServiceQuantity,
     reset,
     isStepComplete,
+    setCompletedSteps,
+    getCurrentStep,
     subscribe,
 };
