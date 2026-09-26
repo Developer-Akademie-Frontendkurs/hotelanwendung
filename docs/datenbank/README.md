@@ -924,6 +924,9 @@ merkt, welche Felder nirgends hinpassen.
 
 ### E42 — Die Rechnungsadresse ist eine **eigene Tabelle**, nicht eine Spaltengruppe am Kunden
 
+> **Revidiert durch E50 (2026-09-26):** Sitzadresse und Rechnungsadressen liegen gemeinsam in
+> `customer_addresses`, getrennt durch `kind`. `billing_addresses` wurde nie migriert.
+
 **Entscheidung:** `billing_addresses` mit `customer_id` als 1:n-Beziehung. Spalten: `street`,
 `house_number`, `postal_code`, `city`, `country_code` (ISO-3166-1 alpha-2, `check char_length = 2`),
 dazu `archived_at` (E22) und die üblichen Zeitstempel. **Kein** `is_default`, **kein** `label`,
@@ -949,6 +952,10 @@ sehen kann. Er kann es in v1 nicht (siehe E43), also wären es Spalten, die niem
 `company`/`recipient_name` kommen mit der ersten Firmenbuchung — additiv.
 
 ### E43 — Die Buchung **verweist** auf die Adresse; benutzte Adressen sind unveränderlich
+
+> **Angepasst durch E51 (2026-09-26):** Die Buchung verweist auf Sitz- **und** optionale
+> Rechnungsadresse; `billing_address_id` ist nullable. Die Unveränderlichkeit sitzt in einem Trigger
+> statt in der UPDATE-Policy.
 
 **Entscheidung:** `bookings.billing_address_id uuid not null references billing_addresses`. Die
 Adressfelder werden **nicht** zusätzlich in `bookings` eingefroren. Stattdessen darf eine
@@ -1194,12 +1201,82 @@ zweite Leistung mit derselben Grenze, wird daraus eine Spalte.
 
 ---
 
+## 4k. Entschieden (Runde 11) — Sitzadresse und optionale Rechnungsadresse
+
+Ausgangslage: Beim Anbinden des Adressformulars kam eine fachliche Unterscheidung dazu, die E42 nur
+als Begründung kannte: Die **Sitzadresse** gehört zum Kunden (wo er wohnt), die **Rechnungsadresse**
+ist optional. Ein Kunde hat genau eine Sitzadresse, aber über die Zeit mehrere Rechnungsadressen
+(Zweitwohnsitz, Firma A, später Firma B). Je Buchungsvorgang gibt es eine Sitzadresse und höchstens
+eine Rechnungsadresse. Fehlt sie, geht die Rechnung an die Sitzadresse. Kundenidentität bleibt die
+E-Mail (E26), einen Abgleich über Name und Adresse gibt es nicht.
+
+### E50 — Sitz- und Rechnungsadressen in **einer** Tabelle `customer_addresses` (revidiert E42)
+
+**Entscheidung:** `customer_addresses` mit `kind in ('residence', 'billing')`. Spalten wie in E42
+(`street`, `house_number`, `postal_code`, `city`, `country_code`, `archived_at`), dazu `company`
+(„Firma / z. Hd.“, nur bei `billing`) und die generierte Spalte `match_key`. Umgesetzt in
+`20260926101000_customer_addresses.sql`.
+
+1. **Eine aktive Sitzadresse je Kunde** über einen partiellen Unique-Index
+   (`where kind = 'residence' and archived_at is null`). Ein Umzug archiviert die alte Zeile.
+2. **Jede Adresse je Kunde und Art nur einmal**, auch archiviert: Unique-Index auf
+   `(customer_id, kind, match_key)`. Wer zurückzieht, bekommt die alte Zeile zurück.
+3. **`country_code` aus einer festen Liste** (AT/DE/CH/IT/SI) über `is_supported_country()`, einmal
+   im `CHECK` und einmal in `create_booking`. Ein neues Land ist eine Zeile in der Funktion, keine
+   Tabelle `countries` für fünf Werte.
+4. **`company` jetzt statt „mit der ersten Firmenbuchung“ (E42):** Der häufigste Grund für eine
+   abweichende Rechnungsadresse *ist* eine Firma. Ohne das Feld stünde auf der Rechnung an die
+   Firmenadresse der Privatname.
+
+**Begründung:** Beide sind Adressen desselben Kunden mit denselben sechs Spalten. Zwei Tabellen
+hätten dieselbe Struktur doppelt. Die drei Regeln (eine Sitzadresse, mehrere Rechnungsadressen,
+Rechnungsadresse optional) stehen damit im Schema: Index, 1:n, nullable Fremdschlüssel.
+
+**Verworfen:** Sitzadresse als Spalten an `customers`. Sie wäre überschreibbar, und die Rechnung
+einer alten Buchung, die an die Sitzadresse ging, hätte nach einem Umzug rückwirkend eine andere
+Anschrift (Leitsatz 3). Ebenfalls verworfen: die Sitzadresse in eine `billing`-Zeile zu kopieren,
+wenn keine Rechnungsadresse angegeben ist. Dann ließe sich nicht mehr unterscheiden, ob der Gast eine
+abweichende Rechnungsadresse wollte.
+
+### E51 — Die Buchung verweist auf Sitz- und optionale Rechnungsadresse; Stammdaten „neueste gewinnt“ (passt E43 an)
+
+**Entscheidung:**
+
+1. **`bookings.residence_address_id`** (Pflicht für jede neue Buchung) und
+   **`bookings.billing_address_id`** (nullable, `null` = Rechnung an die Sitzadresse). Beide als
+   zusammengesetzte Fremdschlüssel `(adresse, customer_id)`: Eine Buchung kann nur auf Adressen
+   *ihres* Kunden zeigen. Alle Zimmer eines Vorgangs zeigen auf dieselben Adressen.
+2. **Pflicht als `CHECK … NOT VALID`:** Die Buchungen vor dieser Migration haben keine Adresse und
+   können keine bekommen. Erfinden wäre schlimmer als leer. Postgres prüft den `CHECK` bei jedem
+   neuen `INSERT`/`UPDATE`, nur nicht rückwirkend.
+3. **Unveränderlich per Trigger statt Policy:** Eine Adresse, an der eine Buchung hängt, darf
+   inhaltlich nicht mehr geändert werden, auch nicht mit dem Service-Role-Key.
+   **Archivieren** bleibt erlaubt, denn genau das passiert bei jedem Umzug. Die UPDATE-Policy aus E43
+   hätte beides verboten und wäre vom Service-Role-Key umgangen worden.
+4. **`create_booking` bekommt elf Skalarparameter (V13):** Sitzadresse (Pflicht, trotz Default, weil
+   Parameter mit Default hinten stehen müssen) und Rechnungsadresse (alles oder nichts). Fehlende oder
+   halbe Angaben und unbekannte Länder → `ungueltige_adresse`, für Gäste sichtbar wie
+   `ungueltige_belegung`. Umgesetzt in `20260926102000_create_booking_addresses.sql`.
+5. **Wiederverwenden statt duplizieren:** Gleich heißt gleich nach `trim`, Kleinschreibung und
+   zusammengefassten Leerzeichen (`address_match_key()`). „Hauptstr.“ und „Hauptstraße“ bleiben
+   verschieden. Mehr Unschärfe wäre Raten, und eine Adresse zu viel schadet weniger als zwei falsch
+   zusammengelegte. Rechnungsadressen werden nie archiviert, weil ein Kunde mehrere zugleich hat.
+6. **Name und Telefon: die neueste Eingabe gewinnt.** Bisher blieb der erste Datensatz stehen. Die
+   E-Mail behält ihre ursprüngliche Schreibweise (E32).
+
+**Preis, benannt:** Ohne Login kann **jeder, der die E-Mail eines Kunden kennt**, mit einer Buchung
+dessen Namen, Telefon und aktive Sitzadresse ändern. Alte Buchungen sind geschützt, denn ihre
+Adressen sind unveränderlich. Die Stammdaten sind es nicht. Das wird mit den Kundenkonten
+abgesichert, nicht vorher.
+
+---
+
 ## 5. Offene Punkte
 
 | #   | Frage | hängt an |
 | --- | ----- | -------- |
 
-**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E49).
+**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E51).
 
 Der zuvor offene Punkt ist erledigt: Die **Umsetzungsinterpretation in E28** (feine Sperrgründe nur
 für `is_staff()`) wurde in der Grilling-Runde vom 2026-09-02 ausdrücklich bestätigt. Ebenfalls dort
@@ -1214,8 +1291,8 @@ Housekeeping-Abläufe. Alle additiv nachrüstbar.
 
 Benannte Upgrade-Pfade, die aus Entscheidungen folgen: Tages-Inventar-Tabelle (E10), volles RBAC
 (E13), `booking_guests` (E16), `bookings` + `booking_items` (E20/E27), Belegungspreise und weitere
-Rate-Plans (E5), Belegung **je Position** statt je Vorgang (E45), `company`/`recipient_name` an der
-Rechnungsadresse (E42), Bestätigungsmail und damit der ursprüngliche Popup-Text (E46).
+Rate-Plans (E5), Belegung **je Position** statt je Vorgang (E45), Absicherung der Kundenstammdaten über
+Kundenkonten (E51), Bestätigungsmail und damit der ursprüngliche Popup-Text (E46).
 
 ---
 
@@ -1252,4 +1329,5 @@ Für den Call als Zusammenfassung auf einer Folie:
 | 2026-09-02 | Grilling-Runde zur **Umsetzung**: Runde 6 (E32–E36) entschieden und begründet; E28 bestätigt; Cloud-Instanz als Wegwerf-Spike freigegeben; `schema.md` um E32/E33 korrigiert; Umsetzungsplan um die Vorgehensentscheidungen ergänzt |
 | 2026-09-02 | Phasen 1–7 umgesetzt und getestet (91 Tests). Runde 7 (E37–E41) aus der Umsetzung heraus entschieden; `schema.md` um Trigger, Teilindizes, `is_blocking_status` im Prädikat und die internen Funktionen nachgeführt                 |
 | 2026-09-09 | Grilling-Runde 8 zur **Anbindung der Buchungsseite**: E42–E46 entschieden. E44 revidiert den Nachsatz von E41 (mehrere Kategorien je Vorgang). Fragen/Antworten und V8–V16 im Umsetzungsplan, Phasen 8/9 dort ausgearbeitet, Phase 7b und 9b ergänzt |
+| 2026-09-26 | Runde 11: **E50/E51** — Sitzadresse und optionale Rechnungsadresse in `customer_addresses` (revidiert E42), Verweise an `bookings`, Unveränderlichkeit per Trigger (passt E43 an), `create_booking` mit Adressparametern, Stammdaten „neueste gewinnt“ |
 | 2026-09-16 | Runde 9: **E47** — Frühstück als eigener Posten (`services`, `booking_extras`, `bookings.extras_amount_cents`/`grand_total_cents`, `p_with_breakfast`). Zusatzleistungen damit aus dem Scope-Zaun E15 heraus; `schema.md` um beide Tabellen und die RLS-Zeilen ergänzt |

@@ -5,12 +5,12 @@ import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomType
 import { clampQuantity, getLimitMessage, getMissingBeds, getRoomLimit, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
 import { buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService, type ServiceRow } from './services';
+import { COUNTRIES, DEFAULT_COUNTRY, formatAddressLines, getInvalidFields, isCountryCode, toOptional, type CountryCode, type CustomerDetails, type InvalidField } from './address';
 import './booking.css';
 
 /*
     *** Vorbereitung und Verknüpfung BookingView zu Datenbank ***
         TODO: Buchungssteps verknüpfen
-        TODO: Console Logs json Buchung
         TODO: Migrations notwending? Eventuelle Änderungen an der Datenbank?
         TODO: Integration Datenbank Buchungspeichern
 */
@@ -38,8 +38,11 @@ type BookingService = {
     quantity: number;
 };
 
-/** Gäste als Gesamtzahl des Vorgangs (E48) – verteilt werden sie in `create_booking`. */
-type Booking = {
+/**
+ * Gäste als Gesamtzahl des Vorgangs (E48) – verteilt werden sie in `create_booking`.
+ * Kontaktdaten und Adressen gelten ebenso für den ganzen Vorgang (E51).
+ */
+type Booking = CustomerDetails & {
     checkIn: string;
     checkOut: string;
     nights: number;
@@ -48,6 +51,14 @@ type Booking = {
     positions: BookingPosition[];
     withBreakfast: boolean;
     services: BookingService[];
+};
+
+/** Stand der Buchung während der Eingabe – was noch fehlt, ist `null`. */
+type BookingDraft = Omit<Booking, 'checkIn' | 'checkOut' | 'nights' | 'adults'> & {
+    checkIn: string | null;
+    checkOut: string | null;
+    nights: number | null;
+    adults: number | null;
 };
 
 type GuestField = 'adults' | 'children';
@@ -179,12 +190,35 @@ const ROOM_AMENITIES: Readonly<Record<string, readonly RoomAmenity[]>> = {
 
 const ROOM_IMAGE_BUCKET = 'room-images';
 
+// Eingabefelder und Auswahl im Adressformular – `aria-invalid` markiert, was beim Klick
+// auf „zahlungspflichtig buchen" fehlte.
+const FIELD_CLASSES =
+    'w-full min-w-0 rounded-[0.3125rem] border-[0.5px] border-purple-haze bg-purple-haze-light/45 p-2 font-antic-didone text-18 456:text-20 leading-tight text-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 aria-[invalid=true]:border-red-600 aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-red-600';
+
+/** Welches Formularfeld zu welchem Eintrag aus `getInvalidFields()` gehört. */
+const FIELD_NAMES: Record<InvalidField, string> = {
+    'customer.firstName': 'vorname',
+    'customer.lastName': 'nachname',
+    'customer.email': 'email',
+    'residence.street': 'strasse',
+    'residence.houseNumber': 'hausnummer',
+    'residence.postalCode': 'plz',
+    'residence.city': 'ort',
+    'residence.countryCode': 'land',
+    'billing.street': 'rechnung-strasse',
+    'billing.houseNumber': 'rechnung-hausnummer',
+    'billing.postalCode': 'rechnung-plz',
+    'billing.city': 'rechnung-ort',
+    'billing.countryCode': 'rechnung-land',
+};
+
 export class BookingView extends AbstractView {
     private readonly today: Date;
     private displayedYear: number;
     private displayedMonth: number;
     private calendarEl: HTMLElement | null = null;
     private roomsEl: HTMLElement | null = null;
+    private customerFormEl: HTMLFormElement | null = null;
     private readonly guests: Record<GuestField, number | null> = { adults: null, children: null };
     private rooms: RoomCard[] = [];
     // `null` heißt: für dieses Hotel ist kein Frühstück hinterlegt. Dann wird auch keins
@@ -200,6 +234,8 @@ export class BookingView extends AbstractView {
     // Zählt die Suchanfragen mit. Trifft eine ältere Antwort nach einer neueren ein,
     // wird sie verworfen, statt das Ergebnis der neueren zu überschreiben.
     private roomsRequestId = 0;
+    // TODO: Übergangsweise – entfernen, sobald die Buchung gespeichert wird.
+    private unsubscribeBookingLog: (() => void) | null = null;
 
     constructor() {
         super();
@@ -238,12 +274,19 @@ export class BookingView extends AbstractView {
         });
         void this.loadRooms();
 
+        this.bindCustomerForm();
+
         this.calendarEl = document.getElementById('booking-calendar');
         if (!this.calendarEl) return;
         this.calendarEl.addEventListener('click', (event: MouseEvent): void => {
             this.handleClick(event);
         });
         this.renderCalendar();
+
+        this.unsubscribeBookingLog?.();
+        this.unsubscribeBookingLog = bookingState.subscribe((): void => {
+            this.logBooking();
+        });
     }
 
     private getGuestsHtml(): string {
@@ -320,6 +363,8 @@ export class BookingView extends AbstractView {
         if (field !== 'adults' && field !== 'children') return;
 
         this.guests[field] = target.value === '' ? null : Number(target.value);
+        // Die Gäste liegen in der View, nicht in `bookingState` – deshalb hier von Hand.
+        this.logBooking();
         this.renderGuestsNotice();
         // Der weiter-Knopf hängt jetzt mit an der Belegung.
         this.renderCalendar();
@@ -833,55 +878,80 @@ export class BookingView extends AbstractView {
     }
 
     /**
-     * Abschluss-Sektion aus dem Design ("BuchungAbschließen"): Rechnungsadresse links,
-     * Zusammenfassung rechts.
+     * Abschluss-Sektion aus dem Design ("BuchungAbschließen"): Kontaktdaten und Adressen
+     * links, Zusammenfassung rechts.
      *
-     * Noch reines Markup – die Beispielwerte stammen aus dem Figma-Entwurf und sind
-     * bewusst nicht an `bookingState` oder Supabase angebunden.
+     * Name und Adressen der Zusammenfassung folgen der Eingabe links. Der Rest sind noch
+     * die Beispielwerte aus dem Figma-Entwurf, nicht an `bookingState` angebunden.
      */
     private getCheckoutHtml(): string {
         return /*html*/ `
             <section class="bg-purple-haze-light px-3 py-10 768:py-16">
                 <div class="w-full max-w-268 mx-auto flex flex-col gap-10 992:flex-row 992:items-start 992:justify-between 992:gap-8">
-                    ${this.getBillingAddressHtml()}
+                    ${this.getCustomerFormHtml()}
                     ${this.getBookingSummaryHtml()}
                 </div>
             </section>
         `;
     }
 
-    private getBillingAddressHtml(): string {
+    /**
+     * Kontaktdaten, Wohnadresse und – per Checkbox – eine abweichende Rechnungsadresse
+     * (E50, E51). Der Rechnungsblock bleibt im DOM und wird nur ausgeblendet: Wer die
+     * Checkbox versehentlich abwählt, verliert seine Eingabe nicht. In den Entwurf geht
+     * er trotzdem nur, solange die Checkbox an ist.
+     */
+    private getCustomerFormHtml(): string {
         return /*html*/ `
             <div class="w-full 992:max-w-[31.0625rem] flex flex-col gap-5">
                 <div class="flex flex-col gap-2">
-                    <h2 class="font-playfair-display text-28 768:text-36 leading-none text-purple-haze-dark">Rechnungsadresse</h2>
-                    <p class="font-antic-didone text-16 leading-tight text-purple-haze-dark">Wohin soll die Buchungsbestätigung gesendet werden?</p>
+                    <h2 class="font-playfair-display text-28 768:text-36 leading-none text-purple-haze-dark">Ihre Daten</h2>
+                    <p class="font-antic-didone text-16 leading-tight text-purple-haze-dark">Die Rechnung geht an Ihre Wohnadresse – außer Sie geben eine abweichende Rechnungsadresse an.</p>
                 </div>
-                <form class="flex flex-col gap-8 rounded-[0.625rem] border-[0.5px] border-purple-haze bg-[#fbfbfb] px-5 py-4">
+                <form id="booking-customer" novalidate class="flex flex-col gap-8 rounded-[0.625rem] border-[0.5px] border-purple-haze bg-[#fbfbfb] px-5 py-4">
                     <div class="flex flex-col gap-3">
                         ${this.getBillingFieldHtml('vorname', 'Vorname', 'Maxime', 'given-name', 'text', 'w-full')}
                         ${this.getBillingFieldHtml('nachname', 'Nachname', 'Musterfrau', 'family-name', 'text', 'w-full')}
                     </div>
                     <div class="flex flex-col gap-3">
                         ${this.getBillingFieldHtml('email', 'E-Mail', 'maxime@musterfrau.at', 'email', 'email', 'w-full')}
-                        ${this.getBillingFieldHtml('telefon', 'Telefon', '+43 664 3226628', 'tel', 'tel', 'w-full')}
+                        ${this.getBillingFieldHtml('telefon', 'Telefon (optional)', '+43 664 3226628', 'tel', 'tel', 'w-full', false)}
                     </div>
-                    <div class="flex flex-col gap-3">
-                        ${this.getBillingFieldHtml('strasse', 'Straße', 'Musterstraße', 'address-line1', 'text', 'w-full')}
-                        <div class="flex gap-3 576:gap-8">
-                            ${this.getBillingFieldHtml('hausnummer', 'Hausnummer', '67', 'address-line2', 'text', 'flex-1 min-w-0 576:w-46 576:flex-none')}
-                            ${this.getBillingFieldHtml('plz', 'PLZ', '9872', 'postal-code', 'text', 'w-20 shrink-0 576:w-[4.3125rem]')}
-                            ${this.getBillingFieldHtml('ort', 'Ort', 'Villach', 'address-level2', 'text', 'flex-1 min-w-0')}
-                        </div>
-                        ${this.getBillingFieldHtml('land', 'Land', 'Österreich', 'country-name', 'text', 'w-full 576:w-[16.1875rem]')}
-                    </div>
+                    <fieldset class="flex flex-col gap-3">
+                        <legend class="mb-3 font-playfair-display font-medium text-20 leading-tight text-purple-haze-dark">Wohnadresse</legend>
+                        ${this.getAddressFieldsHtml('', '')}
+                    </fieldset>
+
+                    <label class="flex items-center gap-3 cursor-pointer font-antic-didone text-16 leading-tight text-purple-haze-dark">
+                        <input type="checkbox" name="rechnung-abweichend" data-billing-toggle class="w-5 h-5 shrink-0 accent-purple-haze cursor-pointer" />
+                        Rechnungsadresse weicht von der Wohnadresse ab
+                    </label>
+
+                    <fieldset id="booking-billing" hidden class="flex flex-col gap-3">
+                        <legend class="mb-3 font-playfair-display font-medium text-20 leading-tight text-purple-haze-dark">Rechnungsadresse</legend>
+                        ${this.getBillingFieldHtml('rechnung-firma', 'Firma / z. Hd. (optional)', 'Musterfirma GmbH', 'billing organization', 'text', 'w-full', false)}
+                        ${this.getAddressFieldsHtml('rechnung-', 'billing ')}
+                    </fieldset>
                 </form>
             </div>
         `;
     }
 
+    /** Straße bis Land – für Wohn- und Rechnungsadresse dieselben Felder, nur mit Präfix. */
+    private getAddressFieldsHtml(prefix: string, autocompleteSection: string): string {
+        return /*html*/ `
+            ${this.getBillingFieldHtml(`${prefix}strasse`, 'Straße', 'Musterstraße', `${autocompleteSection}address-line1`, 'text', 'w-full')}
+            <div class="flex gap-3 576:gap-8">
+                ${this.getBillingFieldHtml(`${prefix}hausnummer`, 'Hausnummer', '67', `${autocompleteSection}address-line2`, 'text', 'flex-1 min-w-0 576:w-46 576:flex-none')}
+                ${this.getBillingFieldHtml(`${prefix}plz`, 'PLZ', '9872', `${autocompleteSection}postal-code`, 'text', 'w-20 shrink-0 576:w-[4.3125rem]')}
+                ${this.getBillingFieldHtml(`${prefix}ort`, 'Ort', 'Villach', `${autocompleteSection}address-level2`, 'text', 'flex-1 min-w-0')}
+            </div>
+            ${this.getCountryFieldHtml(`${prefix}land`, `${autocompleteSection}country`)}
+        `;
+    }
+
     /** Die Werte aus dem Design stehen als `placeholder` im Feld – die Eingabe bleibt leer. */
-    private getBillingFieldHtml(id: string, label: string, sample: string, autocomplete: string, type: string, widthClass: string): string {
+    private getBillingFieldHtml(id: string, label: string, sample: string, autocomplete: string, type: string, widthClass: string, required = true): string {
         return /*html*/ `
             <div class="flex flex-col ${widthClass}">
                 <label for="booking-${id}" class="font-playfair-display font-medium text-16 leading-tight text-purple-haze">${label}</label>
@@ -891,8 +961,26 @@ export class BookingView extends AbstractView {
                     type="${type}"
                     autocomplete="${autocomplete}"
                     placeholder="${sample}"
-                    class="w-full min-w-0 rounded-[0.3125rem] border-[0.5px] border-purple-haze bg-purple-haze-light/45 p-2 font-antic-didone text-18 456:text-20 leading-tight text-purple-haze-dark placeholder:text-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
+                    ${required ? 'aria-required="true"' : ''}
+                    class="${FIELD_CLASSES} placeholder:text-purple-haze-dark"
                 />
+            </div>
+        `;
+    }
+
+    /** Land als Auswahl statt Freitext (E42): „Österreich"/„AT"/„Oesterreich" wären drei Länder. */
+    private getCountryFieldHtml(id: string, autocomplete: string): string {
+        const options = COUNTRIES.map(
+            (country: (typeof COUNTRIES)[number]): string =>
+                /*html*/ `<option value="${country.code}" ${country.code === DEFAULT_COUNTRY ? 'selected' : ''}>${country.label}</option>`,
+        ).join('');
+
+        return /*html*/ `
+            <div class="flex flex-col w-full 576:w-[16.1875rem]">
+                <label for="booking-${id}" class="font-playfair-display font-medium text-16 leading-tight text-purple-haze">Land</label>
+                <select id="booking-${id}" name="${id}" autocomplete="${autocomplete}" aria-required="true" class="${FIELD_CLASSES} cursor-pointer">
+                    ${options}
+                </select>
             </div>
         `;
     }
@@ -930,17 +1018,7 @@ export class BookingView extends AbstractView {
                         ${this.getOrderRowHtml('Extra Angebot', '', '23€')}
                     </div>
 
-                    <div class="flex flex-col font-antic-didone text-16 leading-tight text-purple-haze-dark">
-                        <div class="flex items-start justify-between gap-4">
-                            <span>Name</span>
-                            <span class="text-right">Maxime Musterfrau</span>
-                        </div>
-                        <hr class="my-3 border-t-[0.5px] border-purple-haze/45">
-                        <div class="flex items-start justify-between gap-4">
-                            <span>Adresse</span>
-                            <span class="text-right">Rechnungsadresse 1<br>Irgendwo in der Stadt</span>
-                        </div>
-                    </div>
+                    <div id="booking-summary-customer" class="flex flex-col font-antic-didone text-16 leading-tight text-purple-haze-dark"></div>
                 </div>
 
                 <div class="flex flex-col gap-8 pt-2">
@@ -950,12 +1028,12 @@ export class BookingView extends AbstractView {
                         <span>732€</span>
                     </div>
                     <div class="flex flex-col gap-2">
-                        <button type="button" class="w-full bg-purple-haze px-5 py-2.5 font-lato font-bold text-20 768:text-24 text-white opacity-85 hover:opacity-100 cursor-pointer">
+                        <button type="button" data-action="checkout" class="w-full bg-purple-haze px-5 py-2.5 font-lato font-bold text-20 768:text-24 text-white opacity-85 hover:opacity-100 cursor-pointer">
                             zahlungspflichtig buchen
                         </button>
                         <div class="flex flex-col gap-4 text-center">
                             <p class="font-antic-didone text-14 leading-tight text-[#74687e]">Ich bestätige, dass ich die Datenschutzvereinbarung gelesen habe.</p>
-                            <p class="font-antic-didone text-[0.8125rem] leading-tight text-red-600">Bitte tragen Sie alle notwendigen Informationen ein.</p>
+                            <p id="booking-checkout-error" hidden role="alert" class="font-antic-didone text-[0.8125rem] leading-tight text-red-600">Bitte tragen Sie alle notwendigen Informationen ein.</p>
                         </div>
                     </div>
                 </div>
@@ -1272,19 +1350,51 @@ export class BookingView extends AbstractView {
         return firstOfDisplayed > firstOfCurrentMonth;
     }
 
+    /**
+     * Geprüft wird beim Klick, nicht während der Eingabe (V16): Der Knopf ist immer aktiv,
+     * und erst dann werden die fehlenden Felder markiert.
+     */
     private submit(): void {
-        const { checkIn, checkOut } = bookingState.getDates();
-        const adults = this.guests.adults;
-        if (checkIn === null || checkOut === null || adults === null) return;
+        const draft = this.getBookingDraft();
+        const { checkIn, checkOut, nights, adults } = draft;
+        const invalid = getInvalidFields(draft);
+        this.markInvalidFields(invalid);
 
-        const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY);
+        const complete = checkIn !== null && checkOut !== null && nights !== null && adults !== null && invalid.length === 0;
+        const errorEl = document.getElementById('booking-checkout-error');
+        if (errorEl) errorEl.hidden = complete;
+        if (!complete) return;
+
+        const booking: Booking = { ...draft, checkIn, checkOut, nights, adults };
+
+        // TODO: Buchungsdaten später an das Backend senden (fetch / Supabase).
+        console.log('Buchungsdaten', booking);
+    }
+
+    /**
+     * TODO: Übergangsweise – loggt bei jeder Änderung den aktuellen Stand als JSON.
+     *
+     * Die View bleibt nach einem Seitenwechsel im Listener von `bookingState` hängen (es
+     * gibt keinen Destroy-Hook); ist ihr DOM weg, meldet sie sich hier selbst ab.
+     */
+    private logBooking(): void {
+        if (this.calendarEl?.isConnected !== true) {
+            this.unsubscribeBookingLog?.();
+            this.unsubscribeBookingLog = null;
+            return;
+        }
+        console.log(JSON.stringify(this.getBookingDraft(), null, 2));
+    }
+
+    private getBookingDraft(): BookingDraft {
+        const { checkIn, checkOut } = bookingState.getDates();
         const quantities = bookingState.getRoomQuantities();
 
-        const booking: Booking = {
-            checkIn: toISODate(checkIn),
-            checkOut: toISODate(checkOut),
-            nights,
-            adults,
+        return {
+            checkIn: checkIn === null ? null : toISODate(checkIn),
+            checkOut: checkOut === null ? null : toISODate(checkOut),
+            nights: checkIn === null || checkOut === null ? null : Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY),
+            adults: this.guests.adults,
             children: this.guests.children ?? 0,
             // Eine Position je Kategorie – die Form von `p_positions` in `create_booking`
             // (E44). Frühstück und Gäste gelten für den ganzen Vorgang (E48).
@@ -1292,10 +1402,144 @@ export class BookingView extends AbstractView {
             withBreakfast: bookingState.getBreakfast(),
             // Die Form von `p_services` (E49). Die Menge ist nur beim Kinderbett mehr als 1.
             services: Object.entries(bookingState.getServices()).map(([code, quantity]: [string, number]): BookingService => ({ code, quantity })),
+            ...this.readCustomerDetails(),
+        };
+    }
+
+    private bindCustomerForm(): void {
+        this.customerFormEl = document.querySelector<HTMLFormElement>('#booking-customer');
+        const form = this.customerFormEl;
+        if (!form) return;
+
+        form.addEventListener('input', (event: Event): void => {
+            // Wer ein markiertes Feld korrigiert, soll die Markierung nicht bis zum
+            // nächsten Klick behalten.
+            (event.target as HTMLElement).removeAttribute('aria-invalid');
+            this.renderCustomerSummary();
+            this.logBooking();
+        });
+        form.addEventListener('change', (event: Event): void => {
+            const target = event.target as HTMLElement;
+            if (!target.hasAttribute('data-billing-toggle')) return;
+
+            const billingEl = document.getElementById('booking-billing');
+            if (billingEl) billingEl.hidden = !(target as HTMLInputElement).checked;
+            this.renderCustomerSummary();
+            this.logBooking();
+        });
+        form.addEventListener('submit', (event: Event): void => {
+            // Enter in einem Feld soll nicht die Seite neu laden.
+            event.preventDefault();
+        });
+
+        document.querySelector('[data-action="checkout"]')?.addEventListener('click', (): void => {
+            this.submit();
+        });
+
+        this.renderCustomerSummary();
+    }
+
+    /**
+     * Liest das Formular in die Form der `create_booking`-Parameter (V13, E51).
+     *
+     * Ist die Checkbox aus, ist `billing` `null` – auch wenn im ausgeblendeten Block noch
+     * etwas steht.
+     */
+    private readCustomerDetails(): CustomerDetails {
+        const data = this.customerFormEl ? new FormData(this.customerFormEl) : new FormData();
+        const text = (name: string): string => {
+            const value = data.get(name);
+            return typeof value === 'string' ? value : '';
+        };
+        const country = (name: string): CountryCode => {
+            const value = text(name);
+            return isCountryCode(value) ? value : DEFAULT_COUNTRY;
         };
 
-        // TODO: Buchungsdaten später an das Backend senden (fetch / Supabase).
-        console.log('Buchungsdaten', booking);
+        return {
+            customer: {
+                firstName: text('vorname').trim(),
+                lastName: text('nachname').trim(),
+                email: text('email').trim(),
+                phone: toOptional(text('telefon')),
+            },
+            residence: {
+                street: text('strasse').trim(),
+                houseNumber: text('hausnummer').trim(),
+                postalCode: text('plz').trim(),
+                city: text('ort').trim(),
+                countryCode: country('land'),
+            },
+            billing:
+                data.get('rechnung-abweichend') === null
+                    ? null
+                    : {
+                          company: toOptional(text('rechnung-firma')),
+                          street: text('rechnung-strasse').trim(),
+                          houseNumber: text('rechnung-hausnummer').trim(),
+                          postalCode: text('rechnung-plz').trim(),
+                          city: text('rechnung-ort').trim(),
+                          countryCode: country('rechnung-land'),
+                      },
+        };
+    }
+
+    private markInvalidFields(invalid: InvalidField[]): void {
+        const form = this.customerFormEl;
+        if (!form) return;
+
+        for (const [field, name] of Object.entries(FIELD_NAMES) as [InvalidField, string][]) {
+            const element = form.elements.namedItem(name);
+            if (!(element instanceof HTMLElement)) continue;
+            if (invalid.includes(field)) {
+                element.setAttribute('aria-invalid', 'true');
+            } else {
+                element.removeAttribute('aria-invalid');
+            }
+        }
+    }
+
+    /**
+     * Name und Adressen in der Zusammenfassung: immer die Wohnadresse, die
+     * Rechnungsadresse nur, wenn es eine gibt.
+     *
+     * Per `textContent` statt als HTML-String – das sind Eingaben des Gastes.
+     */
+    private renderCustomerSummary(): void {
+        const summaryEl = document.getElementById('booking-summary-customer');
+        if (!summaryEl) return;
+
+        const { customer, residence, billing } = this.readCustomerDetails();
+        const name = `${customer.firstName} ${customer.lastName}`.trim();
+        // Das Land steht schon da, bevor etwas eingegeben ist – das allein ist noch keine
+        // Adresse.
+        const address = (lines: string[]): string | null => (lines.length > 1 ? lines.join('\n') : null);
+        const rows: [string, string | null][] = [
+            ['Name', name === '' ? null : name],
+            ['Wohnadresse', address(formatAddressLines(residence))],
+        ];
+        if (billing !== null) rows.push(['Rechnungsadresse', address(formatAddressLines(billing))]);
+
+        summaryEl.replaceChildren(
+            ...rows.flatMap(([label, value]: [string, string | null], index: number): HTMLElement[] => {
+                const row = document.createElement('div');
+                row.className = 'flex items-start justify-between gap-4';
+
+                const labelEl = document.createElement('span');
+                labelEl.textContent = label;
+
+                const valueEl = document.createElement('span');
+                valueEl.className = 'text-right whitespace-pre-line';
+                valueEl.textContent = value ?? '–';
+
+                row.append(labelEl, valueEl);
+                if (index === 0) return [row];
+
+                const divider = document.createElement('hr');
+                divider.className = 'my-3 border-t-[0.5px] border-purple-haze/45';
+                return [divider, row];
+            }),
+        );
     }
 }
 

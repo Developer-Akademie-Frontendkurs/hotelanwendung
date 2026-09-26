@@ -95,6 +95,11 @@ describe('Verhalten des anonymen Clients', () => {
                 p_email: 'rechtepruefung@muster.test',
                 p_first_name: 'Test',
                 p_last_name: 'Test',
+                p_street: 'Teststraße',
+                p_house_number: '1',
+                p_postal_code: '9500',
+                p_city: 'Villach',
+                p_country_code: 'AT',
             },
         };
         const intern: Record<string, Record<string, unknown>> = {

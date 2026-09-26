@@ -38,6 +38,12 @@ async function book(fixture: Fixture, overrides: Record<string, unknown> = {}) {
         p_email: `gast.${fixture.roomTypeId.slice(0, 8)}@muster.test`,
         p_first_name: 'Anna',
         p_last_name: 'Beispiel',
+        // Die Sitzadresse ist Pflicht (E51).
+        p_street: 'Teststraße',
+        p_house_number: '1',
+        p_postal_code: '9500',
+        p_city: 'Villach',
+        p_country_code: 'AT',
         ...overrides,
     });
 }

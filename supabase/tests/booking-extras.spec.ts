@@ -43,6 +43,12 @@ async function book(fixture: Fixture, overrides: Record<string, unknown> = {}) {
         p_email: mailOf(fixture),
         p_first_name: 'Anna',
         p_last_name: 'Beispiel',
+        // Die Sitzadresse ist Pflicht (E51).
+        p_street: 'Teststraße',
+        p_house_number: '1',
+        p_postal_code: '9500',
+        p_city: 'Villach',
+        p_country_code: 'AT',
         ...overrides,
     });
 }
@@ -96,6 +102,7 @@ async function cleanup(fixture: Fixture): Promise<void> {
             await serviceClient.from('booking_events').delete().in('booking_id', ids);
             await serviceClient.from('bookings').delete().in('id', ids);
         }
+        await serviceClient.from('customer_addresses').delete().eq('customer_id', customerId);
         await serviceClient.from('customers').delete().eq('id', customerId);
     }
     await serviceClient.from('services').delete().eq('hotel_id', fixture.hotelId);

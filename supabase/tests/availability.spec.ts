@@ -56,6 +56,7 @@ describe('Kapazitätsformel (E11, E18)', () => {
                 .from('bookings')
                 .insert({
                     customer_id: fixture.customerId,
+                    residence_address_id: fixture.residenceAddressId,
                     room_type_id: fixture.roomTypeId,
                     rate_plan_id: fixture.ratePlanId,
                     check_in: NIGHT,
@@ -300,6 +301,7 @@ describe('search_availability: Aggregation und Zugang', () => {
         // sie für den vollen Aufenthalt ist.
         await serviceClient.from('bookings').insert({
             customer_id: fixture.customerId,
+            residence_address_id: fixture.residenceAddressId,
             room_type_id: fixture.roomTypeId,
             rate_plan_id: fixture.ratePlanId,
             check_in: isoDay(31),

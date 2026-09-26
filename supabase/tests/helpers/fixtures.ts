@@ -22,6 +22,8 @@ export type Fixture = {
     /** Nur gesetzt, wenn `withCustomer` angefordert wurde. */
     customerId?: string;
     customerEmail?: string;
+    /** Sitzadresse des Kunden – Pflicht an jeder neuen Buchung (E51). Gesetzt mit `withCustomer`. */
+    residenceAddressId?: string;
     cleanup: () => Promise<void>;
 };
 
@@ -95,6 +97,7 @@ export async function createFixture(options: { roomCount?: number; maxOccupancy?
 
     let customerId: string | undefined;
     let customerEmail: string | undefined;
+    let residenceAddressId: string | undefined;
     if (options.withCustomer) {
         // Absichtlich mit Grossbuchstaben: So belegt jeder Test, der diese Fixture
         // benutzt, beilaeufig mit, dass email_normalized greift (E32).
@@ -106,6 +109,14 @@ export async function createFixture(options: { roomCount?: number; maxOccupancy?
             .single();
         if (customerError) throw new Error(`Fixture: customers — ${customerError.message}`);
         customerId = customer.id as string;
+
+        const { data: address, error: addressError } = await serviceClient
+            .from('customer_addresses')
+            .insert({ customer_id: customerId, kind: 'residence', street: 'Teststraße', house_number: '1', postal_code: '9500', city: 'Villach', country_code: 'AT' })
+            .select('id')
+            .single();
+        if (addressError) throw new Error(`Fixture: customer_addresses — ${addressError.message}`);
+        residenceAddressId = address.id as string;
     }
 
     // Abbau in umgekehrter Reihenfolge: ON DELETE RESTRICT (E22) laesst nichts
@@ -131,6 +142,7 @@ export async function createFixture(options: { roomCount?: number; maxOccupancy?
             await serviceClient.from('rate_plans').delete().eq('id', ratePlanId);
         }
         if (customerId !== undefined) {
+            await serviceClient.from('customer_addresses').delete().eq('customer_id', customerId);
             await serviceClient.from('customers').delete().eq('id', customerId);
         }
         await serviceClient.from('hotels').delete().eq('id', hotelId);
@@ -140,5 +152,6 @@ export async function createFixture(options: { roomCount?: number; maxOccupancy?
     if (ratePlanId !== undefined) fixture.ratePlanId = ratePlanId;
     if (customerId !== undefined) fixture.customerId = customerId;
     if (customerEmail !== undefined) fixture.customerEmail = customerEmail;
+    if (residenceAddressId !== undefined) fixture.residenceAddressId = residenceAddressId;
     return fixture;
 }

@@ -28,6 +28,7 @@ describe('bookings: Zeitraeume und Zimmerbelegung', () => {
             .from('bookings')
             .insert({
                 customer_id: fixture.customerId,
+                residence_address_id: fixture.residenceAddressId,
                 room_type_id: fixture.roomTypeId,
                 rate_plan_id: fixture.ratePlanId,
                 check_in: '2029-04-10',
@@ -127,6 +128,7 @@ describe('bookings: Storno-Widerspruch (E11)', () => {
     async function booking(overrides: Record<string, unknown>) {
         return serviceClient.from('bookings').insert({
             customer_id: fixture.customerId,
+            residence_address_id: fixture.residenceAddressId,
             room_type_id: fixture.roomTypeId,
             rate_plan_id: fixture.ratePlanId,
             check_in: '2030-03-01',
@@ -174,6 +176,7 @@ describe('booking_reference (E23)', () => {
             .from('bookings')
             .insert({
                 customer_id: fixture.customerId,
+                residence_address_id: fixture.residenceAddressId,
                 room_type_id: fixture.roomTypeId,
                 rate_plan_id: fixture.ratePlanId,
                 check_in: '2031-02-01',
@@ -203,6 +206,7 @@ describe('RLS: Buchungen', () => {
             .from('bookings')
             .insert({
                 customer_id: fixture.customerId,
+                residence_address_id: fixture.residenceAddressId,
                 room_type_id: fixture.roomTypeId,
                 rate_plan_id: fixture.ratePlanId,
                 check_in: '2032-05-01',
@@ -247,6 +251,7 @@ describe('RLS: Buchungen', () => {
     it('Gast darf NICHT direkt in bookings einfuegen — gebucht wird nur ueber die RPC (E6)', async () => {
         const { error } = await anonClient.from('bookings').insert({
             customer_id: fixture.customerId,
+            residence_address_id: fixture.residenceAddressId,
             room_type_id: fixture.roomTypeId,
             rate_plan_id: fixture.ratePlanId,
             check_in: '2032-08-01',
@@ -286,6 +291,7 @@ describe('booking_events: append-only (E12)', () => {
             .from('bookings')
             .insert({
                 customer_id: fixture.customerId,
+                residence_address_id: fixture.residenceAddressId,
                 room_type_id: fixture.roomTypeId,
                 rate_plan_id: fixture.ratePlanId,
                 check_in: '2033-05-01',
