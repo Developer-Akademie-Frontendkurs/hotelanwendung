@@ -11,7 +11,7 @@ function card(roomTypeId: string, maxOccupancy: number, roomsFree: number | null
         imageUrl: null,
         imageAlt: '',
         maxOccupancy,
-        availability: { priceLabel: null, nights: 2, roomsFree, isBookable: true, unavailableReason: null },
+        availability: { priceLabel: null, amountCents: null, currency: 'EUR', nights: 2, roomsFree, isBookable: true, unavailableReason: null },
     };
 }
 

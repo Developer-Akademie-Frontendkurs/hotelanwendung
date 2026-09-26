@@ -46,6 +46,9 @@ export interface RoomAmenity {
 /** Preis und Verfügbarkeit einer Kategorie – gibt es nur mit gewähltem Zeitraum. */
 export interface RoomCardAvailability {
     priceLabel: string | null;
+    /** Preis EINES Zimmers für den ganzen Zeitraum – die Zusammenfassung rechnet damit weiter. */
+    amountCents: number | null;
+    currency: string;
     nights: number;
     roomsFree: number | null;
     isBookable: boolean;

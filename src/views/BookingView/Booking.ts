@@ -5,7 +5,20 @@ import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomType
 import { clampQuantity, getLimitMessage, getMissingBeds, getRoomLimit, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
 import { buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService, type ServiceRow } from './services';
-import { COUNTRIES, DEFAULT_COUNTRY, formatAddressLines, getInvalidFields, isCountryCode, toOptional, type CountryCode, type CustomerDetails, type InvalidField } from './address';
+import {
+    COUNTRIES,
+    DEFAULT_COUNTRY,
+    formatAddressLines,
+    getCountryLabel,
+    getInvalidFields,
+    isCountryCode,
+    toOptional,
+    type CountryCode,
+    type CustomerDetails,
+    type InvalidField,
+} from './address';
+import { buildOrderLines, getOrderTotalCents, type OrderLine } from './summary';
+import type { HotelRow } from './hotel.interface';
 import './booking.css';
 
 /*
@@ -190,6 +203,8 @@ const ROOM_AMENITIES: Readonly<Record<string, readonly RoomAmenity[]>> = {
 
 const ROOM_IMAGE_BUCKET = 'room-images';
 
+const FORM_INCOMPLETE = 'Bitte tragen Sie alle notwendigen Informationen ein.';
+
 // Eingabefelder und Auswahl im Adressformular – `aria-invalid` markiert, was beim Klick
 // auf „zahlungspflichtig buchen" fehlte.
 const FIELD_CLASSES =
@@ -246,6 +261,11 @@ export class BookingView extends AbstractView {
     // Zählt die Suchanfragen mit. Trifft eine ältere Antwort nach einer neueren ein,
     // wird sie verworfen, statt das Ergebnis der neueren zu überschreiben.
     private roomsRequestId = 0;
+    // Adresse und Check-in-/Check-out-Zeiten für „Ihre Buchung". `null`, solange nicht
+    // geladen – dann fehlen nur diese Angaben, die Buchung selbst hängt nicht daran.
+    private hotel: HotelRow | null = null;
+    private summaryEl: HTMLElement | null = null;
+    private unsubscribeSummary: (() => void) | null = null;
     // TODO: Übergangsweise – entfernen, sobald die Buchung gespeichert wird.
     private unsubscribeBookingLog: (() => void) | null = null;
 
@@ -287,6 +307,17 @@ export class BookingView extends AbstractView {
         void this.loadRooms();
 
         this.bindCustomerForm();
+
+        this.summaryEl = document.getElementById('booking-summary');
+        this.summaryEl?.addEventListener('click', (event: MouseEvent): void => {
+            this.handleSummaryClick(event);
+        });
+        this.unsubscribeSummary?.();
+        this.unsubscribeSummary = bookingState.subscribe((): void => {
+            this.renderSummary();
+        });
+        this.renderSummary();
+        void this.loadHotel();
 
         this.calendarEl = document.getElementById('booking-calendar');
         if (!this.calendarEl) return;
@@ -386,6 +417,9 @@ export class BookingView extends AbstractView {
     private renderRooms(): void {
         if (!this.roomsEl) return;
         this.roomsEl.innerHTML = this.getRoomsBodyHtml();
+        // Neue Preise oder eine neue Belegung ändern die Zusammenfassung, ohne dass sich
+        // in `bookingState` etwas rührt.
+        this.renderSummary();
     }
 
     private getRoomsBodyHtml(): string {
@@ -893,8 +927,8 @@ export class BookingView extends AbstractView {
      * Abschluss-Sektion aus dem Design ("BuchungAbschließen"): Kontaktdaten und Adressen
      * links, Zusammenfassung rechts.
      *
-     * Name und Adressen der Zusammenfassung folgen der Eingabe links. Der Rest sind noch
-     * die Beispielwerte aus dem Figma-Entwurf, nicht an `bookingState` angebunden.
+     * Die Zusammenfassung folgt `bookingState`, der Gästeauswahl, den Preisen aus
+     * `search_availability` und der Eingabe links (Phase 9b, Punkte 4–5).
      */
     private getCheckoutHtml(): string {
         return /*html*/ `
@@ -1004,47 +1038,25 @@ export class BookingView extends AbstractView {
         `;
     }
 
+    /**
+     * Das Gerüst von „Ihre Buchung". Was sich mit der Auswahl ändert, füllt
+     * `renderSummary()` in `#booking-summary-order` und `[data-summary-total]`; Name und
+     * Adressen kommen aus `renderCustomerSummary()`.
+     */
     private getBookingSummaryHtml(): string {
         return /*html*/ `
-            <div class="w-full 992:max-w-[33.8125rem] flex flex-col gap-5 rounded-[0.8125rem] border-[0.5px] border-purple-haze bg-[#fbfbfb] p-5">
-                <h2 class="font-playfair-display text-28 768:text-36 leading-none text-purple-haze-dark">Ihre Buchung</h2>
+            <div id="booking-summary" class="w-full 992:max-w-[33.8125rem] flex flex-col gap-5 rounded-[0.8125rem] border-[0.5px] border-purple-haze bg-[#fbfbfb] p-5">
+                <h2 id="booking-summary-title" tabindex="-1" class="font-playfair-display text-28 768:text-36 leading-none text-purple-haze-dark focus:outline-none">Ihre Buchung</h2>
 
-                <div class="flex flex-col gap-4">
-                    <address class="not-italic font-antic-didone text-16 leading-tight text-purple-haze-dark">
-                        Karawanken Hof<br>
-                        Kadischen Allee 3<br>
-                        A - 3459 Villach
-                    </address>
-                    <hr class="border-t-[0.5px] border-purple-haze/45">
-                </div>
+                <div id="booking-summary-order" class="flex flex-col gap-5"></div>
 
-                <div class="flex items-center gap-4">
-                    <div class="shrink-0 w-24 h-18 rounded-[0.6875rem] bg-purple-haze-dark"></div>
-                    <div class="flex flex-col gap-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">
-                        <span class="font-playfair-display font-medium">Double Suite</span>
-                        <span>King-size Bett · Badewanne<br>Gym Zugang · Klimaanlage</span>
-                    </div>
-                </div>
-
-                <div class="flex flex-col gap-6 768:gap-10">
-                    <div class="flex flex-col 456:flex-row gap-4">
-                        ${this.getCheckTileHtml('Check-in', '13.06.2026 ab 14:00 Uhr')}
-                        ${this.getCheckTileHtml('Check-out', '15.06.2026 bis 12:00 Uhr')}
-                    </div>
-
-                    <div class="flex flex-col gap-4">
-                        ${this.getOrderRowHtml('Double Suite', '2 Erwachsene - 2 Nächte', '732€')}
-                        ${this.getOrderRowHtml('Extra Angebot', '', '23€')}
-                    </div>
-
-                    <div id="booking-summary-customer" class="flex flex-col font-antic-didone text-16 leading-tight text-purple-haze-dark"></div>
-                </div>
+                <div id="booking-summary-customer" class="flex flex-col font-antic-didone text-16 leading-tight text-purple-haze-dark"></div>
 
                 <div class="flex flex-col gap-8 pt-2">
                     <hr class="border-t-2 border-purple-haze/45">
                     <div class="flex items-baseline justify-between gap-4 font-playfair-display text-24 text-purple-haze-dark">
                         <span>Gesamtsumme</span>
-                        <span>732€</span>
+                        <span data-summary-total aria-live="polite">–</span>
                     </div>
                     <div class="flex flex-col gap-2">
                         <button type="button" data-action="checkout" class="w-full bg-purple-haze px-5 py-2.5 font-lato font-bold text-20 768:text-24 text-white opacity-85 hover:opacity-100 cursor-pointer">
@@ -1060,6 +1072,123 @@ export class BookingView extends AbstractView {
         `;
     }
 
+    /**
+     * Baut den veränderlichen Teil von „Ihre Buchung" neu auf.
+     *
+     * Ein kompletter Neuaufbau ist hier unbedenklich – anders als in der Zimmerliste gibt
+     * es in der Zusammenfassung kein Feld, in dem gerade getippt wird.
+     */
+    private renderSummary(): void {
+        // Kein Destroy-Hook: Nach einem Seitenwechsel meldet sich die View hier selbst ab.
+        if (this.summaryEl?.isConnected !== true) {
+            this.unsubscribeSummary?.();
+            this.unsubscribeSummary = null;
+            return;
+        }
+
+        const orderEl = document.getElementById('booking-summary-order');
+        if (!orderEl) return;
+
+        const lines = this.getOrderLines();
+        orderEl.innerHTML = /*html*/ `
+            ${this.getHotelAddressHtml()}
+            ${this.getSummaryRoomsHtml()}
+            <div class="flex flex-col gap-6 768:gap-10">
+                ${this.getStayHtml()}
+                ${lines.length === 0 ? '' : /*html*/ `<div class="flex flex-col gap-4">${lines.map((line: OrderLine): string => this.getOrderRowHtml(line)).join('')}</div>`}
+            </div>
+        `;
+
+        const totalEl = this.summaryEl.querySelector<HTMLElement>('[data-summary-total]');
+        if (totalEl) {
+            const total = getOrderTotalCents(lines);
+            totalEl.textContent = total === null ? '–' : formatPrice(total, lines[0]?.currency ?? 'EUR');
+        }
+    }
+
+    private getOrderLines(): OrderLine[] {
+        const { checkIn, checkOut } = bookingState.getDates();
+        return buildOrderLines({
+            rooms: this.rooms,
+            quantities: bookingState.getRoomQuantities(),
+            nights: countNights(checkIn, checkOut),
+            occupancy: { adults: this.guests.adults ?? 0, children: this.guests.children ?? 0 },
+            breakfast: this.breakfastService,
+            withBreakfast: bookingState.getBreakfast(),
+            services: this.extraServices,
+            serviceQuantities: bookingState.getServices(),
+        });
+    }
+
+    /** Hoteladresse aus `hotels` statt aus dem Entwurf – dort stand eine erfundene. */
+    private getHotelAddressHtml(): string {
+        const hotel = this.hotel;
+        if (hotel === null) return '';
+
+        const country = hotel.country_code === null ? '' : isCountryCode(hotel.country_code) ? getCountryLabel(hotel.country_code) : hotel.country_code;
+        const lines = [hotel.name, hotel.address_line1 ?? '', `${hotel.postal_code ?? ''} ${hotel.city ?? ''}`.trim(), country].filter((line: string): boolean => line !== '');
+
+        return /*html*/ `
+            <div class="flex flex-col gap-4">
+                <address class="not-italic font-antic-didone text-16 leading-tight text-purple-haze-dark">${lines.join('<br>')}</address>
+                <hr class="border-t-[0.5px] border-purple-haze/45">
+            </div>
+        `;
+    }
+
+    /** Bild, Name und Ausstattung je gewählter Kategorie – der Block aus dem Entwurf, einmal je Kategorie. */
+    private getSummaryRoomsHtml(): string {
+        const selected = this.rooms.filter((room: RoomCard): boolean => bookingState.getRoomQuantity(room.roomTypeId) > 0);
+        if (selected.length === 0) {
+            return /*html*/ `<p class="font-antic-didone text-16 leading-tight text-purple-haze-dark/70">Noch kein Zimmer gewählt.</p>`;
+        }
+
+        return /*html*/ `
+            <ul class="flex flex-col gap-4">
+                ${selected
+                    .map((room: RoomCard): string => {
+                        // Das Bild ist Schmuck: Der Name steht direkt daneben.
+                        const image =
+                            room.imageUrl === null
+                                ? /*html*/ `<div class="shrink-0 w-24 h-18 rounded-[0.6875rem] bg-purple-haze-dark"></div>`
+                                : /*html*/ `<img src="${room.imageUrl}" alt="" loading="lazy" class="shrink-0 w-24 h-18 rounded-[0.6875rem] object-cover" />`;
+                        const amenities = (ROOM_AMENITIES[room.slug] ?? []).map((amenity: RoomAmenity): string => amenity.label).join(' · ');
+
+                        return /*html*/ `
+                            <li class="flex items-center gap-4">
+                                ${image}
+                                <div class="flex flex-col gap-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">
+                                    <span class="font-playfair-display font-medium">${room.name}</span>
+                                    ${amenities === '' ? '' : /*html*/ `<span>${amenities}</span>`}
+                                </div>
+                            </li>
+                        `;
+                    })
+                    .join('')}
+            </ul>
+        `;
+    }
+
+    /** Check-in/Check-out mit den Uhrzeiten aus `hotels`, darunter Belegung und Nächte. */
+    private getStayHtml(): string {
+        const { checkIn, checkOut } = bookingState.getDates();
+        const nights = countNights(checkIn, checkOut);
+
+        const adults = this.guests.adults;
+        const guests = adults === null ? 'Anzahl der Gäste noch offen' : formatGuests(adults, this.guests.children ?? 0);
+        const stay = nights === null ? guests : `${guests} · ${formatNights(nights)}`;
+
+        return /*html*/ `
+            <div class="flex flex-col gap-3">
+                <div class="flex flex-col 456:flex-row gap-4">
+                    ${this.getCheckTileHtml('Check-in', formatStayDate(checkIn, 'ab', this.hotel?.check_in_time ?? null))}
+                    ${this.getCheckTileHtml('Check-out', formatStayDate(checkOut, 'bis', this.hotel?.check_out_time ?? null))}
+                </div>
+                <p class="font-antic-didone text-16 leading-tight text-purple-haze-dark text-center">${stay}</p>
+            </div>
+        `;
+    }
+
     private getCheckTileHtml(label: string, value: string): string {
         return /*html*/ `
             <div class="flex-1 flex items-center justify-center rounded-[0.625rem] bg-[#f6f2f2] p-3 text-center font-antic-didone text-16 leading-tight text-purple-haze-dark">
@@ -1071,21 +1200,94 @@ export class BookingView extends AbstractView {
         `;
     }
 
-    private getOrderRowHtml(title: string, subtitle: string, price: string): string {
-        const subtitleHtml = subtitle === '' ? '' : /*html*/ `<span class="block font-antic-didone">${subtitle}</span>`;
+    /** Eine Bestellzeile. Das Kreuz aus dem Entwurf entfernt sie: Zimmer auf 0, Leistung abgewählt. */
+    private getOrderRowHtml(line: OrderLine): string {
+        const detail = this.getOrderLineDetail(line);
+        const detailHtml = detail === '' ? '' : /*html*/ `<span class="block font-antic-didone">${detail}</span>`;
+        const price = line.amountCents === null ? '–' : line.amountCents === 0 ? 'kostenlos' : formatPrice(line.amountCents, line.currency);
 
         return /*html*/ `
             <div class="flex items-center justify-between gap-4 rounded-[0.625rem] border border-purple-haze p-3">
                 <p class="font-playfair-display font-medium text-16 leading-tight text-purple-haze-dark">
-                    ${title}
-                    ${subtitleHtml}
+                    ${line.name}
+                    ${detailHtml}
                 </p>
                 <div class="flex shrink-0 items-center gap-2">
                     <span class="font-antic-didone text-20 768:text-24 leading-none text-purple-haze-dark">${price}</span>
-                    ${ICON_REMOVE}
+                    <button
+                        type="button"
+                        data-summary-remove="${line.kind}"
+                        data-summary-id="${line.id}"
+                        aria-label="${line.name} entfernen"
+                        class="shrink-0 rounded-full cursor-pointer transition-opacity hover:opacity-70 focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
+                    >${ICON_REMOVE}</button>
                 </div>
             </div>
         `;
+    }
+
+    private getOrderLineDetail(line: OrderLine): string {
+        const { checkIn, checkOut } = bookingState.getDates();
+        const nights = countNights(checkIn, checkOut);
+        const withNights = (text: string): string => (nights === null ? text : `${text} · ${formatNights(nights)}`);
+
+        switch (line.kind) {
+            case 'room':
+                return withNights(`${line.quantity.toString()} Zimmer`);
+            case 'breakfast':
+                return withNights(line.quantity === 1 ? 'für 1 Gast' : `für ${line.quantity.toString()} Gäste`);
+            case 'service': {
+                const service = this.extraServices.find((candidate: ExtraService): boolean => candidate.code === line.id);
+                switch (service?.chargeBasis) {
+                    case 'per_night':
+                        return nights === null ? 'pro Nacht' : formatNights(nights);
+                    case 'per_unit':
+                        return `${line.quantity.toString()} Stück`;
+                    case 'per_stay':
+                        return 'einmalig';
+                    case undefined:
+                        return '';
+                }
+            }
+        }
+    }
+
+    private handleSummaryClick(event: MouseEvent): void {
+        const button = (event.target as HTMLElement).closest<HTMLElement>('[data-summary-remove]');
+        const id = button?.dataset.summaryId;
+        if (!button || id === undefined) return;
+
+        switch (button.dataset.summaryRemove) {
+            case 'room':
+                // Direkt statt über `setRoomQuantity()`: Entfernen muss auch gehen, wenn die
+                // Kategorie gerade keine Verfügbarkeit hat (Zeitraum zurückgesetzt).
+                bookingState.setRoomQuantity(id, 0);
+                bookingState.setServices(reconcileServices(bookingState.getServices(), this.extraServices, this.getServiceContext()));
+                this.updateQuantityUi(null);
+                break;
+            case 'breakfast':
+                bookingState.setBreakfast(false);
+                this.updateQuantityUi(null);
+                break;
+            case 'service':
+                this.setServiceQuantity(id, 0);
+                break;
+            default:
+                return;
+        }
+
+        // Der geklickte Knopf ist mit seiner Zeile verschwunden – der Fokus soll nicht ins
+        // Leere fallen.
+        document.getElementById('booking-summary-title')?.focus();
+    }
+
+    /** Die eine Zeile aus `hotels` (E14). */
+    private async loadHotel(): Promise<void> {
+        const { data, error } = await supabase.from('hotels').select('name, address_line1, postal_code, city, country_code, check_in_time, check_out_time').limit(1).maybeSingle();
+        if (error) return;
+
+        this.hotel = data;
+        this.renderSummary();
     }
 
     /**
@@ -1377,17 +1579,37 @@ export class BookingView extends AbstractView {
         const draft = this.getBookingDraft();
         const { checkIn, checkOut, nights, adults } = draft;
         const invalid = getInvalidFields(draft);
-        this.markInvalidFields(invalid);
+        const message = this.getCheckoutError(draft, invalid);
+        // In das Formular springen nur, wenn dort auch das Problem liegt – nicht, wenn
+        // noch das Zimmer fehlt.
+        this.markInvalidFields(invalid, message === FORM_INCOMPLETE);
 
-        const complete = checkIn !== null && checkOut !== null && nights !== null && adults !== null && invalid.length === 0;
         const errorEl = document.getElementById('booking-checkout-error');
-        if (errorEl) errorEl.hidden = complete;
-        if (!complete) return;
+        if (errorEl) {
+            errorEl.hidden = message === null;
+            errorEl.textContent = message ?? '';
+        }
+        if (message !== null || checkIn === null || checkOut === null || nights === null || adults === null) return;
 
         const booking: Booking = { ...draft, checkIn, checkOut, nights, adults };
 
         // TODO: Buchungsdaten später an das Backend senden (fetch / Supabase).
         console.log('Buchungsdaten', booking);
+    }
+
+    /**
+     * Was vor dem Buchen noch fehlt (Phase 9b, Punkt 7) – in der Reihenfolge der Seite,
+     * damit der Gast von oben nach unten arbeiten kann. `null` heißt: alles da.
+     */
+    private getCheckoutError(draft: BookingDraft, invalid: readonly InvalidField[]): string | null {
+        if (draft.checkIn === null || draft.checkOut === null) return 'Bitte wählen Sie zuerst Ihren Zeitraum.';
+        if (draft.adults === null) return 'Bitte wählen Sie die Anzahl der Gäste.';
+        if (draft.positions.length === 0) return 'Bitte wählen Sie mindestens ein Zimmer.';
+
+        const capacity = this.getCapacityText();
+        if (capacity !== '') return capacity;
+
+        return invalid.length === 0 ? null : FORM_INCOMPLETE;
     }
 
     /**
@@ -1412,7 +1634,7 @@ export class BookingView extends AbstractView {
         return {
             checkIn: checkIn === null ? null : toISODate(checkIn),
             checkOut: checkOut === null ? null : toISODate(checkOut),
-            nights: checkIn === null || checkOut === null ? null : Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY),
+            nights: countNights(checkIn, checkOut),
             adults: this.guests.adults,
             children: this.guests.children ?? 0,
             // Eine Position je Kategorie – die Form von `p_positions` in `create_booking`
@@ -1503,7 +1725,7 @@ export class BookingView extends AbstractView {
         };
     }
 
-    private markInvalidFields(invalid: InvalidField[]): void {
+    private markInvalidFields(invalid: readonly InvalidField[], focusFirst: boolean): void {
         const form = this.customerFormEl;
         if (!form) return;
 
@@ -1519,7 +1741,7 @@ export class BookingView extends AbstractView {
 
         // In das erste ungültige Feld springen (Phase 9b, Punkt 7) – in Formularreihenfolge,
         // nicht in der von `FIELD_NAMES`.
-        form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+        if (focusFirst) form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
     }
 
     /**
@@ -1592,6 +1814,8 @@ function buildRoomCards(details: RoomTypeDetail[], availability: RoomAvailabilit
                     ? null
                     : {
                           priceLabel: room.total_amount_cents === null ? null : formatPrice(room.total_amount_cents, room.currency),
+                          amountCents: room.total_amount_cents,
+                          currency: room.currency,
                           nights: room.nights,
                           roomsFree: room.rooms_free,
                           isBookable: room.is_bookable,
@@ -1654,6 +1878,27 @@ function formatUnavailableReason(reason: string): string {
         default:
             return 'Für diesen Zeitraum nicht buchbar.';
     }
+}
+
+/** Nächte zwischen An- und Abreise – `null`, solange der Zeitraum nicht vollständig ist. */
+function countNights(checkIn: Date | null, checkOut: Date | null): number | null {
+    if (checkIn === null || checkOut === null) return null;
+    return Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY);
+}
+
+/** „13.06.2026 ab 14:00 Uhr" wie im Entwurf – ohne geladene Hotelzeile nur das Datum. */
+function formatStayDate(date: Date | null, preposition: string, time: string | null): string {
+    if (date === null) return 'noch offen';
+
+    const day = `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear().toString()}`;
+    // `time` kommt als "14:00:00" – die Sekunden interessieren niemanden.
+    return time === null ? day : `${day} ${preposition} ${time.slice(0, 5)} Uhr`;
+}
+
+function formatGuests(adults: number, children: number): string {
+    const adultText = adults === 1 ? '1 Erwachsener' : `${adults.toString()} Erwachsene`;
+    if (children === 0) return adultText;
+    return `${adultText}, ${children === 1 ? '1 Kind' : `${children.toString()} Kinder`}`;
 }
 
 function formatNights(nights: number): string {

@@ -557,6 +557,23 @@ keine ist versehentlich.
 >
 > `submit()` gibt Kontaktdaten und Adressen in der Form der `create_booking`-Parameter aus
 > (`customer`, `residence`, `billing`). Gebucht wird weiterhin nicht (Punkt 8).
+>
+> **Nachtrag 2026-09-26 (Punkte 4, 5, 7):** Die Zusammenfassung „Ihre Buchung“ ist keine Attrappe mehr:
+>
+> - **Hoteladresse und Uhrzeiten** kommen aus `hotels` (`check_in_time`/`check_out_time`), Zeitraum,
+>   Zimmer, Frühstück und Leistungen aus `bookingState`, die Preise aus `search_availability`.
+> - **Je gewählter Kategorie** ein Block mit Bild, Name und Ausstattung und eine Bestellzeile
+>   („2 Zimmer · 2 Nächte“). Dazu kommen Zeilen für Frühstück und Leistungen. Das Entfernen-Kreuz
+>   setzt das Zimmer auf 0 bzw. wählt die Leistung ab.
+> - **Belegung** als eine Zeile für den ganzen Vorgang („3 Erwachsene, 1 Kind · 2 Nächte“). Seit E48
+>   gibt es keine „Gäste pro Zimmer“ mehr, die Beschriftung aus Punkt 5 ist damit überholt.
+> - **Summe** in `summary.ts` (`buildOrderLines`, `getOrderTotalCents`): Jede sichtbare Zeile steckt
+>   in der Summe. Fehlt einer Zeile der Preis (kein Zeitraum), steht „–“ statt einer Teilsumme.
+> - **Prüfung beim Klick** jetzt auch auf Zeitraum, Belegung, mindestens ein Zimmer und genug
+>   Betten, mit eigenem Satz je Fall. In das erste Formularfeld springt die Seite nur, wenn das
+>   Problem im Formular liegt.
+>
+> Gebucht wird weiterhin nicht (Punkte 8–9).
 
 ---
 
