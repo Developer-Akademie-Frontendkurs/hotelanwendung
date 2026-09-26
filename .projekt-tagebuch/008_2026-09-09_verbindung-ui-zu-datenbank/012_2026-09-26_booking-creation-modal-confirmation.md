@@ -445,4 +445,4 @@ Ein Beispiel dafür, wie ein `TODO` mit klarer Abbruchbedingung funktioniert: Di
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md) · [Nächster Commit →](013_2026-09-26_project-diary.md)

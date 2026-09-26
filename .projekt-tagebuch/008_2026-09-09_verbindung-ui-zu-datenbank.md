@@ -2,7 +2,7 @@
 
 # 008 – Branch `verbindung-ui-zu-datenbank`
 
-**Erster Commit:** 2026-09-09 · **Commits:** 12 · **Status:** offen
+**Erster Commit:** 2026-09-09 · **Commits:** 14 · **Status:** offen
 
 ## Ziel des Branches
 
@@ -39,6 +39,8 @@ Vertagt bleibt allein Phase 10 (Cloud-Deployment).
 | [010](008_2026-09-09_verbindung-ui-zu-datenbank/010_2026-09-26_enhance-address-form-validation.md)            | 2026-09-26 | Graue Platzhalter, neue Beispielwerte, Fokus ins erste fehlerhafte Feld                 |
 | [011](008_2026-09-09_verbindung-ui-zu-datenbank/011_2026-09-26_booking-summary-dynamic-pricing.md)            | 2026-09-26 | „Ihre Buchung" ohne Attrappe: `summary.ts`, Hoteldaten, Entfernen-Kreuz                 |
 | [012](008_2026-09-09_verbindung-ui-zu-datenbank/012_2026-09-26_booking-creation-modal-confirmation.md)        | 2026-09-26 | `create_booking` aus der Oberfläche, `booking.service.ts`, `<dialog>`-Bestätigung       |
+| [013](008_2026-09-09_verbindung-ui-zu-datenbank/013_2026-09-26_project-diary.md)                              | 2026-09-26 | Projekttagebuch für die Commits 002–012 nachziehen (reiner Doku-Commit)                 |
+| [014](008_2026-09-09_verbindung-ui-zu-datenbank/014_2026-09-26_booking-steps-management.md)                   | 2026-09-26 | Buchungsschritte im Sticky-Header: Status aus der View, Sprungmarken zu den Bereichen   |
 
 Merge-Commits gibt es in diesem Branch nicht – er ist seit seinem Start nicht mit `main` synchronisiert worden.
 
@@ -109,6 +111,12 @@ Das bestätigt den Satz, mit dem die Zusammenfassung oben den Plan kommentiert: 
 Mit Commit 012 ist das Ziel des Branches erreicht: **Die Buchungsseite bucht.** Von den zehn Lücken aus der Bestandsaufnahme sind die fachlichen geschlossen – Zimmerauswahl, Checkout, `submit()`, Rechnungsadresse, Gästezahl, Popup-Text.
 
 **Offen** sind zum dokumentierten Stand noch die generierten Typen (`V8`) und die vollständige Service-Schicht: Die Lesezugriffe der View laufen weiterhin direkt über `supabase.from`/`.rpc`, das Prüfkriterium aus Phase 8 wäre also noch nicht erfüllt. Im TODO-Block von `Booking.ts` stehen außerdem noch „Buchungssteps verknüpfen" und die Frage nach Migrationen. Der Branch ist **noch nicht in `main` gemergt**.
+
+### Nachtrag (Commits 013–014)
+
+Commit 013 zieht das Tagebuch bis Commit 012 nach (reiner Doku-Commit, wie schon 002). Commit 014 erledigt das TODO „Buchungssteps verknüpfen": Die drei Schritte im Header stammten noch aus der Idee „eine Seite pro Schritt" und zeigten, seit alles auf einer Seite liegt, nur noch Schritt 1 an. Jetzt meldet die `BookingView` die erledigten Schritte nach denselben Regeln, die auch vor dem Buchen gelten, `bookingState` leitet daraus den fälligen Schritt ab (mit Gleichheitsprüfung gegen eine Endlosschleife), und der Header ist sticky mit anklickbaren Sprungmarken. Die Sprünge scrollen per `scrollIntoView` selbst, weil ein nativer `#hash`-Sprung über `popstate` den selbstgeschriebenen Router zum Neu-Rendern – und damit zum Zurücksetzen der Buchung – bringen würde.
+
+Im TODO-Block von `Booking.ts` bleibt damit nur noch die Frage nach Migrationen offen; `V8` und die Service-Schicht für Lesezugriffe stehen weiterhin aus.
 
 ---
 
