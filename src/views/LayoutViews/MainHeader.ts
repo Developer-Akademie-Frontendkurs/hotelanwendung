@@ -3,6 +3,7 @@ import logo from '../../assets/img/logo.svg';
 import stars from '../../assets/img/icons/stars.png';
 import mainHeaderBg from '../../assets/img/main-header-bg.jpg';
 import { bookingState, type BookingStep } from '../../shared/state/bookingState';
+import { scrollToSection } from '../../shared/ui/scroll';
 import type { PageHeaderConfig, HeaderConfig, StepState } from './header.types';
 
 type BookingStepDefinition = {
@@ -199,18 +200,14 @@ export class MainHeader extends AbstractView {
     /**
      * Scrollt selbst, statt den Browser dem `#hash` folgen zu lassen: Ein Sprung zum Anker
      * löst `popstate` aus, und darauf baut der Router die Seite neu auf – samt
-     * zurückgesetzter Buchung. Den Abstand zum Sticky-Header regelt `scroll-mt-*` am Ziel.
+     * zurückgesetzter Buchung.
      */
     private handleStepClick(event: MouseEvent): void {
         const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[data-step-target]');
         if (!link) return;
 
         event.preventDefault();
-        const target = document.getElementById(link.dataset.stepTarget ?? '');
-        if (!target) return;
-
-        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+        scrollToSection(link.dataset.stepTarget ?? '');
     }
 
     /** Ersetzt nur die Steps – dieselbe Funktion für Erst-Render und Neu-Render nach einer Zustandsänderung. */

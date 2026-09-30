@@ -19,11 +19,11 @@ Die Reihenfolge: zuerst Bugs, dann schnelle Aufräumarbeiten, dann Struktur, dan
 
 ### A. Bugs und Sicherheit (zuerst)
 
-- [ ] **A1: Der Knopf „weiter“ im Kalender bucht verbindlich.**
+- [x] **A1: Der Knopf „weiter“ im Kalender bucht verbindlich.**
   - Wo: `Booking.ts:1471` (`data-action="submit"`) und `:1526` (`case 'submit': void this.submit()`).
   - Folge: `submit()` ruft seit `bb243ce` `createBooking` auf.
   - Lösung: Die Aktion heißt künftig `next-step` und scrollt nur zu `#booking-rooms`. Gebucht wird ausschließlich über `[data-action="checkout"]`.
-- [ ] **A2: Netzwerkfehler sehen aus wie Ablehnungen, das kann zu Doppelbuchungen führen.**
+- [x] **A2: Netzwerkfehler sehen aus wie Ablehnungen, das kann zu Doppelbuchungen führen.**
   - Wo: `booking.service.ts:109`. Dort wird jeder `error` zu `{ ok: false }`.
   - Das widerspricht V15: „Ablehnung als Ergebnis, Infrastrukturfehler werfen“.
   - Lösung: Nur `P0001` mit `DETAIL`-JSON ist eine Ablehnung, alles andere wird geworfen. Bei einem Wurf bleibt der Knopf gesperrt, und der Hinweis sagt „Status unklar, bitte nicht erneut buchen“.

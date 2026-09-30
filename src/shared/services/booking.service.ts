@@ -5,6 +5,9 @@
  * ausgebuchte Nacht ist ein erwartetes Ergebnis, kein Ausnahmefall. Die Oberfläche
  * bekommt stattdessen `{ ok: false, error }` mit Code, Datum und Kategorie aus dem
  * `DETAIL`-JSON von `reject_booking` (E31).
+ *
+ * Alles andere – Netzwerk, Server, unlesbare Antwort – ist keine Ablehnung und wird als
+ * `BookingFailedError` geworfen (V15).
  */
 
 import { supabase } from './supabase';
@@ -55,7 +58,7 @@ export type CreatedBooking = {
 };
 
 export type BookingRejection = {
-    /** Der Code aus `reject_booking` – für Gäste maskiert (`nicht_buchbar`, E28). `unbekannt`, wenn keiner mitkam. */
+    /** Der Code aus `reject_booking` – für Gäste maskiert (`nicht_buchbar`, E28). */
     code: string;
     /** Die erste betroffene Nacht, `YYYY-MM-DD`. */
     date: string | null;
@@ -64,6 +67,24 @@ export type BookingRejection = {
     message: string;
 };
 
+/**
+ * `create_booking` ist nicht mit einer Ablehnung beantwortet worden.
+ *
+ * `outcomeUnknown` sagt, ob die Buchung trotzdem angelegt sein kann: Kam keine Antwort
+ * der Datenbank an (Netzwerk, Zeitüberschreitung, Gateway), kann der Commit durch sein.
+ * Ein erneuter Versuch hieße dann Doppelbuchung. Antwortet dagegen die Datenbank mit
+ * einem Fehlercode, ist die Transaktion zurückgerollt – es ist sicher nichts gebucht.
+ */
+export class BookingFailedError extends Error {
+    readonly outcomeUnknown: boolean;
+
+    constructor(message: string, outcomeUnknown: boolean) {
+        super(message);
+        this.name = 'BookingFailedError';
+        this.outcomeUnknown = outcomeUnknown;
+    }
+}
+
 export type CreateBookingResult = { ok: true; data: CreatedBooking } | { ok: false; error: BookingRejection };
 
 export async function createBooking(request: BookingRequest): Promise<CreateBookingResult> {
@@ -71,7 +92,7 @@ export async function createBooking(request: BookingRequest): Promise<CreateBook
 
     // Ohne generierte Typen (V8 steht noch aus) ist `data` hier `any` – als `unknown`
     // gelesen, prüft `parseCreatedBooking()` die Form selbst.
-    const response: { data: unknown; error: { message: string; details: string | null } | null } = await supabase.rpc('create_booking', {
+    const response: { data: unknown; error: { message: string; details: string | null; code?: string } | null } = await supabase.rpc('create_booking', {
         p_check_in: request.checkIn,
         p_check_out: request.checkOut,
         p_positions: request.positions.map((position: { roomTypeId: string; rooms: number }): { room_type_id: string; rooms: number } => ({
@@ -107,7 +128,14 @@ export async function createBooking(request: BookingRequest): Promise<CreateBook
 
     const { data, error } = response;
     if (error) {
-        return { ok: false, error: parseRejection(error.message, error.details) };
+        const rejection = error.code === REJECTION_SQLSTATE ? parseRejection(error.message, error.details) : null;
+        if (rejection !== null) return { ok: false, error: rejection };
+
+        // Ohne `code` stammt der Fehler nicht aus Postgres/PostgREST: postgrest-js meldet
+        // einen gescheiterten `fetch` mit leerem `code`, ein Gateway-Fehler kommt als
+        // reiner Text. Ob die Datenbank committet hat, weiß dann niemand.
+        const outcomeUnknown = error.code === undefined || error.code === '';
+        throw new BookingFailedError(`create_booking fehlgeschlagen: ${error.message}`, outcomeUnknown);
     }
 
     const created = parseCreatedBooking(data);
@@ -115,26 +143,28 @@ export async function createBooking(request: BookingRequest): Promise<CreateBook
         // Die Buchung ist angelegt, nur die Antwort hat eine unerwartete Form. Das ist
         // ein Programmierfehler, keine Ablehnung – und darf nicht als „nicht gebucht"
         // beim Gast ankommen, sonst bucht er ein zweites Mal.
-        throw new Error('create_booking hat eine unerwartete Antwort geliefert.');
+        throw new BookingFailedError('create_booking hat eine unerwartete Antwort geliefert.', true);
     }
     return { ok: true, data: created };
 }
 
+/** Der SQLSTATE, mit dem `reject_booking` wirft. */
+const REJECTION_SQLSTATE = 'P0001';
+
 /**
- * Liest das `DETAIL`-JSON von `reject_booking`. Andere Fehler (E-Mail fehlt, Netzwerk)
- * haben keins – dann bleibt der Code `unbekannt` und die Meldung, was sie ist.
+ * Liest das `DETAIL`-JSON von `reject_booking`. Fehlt es oder hat es keinen `code`, war
+ * der Fehler keine Ablehnung – dann `null`, und der Aufrufer wirft.
  */
-function parseRejection(message: string, details: string | null | undefined): BookingRejection {
-    const fallback: BookingRejection = { code: 'unbekannt', date: null, roomTypeId: null, message };
-    if (!details) return fallback;
+function parseRejection(message: string, details: string | null | undefined): BookingRejection | null {
+    if (!details) return null;
 
     let parsed: unknown;
     try {
         parsed = JSON.parse(details);
     } catch {
-        return fallback;
+        return null;
     }
-    if (!isRecord(parsed) || typeof parsed.code !== 'string') return fallback;
+    if (!isRecord(parsed) || typeof parsed.code !== 'string') return null;
 
     return {
         code: parsed.code,

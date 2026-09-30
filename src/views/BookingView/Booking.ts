@@ -1,8 +1,9 @@
 import AbstractView from '../AbstractView';
 import { bookingState, type BookingStep } from '../../shared/state/bookingState';
 import { supabase } from '../../shared/services/supabase';
-import { createBooking, type BookingRejection, type CreatedBooking } from '../../shared/services/booking.service';
+import { BookingFailedError, createBooking, type BookingRejection, type CreatedBooking } from '../../shared/services/booking.service';
 import { openModal } from '../../shared/ui/modal';
+import { scrollToSection } from '../../shared/ui/scroll';
 import logo from '../../assets/img/logo-small.svg';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
 import { clampQuantity, getLimitMessage, getMissingBeds, getRoomLimit, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
@@ -211,6 +212,8 @@ const ROOM_IMAGE_BUCKET = 'room-images';
 const FORM_INCOMPLETE = 'Bitte tragen Sie alle notwendigen Informationen ein.';
 const CHECKOUT_LABEL = 'zahlungspflichtig buchen';
 const CHECKOUT_BUSY_LABEL = 'Buchung wird gesendet …';
+/** Die Buchung kann angelegt sein – deshalb ausdrücklich kein „bitte erneut versuchen". */
+const BOOKING_OUTCOME_UNKNOWN = 'Wir konnten nicht feststellen, ob Ihre Buchung angelegt wurde. Bitte buchen Sie nicht erneut, sondern kontaktieren Sie uns.';
 
 // Eingabefelder und Auswahl im Adressformular – `aria-invalid` markiert, was beim Klick
 // auf „zahlungspflichtig buchen" fehlte.
@@ -1463,14 +1466,14 @@ export class BookingView extends AbstractView {
 
     private getFooterHtml(): string {
         const { checkIn, checkOut } = bookingState.getDates();
-        const canSubmit = checkIn !== null && checkOut !== null && this.guests.adults !== null;
+        const canContinue = checkIn !== null && checkOut !== null && this.guests.adults !== null;
         return /*html*/ `
             <div class="flex justify-center mt-8 768:mt-10">
                 <button
                     type="button"
-                    data-action="submit"
-                    ${canSubmit ? '' : 'disabled'}
-                    class="bg-purple-haze py-2 px-8 rounded-md font-lato font-semibold text-white transition-opacity ${canSubmit ? 'opacity-85 hover:opacity-100 cursor-pointer' : 'opacity-40 cursor-not-allowed'}"
+                    data-action="next-step"
+                    ${canContinue ? '' : 'disabled'}
+                    class="bg-purple-haze py-2 px-8 rounded-md font-lato font-semibold text-white transition-opacity ${canContinue ? 'opacity-85 hover:opacity-100 cursor-pointer' : 'opacity-40 cursor-not-allowed'}"
                 >
                     weiter
                 </button>
@@ -1523,8 +1526,10 @@ export class BookingView extends AbstractView {
                 case 'clear':
                     this.clearSelection();
                     return;
-                case 'submit':
-                    void this.submit();
+                case 'next-step':
+                    // Nur weiter zur Zimmerauswahl – gebucht wird ausschließlich über
+                    // `[data-action="checkout"]` in der Zusammenfassung.
+                    scrollToSection('booking-rooms');
                     return;
                 default:
                     return;
@@ -1599,10 +1604,16 @@ export class BookingView extends AbstractView {
         let result: Awaited<ReturnType<typeof createBooking>>;
         try {
             result = await createBooking(booking);
-        } catch {
-            // Nur bei einer unlesbaren Antwort – die Buchung kann trotzdem angelegt sein.
-            // Deshalb kein „bitte erneut versuchen" und der Knopf bleibt gesperrt.
-            this.showCheckoutError('Bei der Buchung ist ein unerwarteter Fehler aufgetreten. Bitte buchen Sie nicht erneut, sondern kontaktieren Sie uns.');
+        } catch (error: unknown) {
+            console.error(error);
+            // Ist nicht sicher, dass nichts gebucht wurde (V15), bleibt der Knopf gesperrt –
+            // ein zweiter Versuch könnte doppelt buchen.
+            if (!(error instanceof BookingFailedError) || error.outcomeUnknown) {
+                this.showCheckoutError(BOOKING_OUTCOME_UNKNOWN);
+                return;
+            }
+            this.setSubmitting(false);
+            this.showCheckoutError('Die Buchung ist aus technischen Gründen nicht zustande gekommen. Bitte versuchen Sie es in einigen Minuten erneut.');
             return;
         }
 
