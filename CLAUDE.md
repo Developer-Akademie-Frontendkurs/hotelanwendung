@@ -68,3 +68,5 @@ Es gibt keine separate `vitest.config.ts` – Vitest nutzt die Standardkonfigura
 - TypeScript ist strikt konfiguriert (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noUnusedLocals/Parameters`, u. a. – siehe `tsconfig.json`). ESLint erzwingt zusätzlich `strictTypeChecked` von typescript-eslint sowie explizite Rückgabetypen für Funktionen (`@typescript-eslint/explicit-function-return-type`).
 - Prettier läuft als ESLint-Regel (nicht nur als Formatter) – `pnpm lint` schlägt bei Formatierungsabweichungen fehl. Kernwerte: 4 Spaces, Single Quotes, Semikolons, `printWidth: 180` (siehe `.prettierrc`).
 - Synchrone Methoden ohne `await` im Body, die aber die `ViewInstance`-Schnittstelle (`Promise<...>`) erfüllen müssen, bekommen `// eslint-disable-next-line @typescript-eslint/require-await` – das ist ein bewusstes, wiederkehrendes Muster in den Views, kein Einzelfall zum Beheben.
+
+<script></script>
