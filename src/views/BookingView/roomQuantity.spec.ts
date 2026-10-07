@@ -53,14 +53,14 @@ describe('reconcileQuantities nach geänderter Erwachsenenzahl', () => {
 });
 
 describe('getMissingBeds (E48)', () => {
-    const rooms = [card('doppel', 2), card('suite', 4)];
+    const rooms = [card('double', 2), card('suite', 4)];
 
     it('zählt die Betten über alle gewählten Kategorien zusammen', () => {
-        expect(getMissingBeds({ doppel: 1, suite: 1 }, rooms, 6)).toBe(0);
+        expect(getMissingBeds({ double: 1, suite: 1 }, rooms, 6)).toBe(0);
     });
 
     it('nennt die Personen ohne Bett', () => {
-        expect(getMissingBeds({ doppel: 1 }, rooms, 5)).toBe(3);
+        expect(getMissingBeds({ double: 1 }, rooms, 5)).toBe(3);
     });
 
     it('wird nie negativ', () => {

@@ -37,7 +37,7 @@ Die Reihenfolge: zuerst Bugs, dann schnelle Aufräumarbeiten, dann Struktur, dan
 - [x] **A5: Kinderbetten werden erst nach dem Laden abgeglichen.**
   - Wird die Zahl der Kinder verringert und schlägt `loadRooms` danach fehl, bleiben zu viele Kinderbetten übrig. `create_booking` antwortet dann mit `ungueltige_leistung`.
   - Lösung: Den Abgleich schon in `handleGuestChange` synchron ausführen.
-- [ ] **A6: Überzähliges `</output>` entfernen** (`Booking.ts:1138`).
+- [x] **A6: Überzähliges `</output>` entfernen** (`Booking.ts:1138`). Fehlalarm des Reviews, nichts zu ändern: Seit `813760d` steht im Code genau ein `<output>` mit passendem `</output>` (die Mengenanzeige der Zusatzleistungen); `getHotelAddressHtml` endet sauber mit `<hr>` und `</div>`.
 
 ### B. Schnelle Aufräumarbeiten
 
@@ -46,7 +46,7 @@ Die Reihenfolge: zuerst Bugs, dann schnelle Aufräumarbeiten, dann Struktur, dan
   - den TODO-Block in `Booking.ts:27-30`,
   - `breakfast.ts:1` (dort steht „je Kategorie“, es gilt inzwischen „je Vorgang“),
   - den JSDoc von `ROOM_AMENITIES`, der jetzt über `SERVICE_ICONS` hängt (`:156`).
-- [ ] B3: Umbenennen:
+- [x] B3: Umbenennen:
   - `getBillingFieldHtml` → `getInputFieldHtml`,
   - `handleClick` → `handleCalendarClick`,
   - gemischte deutsch-englische Bezeichner wie `preise`, `grenze`, `einheit` vereinheitlichen.

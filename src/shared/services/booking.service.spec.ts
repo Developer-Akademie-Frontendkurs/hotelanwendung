@@ -68,7 +68,7 @@ describe('createBooking — Ablehnung oder Fehler (V15)', () => {
     });
 
     it('wirft bei einer unlesbaren Erfolgsantwort – die Buchung kann angelegt sein', async () => {
-        rpc.mockResolvedValue({ data: { unerwartet: true }, error: null, status: 200 });
+        rpc.mockResolvedValue({ data: { unexpected: true }, error: null, status: 200 });
 
         expect((await failure()).outcomeUnknown).toBe(true);
     });

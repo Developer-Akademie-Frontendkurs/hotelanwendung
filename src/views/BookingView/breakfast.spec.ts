@@ -12,7 +12,7 @@ describe('getBreakfastAmountCents (E47, E48)', () => {
     });
 
     it('lässt Kinder ohne eigenen Preis wie Erwachsene zahlen', () => {
-        const ohneKinderpreis = buildBreakfastService({ id: 'x', name: 'Frühstück', description: null, amount_cents: 1700, child_amount_cents: null, currency: 'EUR' });
-        expect(ohneKinderpreis?.childUnitAmountCents).toBe(1700);
+        const withoutChildPrice = buildBreakfastService({ id: 'x', name: 'Frühstück', description: null, amount_cents: 1700, child_amount_cents: null, currency: 'EUR' });
+        expect(withoutChildPrice?.childUnitAmountCents).toBe(1700);
     });
 });

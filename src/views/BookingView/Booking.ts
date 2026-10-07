@@ -17,7 +17,7 @@ import {
     getCountryLabel,
     getInvalidFields,
     isCountryCode,
-    toOptional,
+    emptyToNull,
     type CountryCode,
     type CustomerDetails,
     type InvalidField,
@@ -230,19 +230,19 @@ const BILLING_SAMPLE: AddressSample = { street: 'Ringstraße', houseNumber: '5',
 
 /** Welches Formularfeld zu welchem Eintrag aus `getInvalidFields()` gehört. */
 const FIELD_NAMES: Record<InvalidField, string> = {
-    'customer.firstName': 'vorname',
-    'customer.lastName': 'nachname',
+    'customer.firstName': 'first-name',
+    'customer.lastName': 'last-name',
     'customer.email': 'email',
-    'residence.street': 'strasse',
-    'residence.houseNumber': 'hausnummer',
-    'residence.postalCode': 'plz',
-    'residence.city': 'ort',
-    'residence.countryCode': 'land',
-    'billing.street': 'rechnung-strasse',
-    'billing.houseNumber': 'rechnung-hausnummer',
-    'billing.postalCode': 'rechnung-plz',
-    'billing.city': 'rechnung-ort',
-    'billing.countryCode': 'rechnung-land',
+    'residence.street': 'street',
+    'residence.houseNumber': 'house-number',
+    'residence.postalCode': 'postal-code',
+    'residence.city': 'city',
+    'residence.countryCode': 'country',
+    'billing.street': 'billing-street',
+    'billing.houseNumber': 'billing-house-number',
+    'billing.postalCode': 'billing-postal-code',
+    'billing.city': 'billing-city',
+    'billing.countryCode': 'billing-country',
 };
 
 export class BookingView extends AbstractView {
@@ -331,7 +331,7 @@ export class BookingView extends AbstractView {
         this.calendarEl = document.getElementById('booking-calendar');
         if (!this.calendarEl) return;
         this.calendarEl.addEventListener('click', (event: MouseEvent): void => {
-            this.handleClick(event);
+            this.handleCalendarClick(event);
         });
         this.renderCalendar();
     }
@@ -444,7 +444,7 @@ export class BookingView extends AbstractView {
                     <div class="flex flex-col gap-8 768:gap-11">
                         ${this.rooms.map((room: RoomCard): string => this.getRoomCardHtml(room)).join('')}
                     </div>
-                    <p data-capacity-notice role="status" aria-live="polite" class="${this.getCapacityText() === '' ? 'hidden' : ''} mt-8 768:mt-11 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-4 py-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">${escapeHtml(this.getCapacityText())}</p>
+                    <p data-capacity-notice role="status" aria-live="polite" class="${this.getMissingBedsNotice() === '' ? 'hidden' : ''} mt-8 768:mt-11 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-4 py-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">${escapeHtml(this.getMissingBedsNotice())}</p>
                     ${this.getServicesSectionHtml()}
                 `;
         }
@@ -685,14 +685,14 @@ export class BookingView extends AbstractView {
 
         const perAdult = formatPrice(service.unitAmountCents, service.currency);
         const perChild = formatPrice(service.childUnitAmountCents, service.currency);
-        const preise = `${perAdult} pro Erwachsenem, ${perChild} pro Kind und Nacht`;
+        const priceText = `${perAdult} pro Erwachsenem, ${perChild} pro Kind und Nacht`;
 
         const nights = this.getNights();
-        if (nights === undefined || !bookingState.getBreakfast()) return preise;
+        if (nights === undefined || !bookingState.getBreakfast()) return priceText;
 
         const occupancy = { adults: this.guests.adults ?? 0, children: this.guests.children ?? 0 };
         const amount = getBreakfastAmountCents(service, occupancy, nights);
-        return `+ ${formatPrice(amount, service.currency)} · ${preise}`;
+        return `+ ${formatPrice(amount, service.currency)} · ${priceText}`;
     }
 
     /** Dasselbe für eine Leistung je Vorgang: Einheit vor der Wahl, Aufschlag danach. */
@@ -703,16 +703,16 @@ export class BookingView extends AbstractView {
         if (service.code === CHILD_BED) {
             if ((this.guests.children ?? 0) === 0) return 'Nur mit Kind buchbar';
             const max = getServiceMax(service, this.getServiceContext());
-            const grenze = max > 1 ? `bis zu ${max.toString()}, 1 je Zimmer` : '1 je Zimmer';
-            return `${unitPrice} · ${grenze}`;
+            const limitText = max > 1 ? `bis zu ${max.toString()}, 1 je Zimmer` : '1 je Zimmer';
+            return `${unitPrice} · ${limitText}`;
         }
 
-        const einheit = service.chargeBasis === 'per_night' ? `${unitPrice} pro Nacht` : service.unitAmountCents === 0 ? unitPrice : `${unitPrice} einmalig`;
+        const unitPriceText = service.chargeBasis === 'per_night' ? `${unitPrice} pro Nacht` : service.unitAmountCents === 0 ? unitPrice : `${unitPrice} einmalig`;
         const nights = this.getNights();
-        if (quantity === 0 || nights === undefined || service.unitAmountCents === 0) return einheit;
+        if (quantity === 0 || nights === undefined || service.unitAmountCents === 0) return unitPriceText;
 
         const amount = formatPrice(getServiceAmountCents(service, quantity, nights), service.currency);
-        return service.chargeBasis === 'per_night' ? `+ ${amount} für ${formatNights(nights)} · ${einheit}` : `+ ${amount}`;
+        return service.chargeBasis === 'per_night' ? `+ ${amount} für ${formatNights(nights)} · ${unitPriceText}` : `+ ${amount}`;
     }
 
     /**
@@ -721,7 +721,7 @@ export class BookingView extends AbstractView {
      * Kein Fehler, sondern der nächste Schritt: Wer zwei Zimmer braucht, wählt erst eines
      * und dann das zweite – dazwischen soll dort stehen, was noch fehlt.
      */
-    private getCapacityText(): string {
+    private getMissingBedsNotice(): string {
         const adults = this.guests.adults;
         const quantities = bookingState.getRoomQuantities();
         if (adults === null || getTotalRooms(quantities) === 0) return '';
@@ -873,7 +873,7 @@ export class BookingView extends AbstractView {
 
         const capacityEl = roomsEl.querySelector<HTMLElement>('[data-capacity-notice]');
         if (capacityEl) {
-            const text = this.getCapacityText();
+            const text = this.getMissingBedsNotice();
             capacityEl.textContent = text;
             capacityEl.classList.toggle('hidden', text === '');
         }
@@ -889,7 +889,7 @@ export class BookingView extends AbstractView {
     private updateServicesUi(roomsEl: HTMLElement, totalRooms: number): void {
         roomsEl.querySelector<HTMLElement>('[data-services-hint]')?.classList.toggle('hidden', totalRooms > 0);
 
-        const markRow = (code: string, selected: boolean, label: string): void => {
+        const updateServiceRow = (code: string, selected: boolean, label: string): void => {
             const row = roomsEl.querySelector<HTMLElement>(`[data-service-row="${code}"]`);
             row?.classList.toggle('ring-2', selected);
             row?.classList.toggle('ring-purple-haze', selected);
@@ -902,7 +902,7 @@ export class BookingView extends AbstractView {
             breakfastEl.checked = bookingState.getBreakfast();
             breakfastEl.disabled = totalRooms === 0;
         }
-        markRow('BREAKFAST', bookingState.getBreakfast(), this.getBreakfastLabel());
+        updateServiceRow('BREAKFAST', bookingState.getBreakfast(), this.getBreakfastLabel());
 
         const context = this.getServiceContext();
         this.extraServices.forEach((service: ExtraService): void => {
@@ -922,7 +922,7 @@ export class BookingView extends AbstractView {
             const plus = roomsEl.querySelector<HTMLButtonElement>(`[data-service-step="1"][data-service-code="${service.code}"]`);
             if (plus) plus.disabled = quantity >= max;
 
-            markRow(service.code, quantity > 0, this.getServiceLabel(service));
+            updateServiceRow(service.code, quantity > 0, this.getServiceLabel(service));
         });
     }
 
@@ -975,12 +975,12 @@ export class BookingView extends AbstractView {
                 </div>
                 <form id="booking-customer" novalidate class="flex flex-col gap-8 rounded-[0.625rem] border-[0.5px] border-purple-haze bg-[#fbfbfb] px-5 py-4">
                     <div class="flex flex-col gap-3">
-                        ${this.getBillingFieldHtml('vorname', 'Vorname', 'Maria', 'given-name', 'text', 'w-full')}
-                        ${this.getBillingFieldHtml('nachname', 'Nachname', 'Huber', 'family-name', 'text', 'w-full')}
+                        ${this.getInputFieldHtml('first-name', 'Vorname', 'Maria', 'given-name', 'text', 'w-full')}
+                        ${this.getInputFieldHtml('last-name', 'Nachname', 'Huber', 'family-name', 'text', 'w-full')}
                     </div>
                     <div class="flex flex-col gap-3">
-                        ${this.getBillingFieldHtml('email', 'E-Mail', 'maria.huber@beispiel.at', 'email', 'email', 'w-full')}
-                        ${this.getBillingFieldHtml('telefon', 'Telefon (optional)', '+43 660 1234567', 'tel', 'tel', 'w-full', false)}
+                        ${this.getInputFieldHtml('email', 'E-Mail', 'maria.huber@beispiel.at', 'email', 'email', 'w-full')}
+                        ${this.getInputFieldHtml('phone', 'Telefon (optional)', '+43 660 1234567', 'tel', 'tel', 'w-full', false)}
                     </div>
                     <fieldset class="flex flex-col gap-3">
                         <legend class="mb-3 font-playfair-display font-medium text-20 leading-tight text-purple-haze-dark">Wohnadresse</legend>
@@ -988,14 +988,14 @@ export class BookingView extends AbstractView {
                     </fieldset>
 
                     <label class="flex items-center gap-3 cursor-pointer font-antic-didone text-16 leading-tight text-purple-haze-dark">
-                        <input type="checkbox" name="rechnung-abweichend" data-billing-toggle class="w-5 h-5 shrink-0 accent-purple-haze cursor-pointer" />
+                        <input type="checkbox" name="billing-differs" data-billing-toggle class="w-5 h-5 shrink-0 accent-purple-haze cursor-pointer" />
                         Rechnungsadresse weicht von der Wohnadresse ab
                     </label>
 
                     <fieldset id="booking-billing" hidden class="flex flex-col gap-3">
                         <legend class="mb-3 font-playfair-display font-medium text-20 leading-tight text-purple-haze-dark">Rechnungsadresse</legend>
-                        ${this.getBillingFieldHtml('rechnung-firma', 'Firma / z. Hd. (optional)', 'Beispiel GmbH', 'billing organization', 'text', 'w-full', false)}
-                        ${this.getAddressFieldsHtml('rechnung-', 'billing ', BILLING_SAMPLE)}
+                        ${this.getInputFieldHtml('billing-company', 'Firma / z. Hd. (optional)', 'Beispiel GmbH', 'billing organization', 'text', 'w-full', false)}
+                        ${this.getAddressFieldsHtml('billing-', 'billing ', BILLING_SAMPLE)}
                     </fieldset>
                 </form>
             </div>
@@ -1008,13 +1008,13 @@ export class BookingView extends AbstractView {
      */
     private getAddressFieldsHtml(prefix: string, autocompleteSection: string, sample: AddressSample): string {
         return /*html*/ `
-            ${this.getBillingFieldHtml(`${prefix}strasse`, 'Straße', sample.street, `${autocompleteSection}address-line1`, 'text', 'w-full')}
+            ${this.getInputFieldHtml(`${prefix}street`, 'Straße', sample.street, `${autocompleteSection}address-line1`, 'text', 'w-full')}
             <div class="flex gap-3 576:gap-8">
-                ${this.getBillingFieldHtml(`${prefix}hausnummer`, 'Hausnummer', sample.houseNumber, `${autocompleteSection}address-line2`, 'text', 'flex-1 min-w-0 576:w-46 576:flex-none')}
-                ${this.getBillingFieldHtml(`${prefix}plz`, 'PLZ', sample.postalCode, `${autocompleteSection}postal-code`, 'text', 'w-20 shrink-0 576:w-[4.3125rem]')}
-                ${this.getBillingFieldHtml(`${prefix}ort`, 'Ort', sample.city, `${autocompleteSection}address-level2`, 'text', 'flex-1 min-w-0')}
+                ${this.getInputFieldHtml(`${prefix}house-number`, 'Hausnummer', sample.houseNumber, `${autocompleteSection}address-line2`, 'text', 'flex-1 min-w-0 576:w-46 576:flex-none')}
+                ${this.getInputFieldHtml(`${prefix}postal-code`, 'PLZ', sample.postalCode, `${autocompleteSection}postal-code`, 'text', 'w-20 shrink-0 576:w-[4.3125rem]')}
+                ${this.getInputFieldHtml(`${prefix}city`, 'Ort', sample.city, `${autocompleteSection}address-level2`, 'text', 'flex-1 min-w-0')}
             </div>
-            ${this.getCountryFieldHtml(`${prefix}land`, `${autocompleteSection}country`)}
+            ${this.getCountryFieldHtml(`${prefix}country`, `${autocompleteSection}country`)}
         `;
     }
 
@@ -1023,7 +1023,7 @@ export class BookingView extends AbstractView {
      * leer, und der Gast muss nichts löschen. Grau statt in der Schriftfarbe der Eingabe,
      * damit ein leeres Feld nicht wie ein ausgefülltes aussieht.
      */
-    private getBillingFieldHtml(id: string, label: string, sample: string, autocomplete: string, type: string, widthClass: string, required = true): string {
+    private getInputFieldHtml(id: string, label: string, sample: string, autocomplete: string, type: string, widthClass: string, required = true): string {
         return /*html*/ `
             <div class="flex flex-col ${widthClass}">
                 <label for="booking-${id}" class="font-playfair-display font-medium text-16 leading-tight text-purple-haze">${label}</label>
@@ -1541,7 +1541,7 @@ export class BookingView extends AbstractView {
         return cells;
     }
 
-    private handleClick(event: MouseEvent): void {
+    private handleCalendarClick(event: MouseEvent): void {
         const target = event.target as HTMLElement;
 
         const actionEl = target.closest<HTMLElement>('[data-action]');
@@ -1691,9 +1691,9 @@ export class BookingView extends AbstractView {
             case 'ausgebucht':
             case 'kein_preis':
             case 'zu_klein': {
-                const what = room ?? 'Ihre Auswahl';
-                const when = date === null ? '' : ` für die Nacht vom ${date}`;
-                return `${what} ist${when} leider nicht mehr buchbar. Wir haben die Verfügbarkeit aktualisiert – bitte prüfen Sie Ihre Auswahl.`;
+                const roomLabel = room ?? 'Ihre Auswahl';
+                const nightLabel = date === null ? '' : ` für die Nacht vom ${date}`;
+                return `${roomLabel} ist${nightLabel} leider nicht mehr buchbar. Wir haben die Verfügbarkeit aktualisiert – bitte prüfen Sie Ihre Auswahl.`;
             }
             case 'vergangenheit':
             case 'ausserhalb_horizont':
@@ -1772,7 +1772,7 @@ export class BookingView extends AbstractView {
         if (draft.adults === null) return 'Bitte wählen Sie die Anzahl der Gäste.';
         if (draft.positions.length === 0) return 'Bitte wählen Sie mindestens ein Zimmer.';
 
-        const capacity = this.getCapacityText();
+        const capacity = this.getMissingBedsNotice();
         if (capacity !== '') return capacity;
 
         return invalid.length === 0 ? null : FORM_INCOMPLETE;
@@ -1790,7 +1790,7 @@ export class BookingView extends AbstractView {
         const draft = this.getBookingDraft();
         const steps: BookingStep[] = [];
         if (draft.checkIn !== null && draft.checkOut !== null && draft.adults !== null) steps.push(1);
-        if (draft.positions.length > 0 && this.getCapacityText() === '') steps.push(2);
+        if (draft.positions.length > 0 && this.getMissingBedsNotice() === '') steps.push(2);
         if (getInvalidFields(draft).length === 0) steps.push(3);
 
         bookingState.setCompletedSteps(steps);
@@ -1868,28 +1868,28 @@ export class BookingView extends AbstractView {
 
         return {
             customer: {
-                firstName: text('vorname').trim(),
-                lastName: text('nachname').trim(),
+                firstName: text('first-name').trim(),
+                lastName: text('last-name').trim(),
                 email: text('email').trim(),
-                phone: toOptional(text('telefon')),
+                phone: emptyToNull(text('phone')),
             },
             residence: {
-                street: text('strasse').trim(),
-                houseNumber: text('hausnummer').trim(),
-                postalCode: text('plz').trim(),
-                city: text('ort').trim(),
-                countryCode: country('land'),
+                street: text('street').trim(),
+                houseNumber: text('house-number').trim(),
+                postalCode: text('postal-code').trim(),
+                city: text('city').trim(),
+                countryCode: country('country'),
             },
             billing:
-                data.get('rechnung-abweichend') === null
+                data.get('billing-differs') === null
                     ? null
                     : {
-                          company: toOptional(text('rechnung-firma')),
-                          street: text('rechnung-strasse').trim(),
-                          houseNumber: text('rechnung-hausnummer').trim(),
-                          postalCode: text('rechnung-plz').trim(),
-                          city: text('rechnung-ort').trim(),
-                          countryCode: country('rechnung-land'),
+                          company: emptyToNull(text('billing-company')),
+                          street: text('billing-street').trim(),
+                          houseNumber: text('billing-house-number').trim(),
+                          postalCode: text('billing-postal-code').trim(),
+                          city: text('billing-city').trim(),
+                          countryCode: country('billing-country'),
                       },
         };
     }

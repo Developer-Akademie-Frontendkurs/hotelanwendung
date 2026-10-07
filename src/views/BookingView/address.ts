@@ -105,7 +105,7 @@ export function formatAddressLines(address: Address | BillingAddress): string[] 
 }
 
 /** Leerer Text wird zu `null` – für die optionalen Felder. */
-export function toOptional(value: string): string | null {
+export function emptyToNull(value: string): string | null {
     const trimmed = value.trim();
     return trimmed === '' ? null : trimmed;
 }
