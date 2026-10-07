@@ -64,8 +64,8 @@ Die Reihenfolge: zuerst Bugs, dann schnelle Aufräumarbeiten, dann Struktur, dan
 - [x] C1: `ServiceRow` existiert doppelt und unterschiedlich (`breakfast.ts:11`, `services.ts:18`). Die Store-Typen (`RoomQuantities`, `ServiceQuantities`) gehören nach `domain/booking.types.ts`, damit die Fachlogik keine Typen mehr aus dem Store importiert. Umgesetzt in `src/shared/types/booking.types.ts` (statt `domain/`), weil Store und Fachlogik beide von dort importieren.
 - [x] C2: `Booking`, `BookingPosition` und `BookingService` in `Booking.ts:44-68` doppeln `BookingRequest`. `BookingRequestAddress` doppelt `Address` mit `CountryCode`. Die Typen daraus ableiten, statt sie zu kopieren.
 - [x] C3: Einen Union-Typ `RejectionCode` statt `code: string` einführen und eine gemeinsame Map Code → Text anlegen. Sie ersetzt die zwei Switches `getRejectionMessage` und `formatUnavailableReason`.
-- [ ] C4: `formatRoomsFree` gibt es doppelt mit unterschiedlichem Text (`roomQuantity.ts:138`, `Booking.ts:2036`). Zusammenführen.
-- [ ] C5: Ein gemeinsames `getStepButtonHtml()` für `getServiceStepHtml` (`:637`) und `getQuantityStepHtml` (`:738`) anlegen.
+- [x] C4: `formatRoomsFree` gibt es doppelt mit unterschiedlichem Text (`roomQuantity.ts:138`, `Booking.ts:2036`). Zusammenführen. Umgesetzt: beide in `roomQuantity.ts` mit Namen, die ihren Zweck sagen (`formatRoomsLeftClause` für Sätze, `formatRoomsFreeLabel` für die Karte); Texte unverändert.
+- [x] C5: Ein gemeinsames `getStepButtonHtml()` für `getServiceStepHtml` (`:637`) und `getQuantityStepHtml` (`:738`) anlegen.
 
 ### D. Trennen von Design, Datenfluss und Logik
 

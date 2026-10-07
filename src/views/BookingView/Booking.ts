@@ -8,7 +8,17 @@ import { escapeHtml } from '../../shared/ui/html';
 import type { BookingPosition, BookingRequest, BookingServiceSelection, CustomerDetails, ServiceRow } from '../../shared/types/booking.types';
 import logo from '../../assets/img/logo-small.svg';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
-import { clampQuantity, getLimitMessage, getMissingBeds, getRoomLimit, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
+import {
+    clampQuantity,
+    getLimitMessage,
+    getMissingBeds,
+    getRoomLimit,
+    getRoomMax,
+    getTotalRooms,
+    normalizeQuantityInput,
+    reconcileQuantities,
+    formatRoomsFreeLabel,
+} from './roomQuantity';
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
 import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService } from './services';
 import { COUNTRIES, DEFAULT_COUNTRY, formatAddressLines, getCountryLabel, getInvalidFields, isCountryCode, emptyToNull, type CountryCode, type InvalidField } from './address';
@@ -44,6 +54,9 @@ type BookingDraft = Omit<Booking, 'checkIn' | 'checkOut' | 'nights' | 'adults'> 
 };
 
 type GuestField = 'adults' | 'children';
+
+/** Richtung eines Schritt-Knopfs im Mengenwähler. */
+type Step = -1 | 1;
 
 type GuestOption = {
     value: number;
@@ -505,7 +518,7 @@ export class BookingView extends AbstractView {
                 <div class="flex items-center justify-between gap-4">
                     <label for="${inputId}" class="font-playfair-display font-medium text-16 768:text-18 leading-tight text-purple-haze-dark">Anzahl Zimmer</label>
                     <div class="flex items-center gap-2">
-                        ${this.getQuantityStepHtml(room, -1, `Ein Zimmer weniger – ${room.name}`, '&minus;', quantity === 0)}
+                        ${this.getQuantityStepHtml(room, -1, quantity === 0)}
                         <input
                             id="${inputId}"
                             data-room-quantity="${escapeHtml(room.roomTypeId)}"
@@ -517,7 +530,7 @@ export class BookingView extends AbstractView {
                             value="${quantity.toString()}"
                             class="booking__quantity w-16 456:w-20 appearance-none rounded-xl border border-purple-haze bg-white px-2 py-2 font-antic-didone text-18 456:text-24 leading-tight text-center text-purple-haze-dark transition-colors hover:bg-purple-haze-light focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
                         />
-                        ${this.getQuantityStepHtml(room, 1, `Ein Zimmer mehr – ${room.name}`, '+', quantity >= (availability.roomsFree ?? 0))}
+                        ${this.getQuantityStepHtml(room, 1, quantity >= (availability.roomsFree ?? 0))}
                     </div>
                 </div>
                 <p data-room-quantity-notice="${escapeHtml(room.roomTypeId)}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze text-right"></p>
@@ -604,9 +617,9 @@ export class BookingView extends AbstractView {
             service.chargeBasis === 'per_unit'
                 ? /*html*/ `
                     <div class="shrink-0 flex items-center gap-2">
-                        ${this.getServiceStepHtml(service, -1, '&minus;', quantity === 0)}
+                        ${this.getServiceStepHtml(service, -1, quantity === 0)}
                         <output id="${escapeHtml(inputId)}" data-service-quantity="${code}" aria-live="polite" class="w-8 text-center font-antic-didone text-18 456:text-24 leading-tight text-purple-haze-dark">${quantity.toString()}</output>
-                        ${this.getServiceStepHtml(service, 1, '+', quantity >= max)}
+                        ${this.getServiceStepHtml(service, 1, quantity >= max)}
                     </div>
                 `
                 : this.getCheckboxHtml(inputId, `data-service-code="${code}"`, quantity > 0, max === 0);
@@ -614,18 +627,9 @@ export class BookingView extends AbstractView {
         return this.getServiceRowShellHtml(service.code, inputId, service.name, service.description, this.getServiceLabel(service), control, quantity > 0);
     }
 
-    private getServiceStepHtml(service: ExtraService, step: number, glyph: string, disabled: boolean): string {
+    private getServiceStepHtml(service: ExtraService, step: Step, disabled: boolean): string {
         const ariaLabel = `${service.name}: ${step > 0 ? 'eines mehr' : 'eines weniger'}`;
-        return /*html*/ `
-            <button
-                type="button"
-                data-service-step="${step.toString()}"
-                data-service-code="${escapeHtml(service.code)}"
-                aria-label="${escapeHtml(ariaLabel)}"
-                ${disabled ? 'disabled' : ''}
-                class="shrink-0 flex items-center justify-center w-9 h-9 456:w-10 456:h-10 rounded-full bg-purple-haze font-antic-didone text-24 leading-none text-white cursor-pointer transition-colors hover:bg-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-haze"
-            >${glyph}</button>
-        `;
+        return getStepButtonHtml(step, { 'data-service-step': step.toString(), 'data-service-code': service.code }, ariaLabel, disabled);
     }
 
     /**
@@ -724,17 +728,9 @@ export class BookingView extends AbstractView {
      * Regel, und ein ausgegrauter Knopf erklärt sie nicht. Der Klick löst stattdessen den
      * Hinweis aus (Q10).
      */
-    private getQuantityStepHtml(room: RoomCard, step: number, ariaLabel: string, glyph: string, disabled: boolean): string {
-        return /*html*/ `
-            <button
-                type="button"
-                data-room-step="${step.toString()}"
-                data-room-type="${escapeHtml(room.roomTypeId)}"
-                aria-label="${escapeHtml(ariaLabel)}"
-                ${disabled ? 'disabled' : ''}
-                class="shrink-0 flex items-center justify-center w-9 h-9 456:w-10 456:h-10 rounded-full bg-purple-haze font-antic-didone text-24 leading-none text-white cursor-pointer transition-colors hover:bg-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-haze"
-            >${glyph}</button>
-        `;
+    private getQuantityStepHtml(room: RoomCard, step: Step, disabled: boolean): string {
+        const ariaLabel = `${step > 0 ? 'Ein Zimmer mehr' : 'Ein Zimmer weniger'} – ${room.name}`;
+        return getStepButtonHtml(step, { 'data-room-step': step.toString(), 'data-room-type': room.roomTypeId }, ariaLabel, disabled);
     }
 
     private handleRoomsClick(event: MouseEvent): void {
@@ -1974,7 +1970,7 @@ function getAvailabilityHtml(availability: RoomCardAvailability | null): string 
         return /*html*/ `<p class="font-antic-didone text-16 text-purple-haze">${formatUnavailableReason(availability.unavailableReason)}</p>`;
     }
 
-    const roomsFree = availability.roomsFree === null ? '' : `${formatRoomsFree(availability.roomsFree)} · `;
+    const roomsFree = availability.roomsFree === null ? '' : `${formatRoomsFreeLabel(availability.roomsFree)} · `;
     return /*html*/ `<p class="font-antic-didone text-16 text-purple-haze-dark/70">${roomsFree}${formatNights(availability.nights)}</p>`;
 }
 
@@ -2000,6 +1996,26 @@ function formatPrice(cents: number, currency: string): string {
     return symbol === undefined ? `${amount} ${currency}` : `${amount}${symbol}`;
 }
 
+/**
+ * Runder `−`/`+`-Knopf der Mengenwähler – für Zimmer und Kinderbett derselbe.
+ *
+ * Welche Menge er ändert, sagen allein die `data-*`-Attribute; ihre Werte werden hier escapt.
+ */
+function getStepButtonHtml(step: Step, dataAttributes: Readonly<Record<string, string>>, ariaLabel: string, disabled: boolean): string {
+    const attributes = Object.entries(dataAttributes)
+        .map(([name, value]: [string, string]): string => `${name}="${escapeHtml(value)}"`)
+        .join(' ');
+    return /*html*/ `
+        <button
+            type="button"
+            ${attributes}
+            aria-label="${escapeHtml(ariaLabel)}"
+            ${disabled ? 'disabled' : ''}
+            class="shrink-0 flex items-center justify-center w-9 h-9 456:w-10 456:h-10 rounded-full bg-purple-haze font-antic-didone text-24 leading-none text-white cursor-pointer transition-colors hover:bg-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-haze"
+        >${step > 0 ? '+' : '&minus;'}</button>
+    `;
+}
+
 /** Nächte zwischen An- und Abreise – `null`, solange der Zeitraum nicht vollständig ist. */
 function countNights(checkIn: Date | null, checkOut: Date | null): number | null {
     if (checkIn === null || checkOut === null) return null;
@@ -2023,10 +2039,6 @@ function formatGuests(adults: number, children: number): string {
 
 function formatNights(nights: number): string {
     return nights === 1 ? '1 Nacht' : `${nights.toString()} Nächte`;
-}
-
-function formatRoomsFree(roomsFree: number): string {
-    return roomsFree === 1 ? 'noch 1 Zimmer frei' : `noch ${roomsFree.toString()} Zimmer frei`;
 }
 
 function buildAdultOptions(): readonly GuestOption[] {

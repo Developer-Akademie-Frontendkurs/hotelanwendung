@@ -86,7 +86,7 @@ export function getLimitMessage(limit: QuantityLimit, roomsFree: number | null, 
         case 'roomsFree':
             return roomsFree === null || roomsFree === 0
                 ? 'Für diesen Zeitraum sind keine Zimmer dieser Kategorie frei.'
-                : `Für diesen Zeitraum ${formatRoomsFree(roomsFree)} frei.`;
+                : `Für diesen Zeitraum ${formatRoomsLeftClause(roomsFree)} frei.`;
     }
 }
 
@@ -126,7 +126,7 @@ export function reconcileQuantities(quantities: RoomQuantities, rooms: readonly 
         if (clamped.value < wanted) {
             reasons.push(
                 clamped.limitedBy === 'roomsFree'
-                    ? `Von ${room.name} ${formatRoomsFree(clamped.value)} frei.`
+                    ? `Von ${room.name} ${formatRoomsLeftClause(clamped.value)} frei.`
                     : `${room.name} wurde auf ${clamped.value.toString()} Zimmer verringert.`,
             );
         }
@@ -135,8 +135,17 @@ export function reconcileQuantities(quantities: RoomQuantities, rooms: readonly 
     return { quantities: next, notice: reasons.length === 0 ? null : `Ihre Auswahl wurde angepasst: ${reasons.join(' ')}` };
 }
 
-function formatRoomsFree(roomsFree: number): string {
+/**
+ * Freie Zimmer als Satzteil mit Verb – für Hinweise wie „Für diesen Zeitraum sind nur noch 2 Zimmer frei."
+ * Das Verb steht mit drin, weil es an der Zahl hängt (ist/sind).
+ */
+function formatRoomsLeftClause(roomsFree: number): string {
     return roomsFree === 1 ? 'ist nur noch 1 Zimmer' : `sind nur noch ${roomsFree.toString()} Zimmer`;
+}
+
+/** Freie Zimmer als kurze Angabe für die Zimmerkarte, z. B. „noch 2 Zimmer frei · 3 Nächte". */
+export function formatRoomsFreeLabel(roomsFree: number): string {
+    return roomsFree === 1 ? 'noch 1 Zimmer frei' : `noch ${roomsFree.toString()} Zimmer frei`;
 }
 
 /**

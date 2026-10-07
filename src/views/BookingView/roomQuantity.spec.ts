@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RoomCard } from './room.interface';
-import { clampQuantity, getMissingBeds, getRoomLimit, getRoomMax, MAX_ROOMS_PER_BOOKING, reconcileQuantities } from './roomQuantity';
+import { clampQuantity, getMissingBeds, getRoomLimit, getRoomMax, MAX_ROOMS_PER_BOOKING, reconcileQuantities, formatRoomsFreeLabel } from './roomQuantity';
 
 function card(roomTypeId: string, maxOccupancy: number, roomsFree: number | null = 5): RoomCard {
     return {
@@ -65,5 +65,12 @@ describe('getMissingBeds (E48)', () => {
 
     it('wird nie negativ', () => {
         expect(getMissingBeds({ suite: 2 }, rooms, 2)).toBe(0);
+    });
+});
+
+describe('formatRoomsFreeLabel', () => {
+    it('unterscheidet ein und mehrere Zimmer', () => {
+        expect(formatRoomsFreeLabel(1)).toBe('noch 1 Zimmer frei');
+        expect(formatRoomsFreeLabel(3)).toBe('noch 3 Zimmer frei');
     });
 });
