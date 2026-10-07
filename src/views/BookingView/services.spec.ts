@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService, type ServiceRow } from './services';
+import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService, type ServiceRow } from './services';
 
 function row(code: string, charge_basis: string, amount_cents: number, sort_order: number): ServiceRow {
     return { id: code, code, name: code, description: null, charge_basis, amount_cents, child_amount_cents: null, currency: 'EUR', sort_order };
 }
 
-const rows = [row('MASSAGE', 'per_stay', 7500, 60), row('BREAKFAST', 'per_person_night', 1700, 10), row('GARAGE', 'per_night', 1500, 30), row(CHILD_BED, 'per_unit', 0, 20)];
+const rows = [row('MASSAGE', 'per_stay', 7500, 60), row(BREAKFAST, 'per_person_night', 1700, 10), row('GARAGE', 'per_night', 1500, 30), row(CHILD_BED, 'per_unit', 0, 20)];
 const services = buildExtraServices(rows);
 
 function byCode(code: string): ExtraService {

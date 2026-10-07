@@ -11,6 +11,9 @@ import type { ServiceQuantities } from '../../shared/state/bookingState';
 /** Der Code des Kinderbetts – die einzige Leistung mit Menge (E49). */
 export const CHILD_BED = 'CHILD_BED';
 
+/** Der Code des Frühstücks in `services` – es läuft je Person und Nacht, nicht als Leistung je Vorgang. */
+export const BREAKFAST = 'BREAKFAST';
+
 /** Bezugsgröße der Leistungen je Vorgang. `per_person_night` gehört dem Frühstück. */
 export type ExtraChargeBasis = 'per_night' | 'per_stay' | 'per_unit';
 

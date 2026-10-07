@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BreakfastService } from './breakfast';
 import type { RoomCard } from './room.interface';
-import type { ExtraService } from './services';
+import { BREAKFAST, type ExtraService } from './services';
 import { buildOrderLines, getOrderTotalCents, type OrderInput } from './summary';
 
 function room(roomTypeId: string, amountCents: number | null): RoomCard {
@@ -66,7 +66,7 @@ describe('buildOrderLines', () => {
         const lines = buildOrderLines(input({ nights: null, withBreakfast: true, serviceQuantities: { GARAGE: 1, MASSAGE: 1 }, rooms: [room('suite', null)] }));
         expect(lines.map((line) => [line.id, line.amountCents])).toEqual([
             ['suite', null],
-            ['BREAKFAST', null],
+            [BREAKFAST, null],
             ['GARAGE', null],
             ['MASSAGE', 7500],
         ]);

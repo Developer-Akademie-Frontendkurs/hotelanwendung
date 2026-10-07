@@ -50,7 +50,7 @@ Die Reihenfolge: zuerst Bugs, dann schnelle Aufräumarbeiten, dann Struktur, dan
   - `getBillingFieldHtml` → `getInputFieldHtml`,
   - `handleClick` → `handleCalendarClick`,
   - gemischte deutsch-englische Bezeichner wie `preise`, `grenze`, `einheit` vereinheitlichen.
-- [ ] B4: Magic Strings durch Konstanten ersetzen: `export const BREAKFAST = 'BREAKFAST'`, analog zu `CHILD_BED`; den `'EUR'`-Fallback zentral ablegen.
+- [x] B4: Magic Strings durch Konstanten ersetzen: `export const BREAKFAST = 'BREAKFAST'`, analog zu `CHILD_BED`; den `'EUR'`-Fallback zentral ablegen.
 - [ ] B5: Freie Farbwerte (`#ffc571`, `#f6f2f2`, `#fbfbfb`, `#74687e`) als Tokens in den `@theme`-Block von `style.css` aufnehmen.
 - [ ] B6: `as`-Casts auf `event.target` durch `instanceof`-Guards ersetzen:
   - `Booking.ts:752, 1260, 1512, 1786, 1795`,

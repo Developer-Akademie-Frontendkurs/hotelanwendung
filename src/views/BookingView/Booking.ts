@@ -9,7 +9,7 @@ import logo from '../../assets/img/logo-small.svg';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
 import { clampQuantity, getLimitMessage, getMissingBeds, getRoomLimit, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
-import { buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService, type ServiceRow } from './services';
+import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService, type ServiceRow } from './services';
 import {
     COUNTRIES,
     DEFAULT_COUNTRY,
@@ -22,7 +22,7 @@ import {
     type CustomerDetails,
     type InvalidField,
 } from './address';
-import { buildOrderLines, getOrderTotalCents, type OrderLine } from './summary';
+import { buildOrderLines, DEFAULT_CURRENCY, getOrderTotalCents, type OrderLine } from './summary';
 import type { HotelRow } from './hotel.interface';
 import './booking.css';
 
@@ -617,7 +617,7 @@ export class BookingView extends AbstractView {
         const checked = bookingState.getBreakfast();
         const disabled = getTotalRooms(bookingState.getRoomQuantities()) === 0;
         const control = this.getCheckboxHtml('booking-breakfast', 'data-breakfast', checked, disabled);
-        return this.getServiceRowShellHtml('BREAKFAST', 'booking-breakfast', `${service.name} für alle Gäste`, service.description, this.getBreakfastLabel(), control, checked);
+        return this.getServiceRowShellHtml(BREAKFAST, 'booking-breakfast', `${service.name} für alle Gäste`, service.description, this.getBreakfastLabel(), control, checked);
     }
 
     private getServiceRowHtml(service: ExtraService): string {
@@ -902,7 +902,7 @@ export class BookingView extends AbstractView {
             breakfastEl.checked = bookingState.getBreakfast();
             breakfastEl.disabled = totalRooms === 0;
         }
-        updateServiceRow('BREAKFAST', bookingState.getBreakfast(), this.getBreakfastLabel());
+        updateServiceRow(BREAKFAST, bookingState.getBreakfast(), this.getBreakfastLabel());
 
         const context = this.getServiceContext();
         this.extraServices.forEach((service: ExtraService): void => {
@@ -1121,7 +1121,7 @@ export class BookingView extends AbstractView {
         const totalEl = this.summaryEl.querySelector<HTMLElement>('[data-summary-total]');
         if (totalEl) {
             const total = getOrderTotalCents(lines);
-            totalEl.textContent = total === null ? '–' : formatPrice(total, lines[0]?.currency ?? 'EUR');
+            totalEl.textContent = total === null ? '–' : formatPrice(total, lines[0]?.currency ?? DEFAULT_CURRENCY);
         }
     }
 
@@ -1370,7 +1370,7 @@ export class BookingView extends AbstractView {
 
             this.rooms = buildRoomCards(details.data, availability === null ? null : (availability.data as RoomAvailability[]));
             const serviceRows = services.data as ServiceRow[];
-            this.breakfastService = buildBreakfastService(serviceRows.find((row: ServiceRow): boolean => row.code === 'BREAKFAST') ?? null);
+            this.breakfastService = buildBreakfastService(serviceRows.find((row: ServiceRow): boolean => row.code === BREAKFAST) ?? null);
             this.extraServices = buildExtraServices(serviceRows);
 
             // Ein neues Suchergebnis kann gewählte Mengen unmöglich gemacht haben (V16.6).
@@ -1721,7 +1721,7 @@ export class BookingView extends AbstractView {
      */
     private showConfirmation(booking: Booking, created: CreatedBooking): void {
         const references = created.bookings.map((room: { bookingReference: string }): string => room.bookingReference);
-        const currency = created.bookings[0]?.currency ?? 'EUR';
+        const currency = created.bookings[0]?.currency ?? DEFAULT_CURRENCY;
         const stay = `${formatStayDate(parseISODate(booking.checkIn), '', null)} – ${formatStayDate(parseISODate(booking.checkOut), '', null)}`;
 
         openModal({
@@ -2012,6 +2012,9 @@ function pickImage(images: RoomTypeImage[]): RoomTypeImage | null {
     return [...images].sort((a: RoomTypeImage, b: RoomTypeImage): number => a.sort_order - b.sort_order)[0] ?? null;
 }
 
+/** Währungen mit eigenem Symbol – alle anderen erscheinen mit ihrem ISO-Code. */
+const CURRENCY_SYMBOLS: Readonly<Record<string, string>> = { EUR: '€' };
+
 /**
  * Zahl vor dem Symbol wie im Design ("732€") – `style: 'currency'` stellt das € bei de-AT voran.
  *
@@ -2021,7 +2024,8 @@ function pickImage(images: RoomTypeImage[]): RoomTypeImage | null {
 function formatPrice(cents: number, currency: string): string {
     const digits = cents % 100 === 0 ? 0 : 2;
     const amount = new Intl.NumberFormat('de-AT', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(cents / 100);
-    return currency === 'EUR' ? `${amount}€` : `${amount} ${currency}`;
+    const symbol = CURRENCY_SYMBOLS[currency];
+    return symbol === undefined ? `${amount} ${currency}` : `${amount}${symbol}`;
 }
 
 /**

@@ -9,7 +9,10 @@
 import type { RoomQuantities, ServiceQuantities } from '../../shared/state/bookingState';
 import { getBreakfastAmountCents, type BreakfastService, type Occupancy } from './breakfast';
 import type { RoomCard } from './room.interface';
-import { getServiceAmountCents, type ExtraService } from './services';
+import { BREAKFAST, getServiceAmountCents, type ExtraService } from './services';
+
+/** Rückfall, solange keine Zeile eine Währung mitbringt – das Hotel rechnet in Euro. */
+export const DEFAULT_CURRENCY = 'EUR';
 
 export type OrderLineKind = 'room' | 'breakfast' | 'service';
 
@@ -57,7 +60,7 @@ export function buildOrderLines(input: OrderInput): OrderLine[] {
             name: room.name,
             quantity,
             amountCents: perRoom === null ? null : quantity * perRoom,
-            currency: room.availability?.currency ?? 'EUR',
+            currency: room.availability?.currency ?? DEFAULT_CURRENCY,
         });
     }
 
@@ -65,7 +68,7 @@ export function buildOrderLines(input: OrderInput): OrderLine[] {
     if (breakfast !== null && input.withBreakfast) {
         lines.push({
             kind: 'breakfast',
-            id: 'BREAKFAST',
+            id: BREAKFAST,
             name: breakfast.name,
             quantity: input.occupancy.adults + input.occupancy.children,
             amountCents: input.nights === null ? null : getBreakfastAmountCents(breakfast, input.occupancy, input.nights),
