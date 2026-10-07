@@ -2,7 +2,7 @@
 
 # 008 – Branch `verbindung-ui-zu-datenbank`
 
-**Erster Commit:** 2026-09-09 · **Commits:** 14 · **Status:** offen
+**Erster Commit:** 2026-09-09 · **Commits:** 23 · **Status:** offen
 
 ## Ziel des Branches
 
@@ -25,22 +25,31 @@ Vertagt bleibt allein Phase 10 (Cloud-Deployment).
 
 ## Commits
 
-| Nr.                                                                                                           | Datum      | Beschreibung                                                                            |
-| ------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------- |
-| [001](008_2026-09-09_verbindung-ui-zu-datenbank/001_2026-09-09_umsetzungsplan-erstellt.md)                    | 2026-09-09 | Grilling-Runde 8: `E42`–`E46`, `V8`–`V17`, Phasen 7b/8/9/9b (reiner Doku-Commit)        |
-| [002](008_2026-09-09_verbindung-ui-zu-datenbank/002_2026-09-09_projekttagebuch-aktualisiert.md)               | 2026-09-09 | Projekttagebuch für die Branches 006–008 nachziehen (reiner Doku-Commit)                |
-| [003](008_2026-09-09_verbindung-ui-zu-datenbank/003_2026-09-16_update-comments-for-database-integration.md)   | 2026-09-16 | TODO-Block als Arbeitsliste für die Anbindung in `Booking.ts`                           |
-| [004](008_2026-09-09_verbindung-ui-zu-datenbank/004_2026-09-16_mengenwaehler-je-zimmerkategorie.md)           | 2026-09-16 | Mengenwähler je Kategorie, Mengen in `bookingState`, Regeln in `roomQuantity.ts`        |
-| [005](008_2026-09-09_verbindung-ui-zu-datenbank/005_2026-09-16_belegung-verpflichtend-kein-suchdefault.md)    | 2026-09-16 | Keine geratene Belegung mehr: ohne Erwachsenenzahl keine Suche                          |
-| [006](008_2026-09-09_verbindung-ui-zu-datenbank/006_2026-09-16_zimmer-anzahl-und-fruehstueck-integriert.md)   | 2026-09-16 | `E47`: Frühstück als eigener Posten – `services`, `booking_extras`, `grand_total_cents` |
-| [007](008_2026-09-09_verbindung-ui-zu-datenbank/007_2026-09-23_belegung-als-gesamtzahl-mehrere-kategorien.md) | 2026-09-23 | `E48` revidiert `E45`: Belegung als Gesamtzahl, `p_positions`, `group_capacity()`       |
-| [008](008_2026-09-09_verbindung-ui-zu-datenbank/008_2026-09-23_sektion-zusatzleistungen-je-vorgang.md)        | 2026-09-23 | `E49`: Sektion Zusatzleistungen, `charge_basis`, `p_services`                           |
-| [009](008_2026-09-09_verbindung-ui-zu-datenbank/009_2026-09-26_customer-address-management.md)                | 2026-09-26 | `E50`/`E51`: `customer_addresses`, Sitz- und optionale Rechnungsadresse, Formular       |
-| [010](008_2026-09-09_verbindung-ui-zu-datenbank/010_2026-09-26_enhance-address-form-validation.md)            | 2026-09-26 | Graue Platzhalter, neue Beispielwerte, Fokus ins erste fehlerhafte Feld                 |
-| [011](008_2026-09-09_verbindung-ui-zu-datenbank/011_2026-09-26_booking-summary-dynamic-pricing.md)            | 2026-09-26 | „Ihre Buchung" ohne Attrappe: `summary.ts`, Hoteldaten, Entfernen-Kreuz                 |
-| [012](008_2026-09-09_verbindung-ui-zu-datenbank/012_2026-09-26_booking-creation-modal-confirmation.md)        | 2026-09-26 | `create_booking` aus der Oberfläche, `booking.service.ts`, `<dialog>`-Bestätigung       |
-| [013](008_2026-09-09_verbindung-ui-zu-datenbank/013_2026-09-26_project-diary.md)                              | 2026-09-26 | Projekttagebuch für die Commits 002–012 nachziehen (reiner Doku-Commit)                 |
-| [014](008_2026-09-09_verbindung-ui-zu-datenbank/014_2026-09-26_booking-steps-management.md)                   | 2026-09-26 | Buchungsschritte im Sticky-Header: Status aus der View, Sprungmarken zu den Bereichen   |
+| Nr.                                                                                                             | Datum      | Beschreibung                                                                            |
+| --------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------- |
+| [001](008_2026-09-09_verbindung-ui-zu-datenbank/001_2026-09-09_umsetzungsplan-erstellt.md)                      | 2026-09-09 | Grilling-Runde 8: `E42`–`E46`, `V8`–`V17`, Phasen 7b/8/9/9b (reiner Doku-Commit)        |
+| [002](008_2026-09-09_verbindung-ui-zu-datenbank/002_2026-09-09_projekttagebuch-aktualisiert.md)                 | 2026-09-09 | Projekttagebuch für die Branches 006–008 nachziehen (reiner Doku-Commit)                |
+| [003](008_2026-09-09_verbindung-ui-zu-datenbank/003_2026-09-16_update-comments-for-database-integration.md)     | 2026-09-16 | TODO-Block als Arbeitsliste für die Anbindung in `Booking.ts`                           |
+| [004](008_2026-09-09_verbindung-ui-zu-datenbank/004_2026-09-16_mengenwaehler-je-zimmerkategorie.md)             | 2026-09-16 | Mengenwähler je Kategorie, Mengen in `bookingState`, Regeln in `roomQuantity.ts`        |
+| [005](008_2026-09-09_verbindung-ui-zu-datenbank/005_2026-09-16_belegung-verpflichtend-kein-suchdefault.md)      | 2026-09-16 | Keine geratene Belegung mehr: ohne Erwachsenenzahl keine Suche                          |
+| [006](008_2026-09-09_verbindung-ui-zu-datenbank/006_2026-09-16_zimmer-anzahl-und-fruehstueck-integriert.md)     | 2026-09-16 | `E47`: Frühstück als eigener Posten – `services`, `booking_extras`, `grand_total_cents` |
+| [007](008_2026-09-09_verbindung-ui-zu-datenbank/007_2026-09-23_belegung-als-gesamtzahl-mehrere-kategorien.md)   | 2026-09-23 | `E48` revidiert `E45`: Belegung als Gesamtzahl, `p_positions`, `group_capacity()`       |
+| [008](008_2026-09-09_verbindung-ui-zu-datenbank/008_2026-09-23_sektion-zusatzleistungen-je-vorgang.md)          | 2026-09-23 | `E49`: Sektion Zusatzleistungen, `charge_basis`, `p_services`                           |
+| [009](008_2026-09-09_verbindung-ui-zu-datenbank/009_2026-09-26_customer-address-management.md)                  | 2026-09-26 | `E50`/`E51`: `customer_addresses`, Sitz- und optionale Rechnungsadresse, Formular       |
+| [010](008_2026-09-09_verbindung-ui-zu-datenbank/010_2026-09-26_enhance-address-form-validation.md)              | 2026-09-26 | Graue Platzhalter, neue Beispielwerte, Fokus ins erste fehlerhafte Feld                 |
+| [011](008_2026-09-09_verbindung-ui-zu-datenbank/011_2026-09-26_booking-summary-dynamic-pricing.md)              | 2026-09-26 | „Ihre Buchung" ohne Attrappe: `summary.ts`, Hoteldaten, Entfernen-Kreuz                 |
+| [012](008_2026-09-09_verbindung-ui-zu-datenbank/012_2026-09-26_booking-creation-modal-confirmation.md)          | 2026-09-26 | `create_booking` aus der Oberfläche, `booking.service.ts`, `<dialog>`-Bestätigung       |
+| [013](008_2026-09-09_verbindung-ui-zu-datenbank/013_2026-09-26_project-diary.md)                                | 2026-09-26 | Projekttagebuch für die Commits 002–012 nachziehen (reiner Doku-Commit)                 |
+| [014](008_2026-09-09_verbindung-ui-zu-datenbank/014_2026-09-26_booking-steps-management.md)                     | 2026-09-26 | Buchungsschritte im Sticky-Header: Status aus der View, Sprungmarken zu den Bereichen   |
+| [015](008_2026-09-09_verbindung-ui-zu-datenbank/015_2026-09-26_update-project-diary.md)                         | 2026-09-26 | Projekttagebuch um die Einträge 013–014 ergänzt (reiner Doku-Commit)                    |
+| [016](008_2026-09-09_verbindung-ui-zu-datenbank/016_2026-09-30_review-document.md)                              | 2026-09-30 | Review-Dokument mit den Gruppen A–F als Fahrplan für die Aufräumarbeiten                |
+| [017](008_2026-09-09_verbindung-ui-zu-datenbank/017_2026-09-30_booking-error-handling-ui-flow.md)               | 2026-09-30 | A1/A2: „weiter" bucht nicht mehr, `BookingFailedError` mit `outcomeUnknown`             |
+| [018](008_2026-09-09_verbindung-ui-zu-datenbank/018_2026-10-07_escape-html-xss-protection.md)                   | 2026-10-07 | A3: `escapeHtml()` für alle Werte von außen, Content-Security-Policy                    |
+| [019](008_2026-09-09_verbindung-ui-zu-datenbank/019_2026-10-07_booking-logic-cleanup-service-reconciliation.md) | 2026-10-07 | A4/A5, B1/B2: späte Antworten verwerfen, Kinderbetten abgleichen, Lint grün             |
+| [020](008_2026-09-09_verbindung-ui-zu-datenbank/020_2026-10-07_standardize-variable-names.md)                   | 2026-10-07 | B3: Bezeichner durchgehend englisch, Regel in `CLAUDE.md`                               |
+| [021](008_2026-09-09_verbindung-ui-zu-datenbank/021_2026-10-07_constants-breakfast-default-currency.md)         | 2026-10-07 | B4: Konstanten `BREAKFAST` und `DEFAULT_CURRENCY` statt Magic Strings                   |
+| [022](008_2026-09-09_verbindung-ui-zu-datenbank/022_2026-10-07_booking-codes-and-types.md)                      | 2026-10-07 | B5–B8, C1–C3: `RejectionCode`-Union, Texttabellen, gemeinsame Buchungstypen             |
+| [023](008_2026-09-09_verbindung-ui-zu-datenbank/023_2026-10-07_room-quantity-handling-availability-messages.md) | 2026-10-07 | C4/C5: Zimmer-frei-Texte sauber benannt, gemeinsamer Schritt-Knopf                      |
 
 Merge-Commits gibt es in diesem Branch nicht – er ist seit seinem Start nicht mit `main` synchronisiert worden.
 
@@ -93,10 +102,10 @@ Die Zusammenfassung oben beschreibt den Plan. Die zehn folgenden Commits setzen 
 
 **Zwei Entscheidungen aus Commit 001 wurden revidiert** – und in beiden Fällen bleibt der alte Text mit einem datierten Vermerk stehen:
 
-| alt   | neu     | was sich änderte                                                                              |
-| ----- | ------- | --------------------------------------------------------------------------------------------- |
-| `E45` | `E48`   | Die Gästezahl gilt für den ganzen Vorgang, nicht pro Zimmer – die Datenbank verteilt die Gäste |
-| `E42` | `E50`   | `billing_addresses` wird nie migriert; stattdessen `customer_addresses` mit `kind`             |
+| alt   | neu   | was sich änderte                                                                               |
+| ----- | ----- | ---------------------------------------------------------------------------------------------- |
+| `E45` | `E48` | Die Gästezahl gilt für den ganzen Vorgang, nicht pro Zimmer – die Datenbank verteilt die Gäste |
+| `E42` | `E50` | `billing_addresses` wird nie migriert; stattdessen `customer_addresses` mit `kind`             |
 
 Das bestätigt den Satz, mit dem die Zusammenfassung oben den Plan kommentiert: _„Erst wer die Maske baut, merkt, welche Felder nirgends hinpassen."_ Es galt auch noch, als die Maske schon teilweise stand.
 
@@ -117,6 +126,25 @@ Mit Commit 012 ist das Ziel des Branches erreicht: **Die Buchungsseite bucht.** 
 Commit 013 zieht das Tagebuch bis Commit 012 nach (reiner Doku-Commit, wie schon 002). Commit 014 erledigt das TODO „Buchungssteps verknüpfen": Die drei Schritte im Header stammten noch aus der Idee „eine Seite pro Schritt" und zeigten, seit alles auf einer Seite liegt, nur noch Schritt 1 an. Jetzt meldet die `BookingView` die erledigten Schritte nach denselben Regeln, die auch vor dem Buchen gelten, `bookingState` leitet daraus den fälligen Schritt ab (mit Gleichheitsprüfung gegen eine Endlosschleife), und der Header ist sticky mit anklickbaren Sprungmarken. Die Sprünge scrollen per `scrollIntoView` selbst, weil ein nativer `#hash`-Sprung über `popstate` den selbstgeschriebenen Router zum Neu-Rendern – und damit zum Zurücksetzen der Buchung – bringen würde.
 
 Im TODO-Block von `Booking.ts` bleibt damit nur noch die Frage nach Migrationen offen; `V8` und die Service-Schicht für Lesezugriffe stehen weiterhin aus.
+
+### Nachtrag (Commits 015–023)
+
+Commit 015 trägt die Tagebuch-Einträge 013 und 014 nach (reiner Doku-Commit). Danach ändert der Branch seinen Charakter: **Statt neuer Funktionen folgt ein Review – und dessen systematische Abarbeitung.**
+
+Commit 016 legt `docs/reviews/2026-09-30_verbindung-ui-zu-datenbank.md` an – ein Review des ganzen Branches gegen `main`, gegliedert nach Dringlichkeit: **A** Bugs, **B** schnelle Aufräumarbeiten, **C** Typen und Duplikate, **D** Trennung von Design, Datenfluss und Logik, **E** Tests, **F** offene Punkte aus dem Umsetzungsplan. Jeder folgende Commit hakt darin Punkte ab, oft mit einem Satz dazu, **wie** umgesetzt wurde oder warum nichts zu tun war (A6 erwies sich als Fehlalarm).
+
+| Commits | Review-Punkte  | Kern                                                                                                  |
+| ------- | -------------- | ----------------------------------------------------------------------------------------------------- |
+| 017     | A1, A2         | „weiter" bucht nicht mehr; Netzwerkfehler werden nicht mehr als „nicht gebucht" ausgegeben            |
+| 018     | A3             | XSS-Schutz in zwei Schichten: `escapeHtml()` und Content-Security-Policy                              |
+| 019     | A4, A5, B1, B2 | späte Antworten alter View-Instanzen verworfen, Kinderbetten abgeglichen, Lint grün                   |
+| 020–021 | B3, B4         | englische, ehrliche Bezeichner; Konstanten statt Magic Strings                                        |
+| 022     | B5–B8, C1–C3   | Datenbank-Codes als Union-Typ mit Prüffunktion an der Grenze, `Record`-Texttabellen, gemeinsame Typen |
+| 023     | C4, C5         | gleichnamige Funktionen mit verschiedenem Zweck umbenannt, gemeinsamer `−`/`+`-Knopf                  |
+
+Ein Muster zieht sich durch die Commits 021–023: **ungültige Zustände nicht darstellbar machen.** Erst Konstanten statt freier Strings, dann Union-Typen mit `Record`-Tabellen (ein fehlender Text ist ein Compilerfehler), schließlich ein Literal-Typ `-1 | 1` für die Richtung eines Knopfs. Daten von außen werden dabei **einmal an der Grenze** geprüft; unbekannte Datenbank-Codes werden zu `null` statt zu einem Absturz.
+
+Damit sind die Gruppen **A, B und C vollständig erledigt**. Offen sind Gruppe D (u. a. `catalog.service.ts` für die Lesezugriffe – das würde zugleich `V9`/Phase 8.4 erfüllen –, Formatierer und Kalender auslagern, `Booking.ts` mit über 2000 Zeilen in Templates aufteilen), Gruppe E (weitere Tests) und F. Der Branch ist weiterhin **nicht in `main` gemergt**.
 
 ---
 

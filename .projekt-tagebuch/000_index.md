@@ -29,7 +29,7 @@ Eine Besonderheit ab Branch 006: `buchungsseite-ui-fertigstellen` wurde **von** 
 | [005](005_2026-07-22_buchungs-seite.md)                 | 2026-07-22 | buchungs-seite                 | 9       | gemergt in `main` |
 | [006](006_2026-08-26_datenbank-anbindung.md)            | 2026-08-26 | datenbank-anbindung            | 12      | gemergt in `main` |
 | [007](007_2026-09-06_buchungsseite-ui-fertigstellen.md) | 2026-09-06 | buchungsseite-ui-fertigstellen | 2       | gemergt in `main` |
-| [008](008_2026-09-09_verbindung-ui-zu-datenbank.md)     | 2026-09-09 | verbindung-ui-zu-datenbank     | 14      | offen             |
+| [008](008_2026-09-09_verbindung-ui-zu-datenbank.md)     | 2026-09-09 | verbindung-ui-zu-datenbank     | 23      | offen             |
 
 ## Wie lese ich dieses Tagebuch?
 
