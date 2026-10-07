@@ -8,16 +8,10 @@
  * Datei falsch, nicht die Buchung.
  */
 
-/** Eine Zeile aus `services`, so wie PostgREST sie liefert. */
-export interface ServiceRow {
-    id: string;
-    name: string;
-    description: string | null;
-    amount_cents: number;
-    /** `null` heißt: kein eigener Kinderpreis hinterlegt. */
-    child_amount_cents: number | null;
-    currency: string;
-}
+import type { ServiceRow } from '../../shared/types/booking.types';
+
+/** Die Felder der `services`-Zeile, die das Frühstück braucht – ein Ausschnitt, kein eigener Typ. */
+type BreakfastServiceRow = Pick<ServiceRow, 'id' | 'name' | 'description' | 'amount_cents' | 'child_amount_cents' | 'currency'>;
 
 /** Die Preiszeile aus `services` für `code = 'BREAKFAST'`. */
 export interface BreakfastService {
@@ -55,7 +49,7 @@ export function getBreakfastAmountCents(service: BreakfastService, occupancy: Oc
  * heißt „wie Erwachsene", nicht „gratis": gratis wäre eine `0` in der Spalte, und die
  * ist dort ausdrücklich erlaubt.
  */
-export function buildBreakfastService(row: ServiceRow | null): BreakfastService | null {
+export function buildBreakfastService(row: BreakfastServiceRow | null): BreakfastService | null {
     if (row === null) return null;
 
     return {

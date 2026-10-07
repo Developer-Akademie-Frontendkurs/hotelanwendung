@@ -11,34 +11,8 @@
  */
 
 import { supabase } from './supabase';
-
-export type BookingRequestAddress = {
-    street: string;
-    houseNumber: string;
-    postalCode: string;
-    city: string;
-    countryCode: string;
-};
-
-/** Was `create_booking` braucht – camelCase, die Übersetzung in `p_*` passiert hier. */
-export type BookingRequest = {
-    checkIn: string;
-    checkOut: string;
-    adults: number;
-    children: number;
-    positions: readonly { roomTypeId: string; rooms: number }[];
-    withBreakfast: boolean;
-    services: readonly { code: string; quantity: number }[];
-    customer: {
-        firstName: string;
-        lastName: string;
-        email: string;
-        phone: string | null;
-    };
-    residence: BookingRequestAddress;
-    /** `null` heißt: Rechnung an die Sitzadresse. */
-    billing: (BookingRequestAddress & { company: string | null }) | null;
-};
+import type { BookingPosition, BookingRequest } from '../types/booking.types';
+import { isRejectionCode, type RejectionCode } from '../types/booking.codes';
 
 /** Eine Zeile aus `bookings` – ein Zimmer des Vorgangs. */
 export type CreatedRoomBooking = {
@@ -58,8 +32,8 @@ export type CreatedBooking = {
 };
 
 export type BookingRejection = {
-    /** Der Code aus `reject_booking` – für Gäste maskiert (`nicht_buchbar`, E28). */
-    code: string;
+    /** Der Code aus `reject_booking` – für Gäste maskiert (`nicht_buchbar`, E28). `null`: ein Code, den die Oberfläche (noch) nicht kennt. */
+    code: RejectionCode | null;
     /** Die erste betroffene Nacht, `YYYY-MM-DD`. */
     date: string | null;
     roomTypeId: string | null;
@@ -95,7 +69,7 @@ export async function createBooking(request: BookingRequest): Promise<CreateBook
     const response: { data: unknown; error: { message: string; details: string | null; code?: string } | null } = await supabase.rpc('create_booking', {
         p_check_in: request.checkIn,
         p_check_out: request.checkOut,
-        p_positions: request.positions.map((position: { roomTypeId: string; rooms: number }): { room_type_id: string; rooms: number } => ({
+        p_positions: request.positions.map((position: BookingPosition): { room_type_id: string; rooms: number } => ({
             room_type_id: position.roomTypeId,
             rooms: position.rooms,
         })),
@@ -167,7 +141,7 @@ function parseRejection(message: string, details: string | null | undefined): Bo
     if (!isRecord(parsed) || typeof parsed.code !== 'string') return null;
 
     return {
-        code: parsed.code,
+        code: isRejectionCode(parsed.code) ? parsed.code : null,
         date: typeof parsed.datum === 'string' ? parsed.datum : null,
         roomTypeId: typeof parsed.room_type_id === 'string' ? parsed.room_type_id : null,
         message: typeof parsed.grund === 'string' ? parsed.grund : message,

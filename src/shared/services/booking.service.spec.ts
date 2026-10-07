@@ -43,6 +43,18 @@ describe('createBooking — Ablehnung oder Fehler (V15)', () => {
         });
     });
 
+    it('bleibt bei einem unbekannten Code eine Ablehnung – mit code null', async () => {
+        rpc.mockResolvedValue({
+            data: null,
+            error: { code: 'P0001', message: 'neu', details: JSON.stringify({ code: 'neuer_code', datum: null, room_type_id: null }) },
+        });
+
+        await expect(createBooking(request)).resolves.toEqual({
+            ok: false,
+            error: { code: null, date: null, roomTypeId: null, message: 'neu' },
+        });
+    });
+
     it('wirft bei einem Netzwerkfehler – das Ergebnis ist unbekannt', async () => {
         rpc.mockResolvedValue({ data: null, error: { code: '', message: 'TypeError: Failed to fetch', details: '' }, status: 0 });
 

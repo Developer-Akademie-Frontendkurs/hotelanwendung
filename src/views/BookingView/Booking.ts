@@ -5,25 +5,17 @@ import { BookingFailedError, createBooking, type BookingRejection, type CreatedB
 import { openModal } from '../../shared/ui/modal';
 import { scrollToSection } from '../../shared/ui/scroll';
 import { escapeHtml } from '../../shared/ui/html';
+import type { BookingPosition, BookingRequest, BookingServiceSelection, CustomerDetails, ServiceRow } from '../../shared/types/booking.types';
 import logo from '../../assets/img/logo-small.svg';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
 import { clampQuantity, getLimitMessage, getMissingBeds, getRoomLimit, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
-import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService, type ServiceRow } from './services';
-import {
-    COUNTRIES,
-    DEFAULT_COUNTRY,
-    formatAddressLines,
-    getCountryLabel,
-    getInvalidFields,
-    isCountryCode,
-    emptyToNull,
-    type CountryCode,
-    type CustomerDetails,
-    type InvalidField,
-} from './address';
+import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService } from './services';
+import { COUNTRIES, DEFAULT_COUNTRY, formatAddressLines, getCountryLabel, getInvalidFields, isCountryCode, emptyToNull, type CountryCode, type InvalidField } from './address';
 import { buildOrderLines, DEFAULT_CURRENCY, getOrderTotalCents, type OrderLine } from './summary';
 import type { HotelRow } from './hotel.interface';
+import { formatUnavailableReason, getRejectionMessage } from './messages';
+import { isUnavailableReason } from '../../shared/types/booking.codes';
 import './booking.css';
 
 type DayCell = {
@@ -38,30 +30,9 @@ type DayCell = {
     selectable: boolean;
 };
 
-type BookingPosition = {
-    roomTypeId: string;
-    rooms: number;
-};
-
-/** Eine Zusatzleistung je Vorgang – die Form von `p_services` in `create_booking` (E49). */
-type BookingService = {
-    code: string;
-    quantity: number;
-};
-
-/**
- * Gäste als Gesamtzahl des Vorgangs (E48) – verteilt werden sie in `create_booking`.
- * Kontaktdaten und Adressen gelten ebenso für den ganzen Vorgang (E51).
- */
-type Booking = CustomerDetails & {
-    checkIn: string;
-    checkOut: string;
+/** Die Anfrage an `create_booking` plus die Nächte, die das Bestätigungs-Popup anzeigt. */
+type Booking = BookingRequest & {
     nights: number;
-    adults: number;
-    children: number;
-    positions: BookingPosition[];
-    withBreakfast: boolean;
-    services: BookingService[];
 };
 
 /** Stand der Buchung während der Eingabe – was noch fehlt, ist `null`. */
@@ -143,9 +114,9 @@ const ICON_GYM = /*html*/ `
     </svg>
 `;
 
-// "Entfernen"-Icon aus dem Design (Vector in den "preis"-Frames), Originalfarbe #FFC571 = Golden Wind.
+// "Entfernen"-Icon aus dem Design (Vector in den "preis"-Frames), Originalfarbe #FFC571 = `golden-wind`.
 const ICON_REMOVE = /*html*/ `
-    <svg class="w-5 h-5 shrink-0 text-[#ffc571]" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <svg class="w-5 h-5 shrink-0 text-golden-wind" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
         <path d="M 6.4 15 L 10 11.4 L 13.6 15 L 15 13.6 L 11.4 10 L 15 6.4 L 13.6 5 L 10 8.6 L 6.4 5 L 5 6.4 L 8.6 10 L 5 13.6 L 6.4 15 Z M 10 20 C 8.62 20 7.32 19.74 6.1 19.21 C 4.88 18.69 3.83 17.98 2.93 17.08 C 2.03 16.18 1.31 15.12 0.79 13.9 C 0.26 12.68 0 11.38 0 10 C 0 8.62 0.26 7.32 0.79 6.1 C 1.31 4.88 2.03 3.83 2.93 2.93 C 3.83 2.03 4.88 1.31 6.1 0.79 C 7.32 0.26 8.62 0 10 0 C 11.38 0 12.68 0.26 13.9 0.79 C 15.12 1.31 16.18 2.03 17.08 2.93 C 17.98 3.83 18.69 4.88 19.21 6.1 C 19.74 7.32 20 8.62 20 10 C 20 11.38 19.74 12.68 19.21 13.9 C 18.69 15.12 17.98 16.18 17.08 17.08 C 16.18 17.98 15.12 18.69 13.9 19.21 C 12.68 19.74 11.38 20 10 20 Z M 10 18 C 12.23 18 14.13 17.23 15.68 15.68 C 17.23 14.13 18 12.23 18 10 C 18 7.77 17.23 5.88 15.68 4.33 C 14.13 2.78 12.23 2 10 2 C 7.77 2 5.88 2.78 4.33 4.33 C 2.78 5.88 2 7.77 2 10 C 2 12.23 2.78 14.13 4.33 15.68 C 5.88 17.23 7.77 18 10 18 Z" />
     </svg>
 `;
@@ -208,6 +179,7 @@ const ROOM_IMAGE_BUCKET = 'room-images';
 const FORM_INCOMPLETE = 'Bitte tragen Sie alle notwendigen Informationen ein.';
 const CHECKOUT_LABEL = 'zahlungspflichtig buchen';
 const CHECKOUT_BUSY_LABEL = 'Buchung wird gesendet …';
+const HOTEL_LOAD_ERROR = 'Hoteladresse und Check-in-Zeiten konnten gerade nicht geladen werden. Ihre Buchung ist davon nicht betroffen.';
 /** Die Buchung kann angelegt sein – deshalb ausdrücklich kein „bitte erneut versuchen". */
 const BOOKING_OUTCOME_UNKNOWN = 'Wir konnten nicht feststellen, ob Ihre Buchung angelegt wurde. Bitte buchen Sie nicht erneut, sondern kontaktieren Sie uns.';
 
@@ -270,6 +242,8 @@ export class BookingView extends AbstractView {
     // Adresse und Check-in-/Check-out-Zeiten für „Ihre Buchung". `null`, solange nicht
     // geladen – dann fehlen nur diese Angaben, die Buchung selbst hängt nicht daran.
     private hotel: HotelRow | null = null;
+    /** Für den Gast formuliert; die technischen Details landen in der Konsole. */
+    private hotelError: string | null = null;
     private summaryEl: HTMLElement | null = null;
     private unsubscribeSummary: (() => void) | null = null;
     // Solange `create_booking` läuft, zählt kein weiterer Klick: ein Doppelklick wären
@@ -764,7 +738,9 @@ export class BookingView extends AbstractView {
     }
 
     private handleRoomsClick(event: MouseEvent): void {
-        const target = event.target as HTMLElement;
+        // `Element` statt `HTMLElement`: Ein Klick auf ein Icon trifft ein SVG-Element.
+        const target = event.target;
+        if (!(target instanceof Element)) return;
 
         const serviceStepEl = target.closest<HTMLElement>('[data-service-step]');
         if (serviceStepEl) {
@@ -973,7 +949,7 @@ export class BookingView extends AbstractView {
                     <h2 class="font-playfair-display text-28 768:text-36 leading-none text-purple-haze-dark">Ihre Daten</h2>
                     <p class="font-antic-didone text-16 leading-tight text-purple-haze-dark">Die Rechnung geht an Ihre Wohnadresse – außer Sie geben eine abweichende Rechnungsadresse an.</p>
                 </div>
-                <form id="booking-customer" novalidate class="flex flex-col gap-8 rounded-[0.625rem] border-[0.5px] border-purple-haze bg-[#fbfbfb] px-5 py-4">
+                <form id="booking-customer" novalidate class="flex flex-col gap-8 rounded-[0.625rem] border-[0.5px] border-purple-haze bg-surface px-5 py-4">
                     <div class="flex flex-col gap-3">
                         ${this.getInputFieldHtml('first-name', 'Vorname', 'Maria', 'given-name', 'text', 'w-full')}
                         ${this.getInputFieldHtml('last-name', 'Nachname', 'Huber', 'family-name', 'text', 'w-full')}
@@ -1064,7 +1040,7 @@ export class BookingView extends AbstractView {
      */
     private getBookingSummaryHtml(): string {
         return /*html*/ `
-            <div id="booking-summary" class="w-full 992:max-w-[33.8125rem] flex flex-col gap-5 rounded-[0.8125rem] border-[0.5px] border-purple-haze bg-[#fbfbfb] p-5">
+            <div id="booking-summary" class="w-full 992:max-w-[33.8125rem] flex flex-col gap-5 rounded-[0.8125rem] border-[0.5px] border-purple-haze bg-surface p-5">
                 <h2 id="booking-summary-title" tabindex="-1" class="font-playfair-display text-28 768:text-36 leading-none text-purple-haze-dark focus:outline-none">Ihre Buchung</h2>
 
                 <div id="booking-summary-order" class="flex flex-col gap-5"></div>
@@ -1082,7 +1058,7 @@ export class BookingView extends AbstractView {
                             ${CHECKOUT_LABEL}
                         </button>
                         <div class="flex flex-col gap-4 text-center">
-                            <p class="font-antic-didone text-14 leading-tight text-[#74687e]">Ich bestätige, dass ich die Datenschutzvereinbarung gelesen habe.</p>
+                            <p class="font-antic-didone text-14 leading-tight text-muted">Ich bestätige, dass ich die Datenschutzvereinbarung gelesen habe.</p>
                             <p id="booking-checkout-error" hidden role="alert" class="font-antic-didone text-[0.8125rem] leading-tight text-red-600">Bitte tragen Sie alle notwendigen Informationen ein.</p>
                         </div>
                     </div>
@@ -1141,10 +1117,19 @@ export class BookingView extends AbstractView {
 
     /** Hoteladresse aus `hotels` statt aus dem Entwurf – dort stand eine erfundene. */
     private getHotelAddressHtml(): string {
+        if (this.hotelError !== null) {
+            return /*html*/ `
+                <div class="flex flex-col gap-4">
+                    <p class="font-antic-didone text-16 leading-tight text-purple-haze-dark/70">${escapeHtml(this.hotelError)}</p>
+                    <hr class="border-t-[0.5px] border-purple-haze/45">
+                </div>
+            `;
+        }
+
         const hotel = this.hotel;
         if (hotel === null) return '';
 
-        const country = hotel.country_code === null ? '' : isCountryCode(hotel.country_code) ? getCountryLabel(hotel.country_code) : hotel.country_code;
+        const country = hotel.country_code === null ? '' : getCountryLabel(hotel.country_code);
         const lines = [hotel.name, hotel.address_line1 ?? '', `${hotel.postal_code ?? ''} ${hotel.city ?? ''}`.trim(), country].filter((line: string): boolean => line !== '');
 
         return /*html*/ `
@@ -1210,7 +1195,7 @@ export class BookingView extends AbstractView {
 
     private getCheckTileHtml(label: string, value: string): string {
         return /*html*/ `
-            <div class="flex-1 flex items-center justify-center rounded-[0.625rem] bg-[#f6f2f2] p-3 text-center font-antic-didone text-16 leading-tight text-purple-haze-dark">
+            <div class="flex-1 flex items-center justify-center rounded-[0.625rem] bg-surface-muted p-3 text-center font-antic-didone text-16 leading-tight text-purple-haze-dark">
                 <span>
                     <span class="block font-playfair-display font-medium">${escapeHtml(label)}</span>
                     ${escapeHtml(value)}
@@ -1272,7 +1257,9 @@ export class BookingView extends AbstractView {
     }
 
     private handleSummaryClick(event: MouseEvent): void {
-        const button = (event.target as HTMLElement).closest<HTMLElement>('[data-summary-remove]');
+        // Der Klick kann das SVG-Icon im Knopf treffen – das ist ein `Element`, kein `HTMLElement`.
+        if (!(event.target instanceof Element)) return;
+        const button = event.target.closest<HTMLElement>('[data-summary-remove]');
         const id = button?.dataset.summaryId;
         if (!button || id === undefined) return;
 
@@ -1321,8 +1308,18 @@ export class BookingView extends AbstractView {
     /** Die eine Zeile aus `hotels` (E14). */
     private async loadHotel(): Promise<void> {
         const { data, error } = await supabase.from('hotels').select('name, address_line1, postal_code, city, country_code, check_in_time, check_out_time').limit(1).maybeSingle();
-        if (error || !this.isDisplayed()) return;
+        if (!this.isDisplayed()) return;
 
+        if (error) {
+            console.error('Hoteldaten konnten nicht geladen werden:', error);
+            this.hotelError = HOTEL_LOAD_ERROR;
+        } else if (data === null) {
+            // Kein Fehler der Abfrage, aber auch kein Hotel – ein Fehler in den Stammdaten (E14).
+            console.error('In der Tabelle `hotels` ist kein Hotel hinterlegt.');
+            this.hotelError = HOTEL_LOAD_ERROR;
+        } else {
+            this.hotelError = null;
+        }
         this.hotel = data;
         this.renderSummary();
     }
@@ -1542,7 +1539,8 @@ export class BookingView extends AbstractView {
     }
 
     private handleCalendarClick(event: MouseEvent): void {
-        const target = event.target as HTMLElement;
+        const target = event.target;
+        if (!(target instanceof Element)) return;
 
         const actionEl = target.closest<HTMLElement>('[data-action]');
         if (actionEl) {
@@ -1649,7 +1647,7 @@ export class BookingView extends AbstractView {
 
         if (!result.ok) {
             this.setSubmitting(false);
-            this.showCheckoutError(this.getRejectionMessage(result.error));
+            this.showCheckoutError(this.getRejectionText(result.error));
             // Eine Ablehnung heißt fast immer: Die Verfügbarkeit hat sich geändert. Die
             // neue Liste passt unmögliche Mengen an und sagt es über der Liste.
             void this.loadRooms();
@@ -1679,39 +1677,13 @@ export class BookingView extends AbstractView {
     }
 
     /**
-     * Übersetzt die Ablehnung aus `create_booking` in einen Satz mit Datum und Kategorie
-     * (E31). Gäste bekommen die feinen Gründe maskiert als `nicht_buchbar` (E28).
+     * Ablehnung aus `create_booking` als Satz mit Kategorie und Nacht (E31). Die Texte
+     * stehen in `messages.ts`; hier kommt nur dazu, was die View kennt.
      */
-    private getRejectionMessage(error: BookingRejection): string {
-        const room = this.rooms.find((card: RoomCard): boolean => card.roomTypeId === error.roomTypeId)?.name ?? null;
-        const date = error.date === null ? null : formatStayDate(parseISODate(error.date), '', null);
-
-        switch (error.code) {
-            case 'nicht_buchbar':
-            case 'ausgebucht':
-            case 'kein_preis':
-            case 'zu_klein': {
-                const roomLabel = room ?? 'Ihre Auswahl';
-                const nightLabel = date === null ? '' : ` für die Nacht vom ${date}`;
-                return `${roomLabel} ist${nightLabel} leider nicht mehr buchbar. Wir haben die Verfügbarkeit aktualisiert – bitte prüfen Sie Ihre Auswahl.`;
-            }
-            case 'vergangenheit':
-            case 'ausserhalb_horizont':
-                return formatUnavailableReason(error.code);
-            case 'ungueltiger_zeitraum':
-                return 'Die Abreise muss nach der Anreise liegen.';
-            case 'kategorie_unbekannt':
-                return `${room ?? 'Diese Zimmerkategorie'} kann derzeit nicht gebucht werden.`;
-            case 'ungueltige_belegung':
-                return 'Die gewählten Zimmer passen nicht zur Anzahl der Gäste.';
-            case 'ungueltige_leistung':
-            case 'leistung_unbekannt':
-                return 'Die gewählten Zusatzleistungen können so nicht gebucht werden.';
-            case 'ungueltige_adresse':
-                return 'Bitte prüfen Sie Ihre Adresse – sie ist unvollständig oder das Land wird nicht unterstützt.';
-            default:
-                return 'Die Buchung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.';
-        }
+    private getRejectionText(rejection: BookingRejection): string {
+        const roomName = this.rooms.find((card: RoomCard): boolean => card.roomTypeId === rejection.roomTypeId)?.name ?? null;
+        const night = rejection.date === null ? null : formatStayDate(parseISODate(rejection.date), '', null);
+        return getRejectionMessage(rejection.code, { roomName, night });
     }
 
     /**
@@ -1811,7 +1783,7 @@ export class BookingView extends AbstractView {
             positions: Object.entries(quantities).map(([roomTypeId, rooms]: [string, number]): BookingPosition => ({ roomTypeId, rooms })),
             withBreakfast: bookingState.getBreakfast(),
             // Die Form von `p_services` (E49). Die Menge ist nur beim Kinderbett mehr als 1.
-            services: Object.entries(bookingState.getServices()).map(([code, quantity]: [string, number]): BookingService => ({ code, quantity })),
+            services: Object.entries(bookingState.getServices()).map(([code, quantity]: [string, number]): BookingServiceSelection => ({ code, quantity })),
             ...this.readCustomerDetails(),
         };
     }
@@ -1824,16 +1796,16 @@ export class BookingView extends AbstractView {
         form.addEventListener('input', (event: Event): void => {
             // Wer ein markiertes Feld korrigiert, soll die Markierung nicht bis zum
             // nächsten Klick behalten.
-            (event.target as HTMLElement).removeAttribute('aria-invalid');
+            if (event.target instanceof Element) event.target.removeAttribute('aria-invalid');
             this.renderCustomerSummary();
             this.updateBookingSteps();
         });
         form.addEventListener('change', (event: Event): void => {
-            const target = event.target as HTMLElement;
-            if (!target.hasAttribute('data-billing-toggle')) return;
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement) || !target.hasAttribute('data-billing-toggle')) return;
 
             const billingEl = document.getElementById('booking-billing');
-            if (billingEl) billingEl.hidden = !(target as HTMLInputElement).checked;
+            if (billingEl) billingEl.hidden = !target.checked;
             this.renderCustomerSummary();
             this.updateBookingSteps();
         });
@@ -1988,7 +1960,7 @@ function buildRoomCards(details: RoomTypeDetail[], availability: RoomAvailabilit
                           nights: room.nights,
                           roomsFree: room.rooms_free,
                           isBookable: room.is_bookable,
-                          unavailableReason: room.unavailable_reason,
+                          unavailableReason: room.unavailable_reason !== null && isUnavailableReason(room.unavailable_reason) ? room.unavailable_reason : null,
                       },
         };
     });
@@ -1999,7 +1971,7 @@ function getAvailabilityHtml(availability: RoomCardAvailability | null): string 
     if (availability === null) return '';
 
     if (!availability.isBookable) {
-        return /*html*/ `<p class="font-antic-didone text-16 text-purple-haze">${formatUnavailableReason(availability.unavailableReason ?? '')}</p>`;
+        return /*html*/ `<p class="font-antic-didone text-16 text-purple-haze">${formatUnavailableReason(availability.unavailableReason)}</p>`;
     }
 
     const roomsFree = availability.roomsFree === null ? '' : `${formatRoomsFree(availability.roomsFree)} · `;
@@ -2026,31 +1998,6 @@ function formatPrice(cents: number, currency: string): string {
     const amount = new Intl.NumberFormat('de-AT', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(cents / 100);
     const symbol = CURRENCY_SYMBOLS[currency];
     return symbol === undefined ? `${amount} ${currency}` : `${amount}${symbol}`;
-}
-
-/**
- * Übersetzt die Gründe aus `search_availability`.
- *
- * Gäste sehen laut `mask_reason` nur `nicht_buchbar`, `vergangenheit` und
- * `ausserhalb_horizont`; die feineren Gründe bekommt nur `is_staff()`.
- */
-function formatUnavailableReason(reason: string): string {
-    switch (reason) {
-        case 'nicht_buchbar':
-            return 'Für diesen Zeitraum nicht buchbar.';
-        case 'vergangenheit':
-            return 'Der gewählte Zeitraum liegt in der Vergangenheit.';
-        case 'ausserhalb_horizont':
-            return 'Der gewählte Zeitraum liegt zu weit in der Zukunft.';
-        case 'ausgebucht':
-            return 'Für diesen Zeitraum ausgebucht.';
-        case 'kein_preis':
-            return 'Für diesen Zeitraum ist kein Preis hinterlegt.';
-        case 'zu_klein':
-            return 'Zu klein für die gewählte Belegung.';
-        default:
-            return 'Für diesen Zeitraum nicht buchbar.';
-    }
 }
 
 /** Nächte zwischen An- und Abreise – `null`, solange der Zeitraum nicht vollständig ist. */

@@ -1,3 +1,5 @@
+import type { RoomQuantities, ServiceQuantities } from '../types/booking.types';
+
 export type BookingStep = 1 | 2 | 3;
 
 export const BOOKING_STEP_ORDER: readonly BookingStep[] = [1, 2, 3];
@@ -6,22 +8,6 @@ export type BookingDates = {
     checkIn: Date | null;
     checkOut: Date | null;
 };
-
-/**
- * Gewählte Zimmer je Kategorie, geschlüsselt nach `room_type_id`.
- *
- * Der Schlüssel ist bewusst die UUID und nicht der sprechendere `slug`: die Positionen
- * in `create_booking` (`p_positions`) verlangen genau diese ID.
- */
-export type RoomQuantities = Readonly<Record<string, number>>;
-
-/**
- * Zusatzleistungen je Vorgang (E49), geschlüsselt nach `services.code`, Wert = Menge.
- *
- * Eine Checkbox ist Menge 1; nur das Kinderbett kennt mehr. Nicht gewählte Leistungen
- * stehen nicht als 0 darin – dieselbe Regel wie bei den Zimmermengen.
- */
-export type ServiceQuantities = Readonly<Record<string, number>>;
 
 type Listener = () => void;
 

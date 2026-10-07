@@ -6,7 +6,7 @@
  * Zahl, die der Gast vor dem Absenden sieht.
  */
 
-import type { ServiceQuantities } from '../../shared/state/bookingState';
+import type { ServiceQuantities, ServiceRow } from '../../shared/types/booking.types';
 
 /** Der Code des Kinderbetts – die einzige Leistung mit Menge (E49). */
 export const CHILD_BED = 'CHILD_BED';
@@ -17,19 +17,8 @@ export const BREAKFAST = 'BREAKFAST';
 /** Bezugsgröße der Leistungen je Vorgang. `per_person_night` gehört dem Frühstück. */
 export type ExtraChargeBasis = 'per_night' | 'per_stay' | 'per_unit';
 
-/** Eine Zeile aus `services`, so wie PostgREST sie liefert. */
-export interface ServiceRow {
-    id: string;
-    code: string;
-    name: string;
-    description: string | null;
-    charge_basis: string;
-    amount_cents: number;
-    /** `null` heißt: kein eigener Kinderpreis hinterlegt. */
-    child_amount_cents: number | null;
-    currency: string;
-    sort_order: number;
-}
+/** Eine Zeile, deren `charge_basis` schon geprüft ist – das Ergebnis des Filters in `buildExtraServices`. */
+type ExtraServiceRow = ServiceRow & { charge_basis: ExtraChargeBasis };
 
 /** Eine buchbare Leistung je Vorgang, so wie die Oberfläche sie braucht. */
 export interface ExtraService {
@@ -55,14 +44,14 @@ export type ServiceContext = {
  */
 export function buildExtraServices(rows: readonly ServiceRow[]): ExtraService[] {
     return rows
-        .filter((row: ServiceRow): boolean => isExtraChargeBasis(row.charge_basis))
-        .sort((a: ServiceRow, b: ServiceRow): number => a.sort_order - b.sort_order)
+        .filter((row: ServiceRow): row is ExtraServiceRow => isExtraChargeBasis(row.charge_basis))
+        .sort((a: ExtraServiceRow, b: ExtraServiceRow): number => a.sort_order - b.sort_order)
         .map(
-            (row: ServiceRow): ExtraService => ({
+            (row: ExtraServiceRow): ExtraService => ({
                 code: row.code,
                 name: row.name,
                 description: row.description,
-                chargeBasis: row.charge_basis as ExtraChargeBasis,
+                chargeBasis: row.charge_basis,
                 unitAmountCents: row.amount_cents,
                 currency: row.currency,
             }),

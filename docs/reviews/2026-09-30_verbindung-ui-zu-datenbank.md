@@ -51,19 +51,19 @@ Die Reihenfolge: zuerst Bugs, dann schnelle Aufräumarbeiten, dann Struktur, dan
   - `handleClick` → `handleCalendarClick`,
   - gemischte deutsch-englische Bezeichner wie `preise`, `grenze`, `einheit` vereinheitlichen.
 - [x] B4: Magic Strings durch Konstanten ersetzen: `export const BREAKFAST = 'BREAKFAST'`, analog zu `CHILD_BED`; den `'EUR'`-Fallback zentral ablegen.
-- [ ] B5: Freie Farbwerte (`#ffc571`, `#f6f2f2`, `#fbfbfb`, `#74687e`) als Tokens in den `@theme`-Block von `style.css` aufnehmen.
-- [ ] B6: `as`-Casts auf `event.target` durch `instanceof`-Guards ersetzen:
+- [x] B5: Freie Farbwerte (`#ffc571`, `#f6f2f2`, `#fbfbfb`, `#74687e`) als Tokens in den `@theme`-Block von `style.css` aufnehmen.
+- [x] B6: `as`-Casts auf `event.target` durch `instanceof`-Guards ersetzen:
   - `Booking.ts:752, 1260, 1512, 1786, 1795`,
   - `modal.ts:41`,
   - in `services.ts:62` den Filter als Type-Guard schreiben.
-- [ ] B7: `loadHotel` verschluckt Fehler. Den Fehler loggen oder anzeigen (`Booking.ts:1291`).
-- [ ] B8: `screenshots/fruehstueck-zimmerkarte.png` (258 KB) entweder bewusst behalten oder entfernen.
+- [x] B7: `loadHotel` verschluckt Fehler. Den Fehler loggen oder anzeigen (`Booking.ts:1291`). Umgesetzt: Hinweis in der Zusammenfassung statt der Hoteladresse, Details per `console.error` (auch wenn kein Hotel hinterlegt ist).
+- [x] B8: `screenshots/fruehstueck-zimmerkarte.png` (258 KB) entweder bewusst behalten oder entfernen. Entscheidung: bewusst behalten.
 
 ### C. Typen und Duplikate
 
-- [ ] C1: `ServiceRow` existiert doppelt und unterschiedlich (`breakfast.ts:11`, `services.ts:18`). Die Store-Typen (`RoomQuantities`, `ServiceQuantities`) gehören nach `domain/booking.types.ts`, damit die Fachlogik keine Typen mehr aus dem Store importiert.
-- [ ] C2: `Booking`, `BookingPosition` und `BookingService` in `Booking.ts:44-68` doppeln `BookingRequest`. `BookingRequestAddress` doppelt `Address` mit `CountryCode`. Die Typen daraus ableiten, statt sie zu kopieren.
-- [ ] C3: Einen Union-Typ `RejectionCode` statt `code: string` einführen und eine gemeinsame Map Code → Text anlegen. Sie ersetzt die zwei Switches `getRejectionMessage` und `formatUnavailableReason`.
+- [x] C1: `ServiceRow` existiert doppelt und unterschiedlich (`breakfast.ts:11`, `services.ts:18`). Die Store-Typen (`RoomQuantities`, `ServiceQuantities`) gehören nach `domain/booking.types.ts`, damit die Fachlogik keine Typen mehr aus dem Store importiert. Umgesetzt in `src/shared/types/booking.types.ts` (statt `domain/`), weil Store und Fachlogik beide von dort importieren.
+- [x] C2: `Booking`, `BookingPosition` und `BookingService` in `Booking.ts:44-68` doppeln `BookingRequest`. `BookingRequestAddress` doppelt `Address` mit `CountryCode`. Die Typen daraus ableiten, statt sie zu kopieren.
+- [x] C3: Einen Union-Typ `RejectionCode` statt `code: string` einführen und eine gemeinsame Map Code → Text anlegen. Sie ersetzt die zwei Switches `getRejectionMessage` und `formatUnavailableReason`.
 - [ ] C4: `formatRoomsFree` gibt es doppelt mit unterschiedlichem Text (`roomQuantity.ts:138`, `Booking.ts:2036`). Zusammenführen.
 - [ ] C5: Ein gemeinsames `getStepButtonHtml()` für `getServiceStepHtml` (`:637`) und `getQuantityStepHtml` (`:738`) anlegen.
 

@@ -203,8 +203,9 @@ export class MainHeader extends AbstractView {
      * zurückgesetzter Buchung.
      */
     private handleStepClick(event: MouseEvent): void {
-        const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[data-step-target]');
-        if (!link) return;
+        if (!(event.target instanceof Element)) return;
+        const link = event.target.closest('a[data-step-target]');
+        if (!(link instanceof HTMLAnchorElement)) return;
 
         event.preventDefault();
         scrollToSection(link.dataset.stepTarget ?? '');

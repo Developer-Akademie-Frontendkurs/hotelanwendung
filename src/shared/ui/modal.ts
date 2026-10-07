@@ -39,7 +39,8 @@ export function openModal(options: ModalOptions): HTMLDialogElement {
         close();
     });
     dialog.addEventListener('click', (event: MouseEvent): void => {
-        const target = event.target as HTMLElement;
+        const target = event.target;
+        if (!(target instanceof Element)) return;
         // Ein Klick auf den Hintergrund trifft den Dialog selbst, nicht seinen Inhalt.
         if (target === dialog || target.closest('[data-modal-close]') !== null) close();
     });

@@ -7,6 +7,8 @@
  * am Feld sieht und nicht erst nach dem Absenden.
  */
 
+import type { Address, BillingAddress, CustomerDetails } from '../../shared/types/booking.types';
+
 /** Die Länder aus `is_supported_country()` – Reihenfolge wie im Auswahlfeld. */
 export const COUNTRIES = [
     { code: 'AT', label: 'Österreich' },
@@ -20,36 +22,6 @@ export type CountryCode = (typeof COUNTRIES)[number]['code'];
 
 export const DEFAULT_COUNTRY: CountryCode = 'AT';
 
-export type Customer = {
-    firstName: string;
-    lastName: string;
-    email: string;
-    /** Optional – `null`, wenn leer. */
-    phone: string | null;
-};
-
-/** Die Form der Adressparameter von `create_booking` (V13). */
-export type Address = {
-    street: string;
-    houseNumber: string;
-    postalCode: string;
-    city: string;
-    countryCode: CountryCode;
-};
-
-export type BillingAddress = Address & {
-    /** „Firma / z. Hd." – optional, `null`, wenn leer. */
-    company: string | null;
-};
-
-export type CustomerDetails = {
-    customer: Customer;
-    /** Sitzadresse – wo der Gast wohnt. Pflicht. */
-    residence: Address;
-    /** `null` heißt: Rechnung an die Sitzadresse. */
-    billing: BillingAddress | null;
-};
-
 /** Ein Feld, das fehlt oder ungültig ist – `<Gruppe>.<Feld>`. */
 export type InvalidField = `customer.${'firstName' | 'lastName' | 'email'}` | `${'residence' | 'billing'}.${'street' | 'houseNumber' | 'postalCode' | 'city' | 'countryCode'}`;
 
@@ -59,7 +31,8 @@ export function isCountryCode(value: string): value is CountryCode {
     return COUNTRIES.some((country: (typeof COUNTRIES)[number]): boolean => country.code === value);
 }
 
-export function getCountryLabel(code: CountryCode): string {
+/** Unbekannte Codes erscheinen so, wie sie sind – ein Land ohne Namen ist besser als keins. */
+export function getCountryLabel(code: string): string {
     return COUNTRIES.find((country: (typeof COUNTRIES)[number]): boolean => country.code === code)?.label ?? code;
 }
 

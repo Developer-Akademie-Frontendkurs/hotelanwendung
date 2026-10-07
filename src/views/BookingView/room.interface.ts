@@ -1,3 +1,5 @@
+import type { UnavailableReason } from '../../shared/types/booking.codes';
+
 /** Eine Zeile aus der Datenbankfunktion `search_availability`. */
 export interface RoomAvailability {
     room_type_id: string;
@@ -52,7 +54,8 @@ export interface RoomCardAvailability {
     nights: number;
     roomsFree: number | null;
     isBookable: boolean;
-    unavailableReason: string | null;
+    /** `null` auch bei einem Grund, den die Oberfläche nicht kennt – dann zeigt sie den allgemeinen Satz. */
+    unavailableReason: UnavailableReason | null;
 }
 
 /** Alles, was eine Zimmerkarte zum Rendern braucht – aus beiden Abfragen zusammengeführt. */

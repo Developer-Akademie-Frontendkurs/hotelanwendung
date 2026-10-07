@@ -113,9 +113,13 @@ export class Router {
     }
 
     private async handleLinkClick(event: MouseEvent): Promise<void> {
-        if ((event.target as HTMLElement).matches('a[data-link]')) {
-            event.preventDefault();
-            await this.navigateTo((event.target as HTMLAnchorElement).href);
-        }
+        if (!(event.target instanceof Element)) return;
+        // `closest` statt `matches`: Ein Klick auf ein Kind des Links (z. B. das Logo-`<img>`)
+        // soll ebenfalls über den Router laufen statt die Seite neu zu laden.
+        const link = event.target.closest('a[data-link]');
+        if (!(link instanceof HTMLAnchorElement)) return;
+
+        event.preventDefault();
+        await this.navigateTo(link.href);
     }
 }

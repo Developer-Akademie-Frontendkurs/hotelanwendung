@@ -6,7 +6,7 @@
  * dem Absenden sieht – und genau deshalb steckt jede sichtbare Zeile auch in der Summe (V16).
  */
 
-import type { RoomQuantities, ServiceQuantities } from '../../shared/state/bookingState';
+import type { RoomQuantities, ServiceQuantities } from '../../shared/types/booking.types';
 import { getBreakfastAmountCents, type BreakfastService, type Occupancy } from './breakfast';
 import type { RoomCard } from './room.interface';
 import { BREAKFAST, getServiceAmountCents, type ExtraService } from './services';

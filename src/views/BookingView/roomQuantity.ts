@@ -1,4 +1,4 @@
-import type { RoomQuantities } from '../../shared/state/bookingState';
+import type { RoomQuantities } from '../../shared/types/booking.types';
 import { RoomCard } from './room.interface';
 
 /**

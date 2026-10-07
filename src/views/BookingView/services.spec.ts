@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService, type ServiceRow } from './services';
+import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService } from './services';
+import type { ServiceRow } from '../../shared/types/booking.types';
 
 function row(code: string, charge_basis: string, amount_cents: number, sort_order: number): ServiceRow {
     return { id: code, code, name: code, description: null, charge_basis, amount_cents, child_amount_cents: null, currency: 'EUR', sort_order };
