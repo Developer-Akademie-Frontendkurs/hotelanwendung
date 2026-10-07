@@ -26,11 +26,6 @@ import { buildOrderLines, getOrderTotalCents, type OrderLine } from './summary';
 import type { HotelRow } from './hotel.interface';
 import './booking.css';
 
-/*
-    *** Vorbereitung und Verknüpfung BookingView zu Datenbank ***
-        TODO: Migrations notwending? Eventuelle Änderungen an der Datenbank?
-*/
-
 type DayCell = {
     date: Date;
     inCurrentMonth: boolean;
@@ -155,15 +150,6 @@ const ICON_REMOVE = /*html*/ `
     </svg>
 `;
 
-/**
- * Ausstattung je Zimmerkategorie.
- *
- * Für diese vier Merkmale gibt es kein Datenbankfeld – die Werte stammen aus dem
- * Figma-Design. Kategorien ohne Eintrag (z. B. `einzelzimmer-alpin`) bekommen keine
- * Ausstattungsliste, statt erfundene Merkmale anzuzeigen.
- */
-// Icons der Zusatzleistungen, zugeordnet über `services.code` – wie die Ausstattung über
-// den `slug`. Darstellung gehört nicht in die Datenbank (E49).
 const SERVICE_ICON_CLASS = 'w-9 h-9 shrink-0 text-purple-haze';
 const SERVICE_ICONS: Readonly<Record<string, string>> = {
     BREAKFAST: /*html*/ `
@@ -193,6 +179,15 @@ const SERVICE_ICONS: Readonly<Record<string, string>> = {
         </svg>`,
 };
 
+/**
+ * Ausstattung je Zimmerkategorie.
+ *
+ * Für diese vier Merkmale gibt es kein Datenbankfeld – die Werte stammen aus dem
+ * Figma-Design. Kategorien ohne Eintrag (z. B. `einzelzimmer-alpin`) bekommen keine
+ * Ausstattungsliste, statt erfundene Merkmale anzuzeigen.
+ */
+// Icons der Zusatzleistungen, zugeordnet über `services.code` – wie die Ausstattung über
+// den `slug`. Darstellung gehört nicht in die Datenbank (E49).
 const ROOM_AMENITIES: Readonly<Record<string, readonly RoomAmenity[]>> = {
     'double-suite': [
         { icon: ICON_BED, label: 'King-size Bett' },
@@ -415,6 +410,10 @@ export class BookingView extends AbstractView {
         if (field !== 'adults' && field !== 'children') return;
 
         this.guests[field] = target.value === '' ? null : Number(target.value);
+        // Sofort, nicht erst nach `loadRooms()`: Schlägt das Neuladen fehl, stünden sonst
+        // mehr Kinderbetten als Kinder in der Bestellung, und `create_booking` lehnt mit
+        // `ungueltige_leistung` ab.
+        if (field === 'children') this.reconcileSelectedServices();
         this.renderGuestsNotice();
         this.updateBookingSteps();
         // Der weiter-Knopf hängt jetzt mit an der Belegung.
@@ -655,6 +654,15 @@ export class BookingView extends AbstractView {
         `;
     }
 
+    /**
+     * Zieht die gewählten Leistungen auf das nach, was Zimmer und Kinder gerade erlauben –
+     * das Kinderbett sinkt mit (1 je Zimmer und Kind, E49). Rein lokal, ohne Anfrage: Der
+     * Abgleich darf nicht davon abhängen, dass ein Neuladen gelingt.
+     */
+    private reconcileSelectedServices(): void {
+        bookingState.setServices(reconcileServices(bookingState.getServices(), this.extraServices, this.getServiceContext()));
+    }
+
     private getServiceContext(): { rooms: number; children: number } {
         return { rooms: getTotalRooms(bookingState.getRoomQuantities()), children: this.guests.children ?? 0 };
     }
@@ -810,7 +818,7 @@ export class BookingView extends AbstractView {
         const clamped = clampQuantity(desired, availability.roomsFree, otherRooms, roomLimit);
         bookingState.setRoomQuantity(roomTypeId, clamped.value);
         // Weniger Zimmer können das Kinderbett-Maximum senken (1 je Zimmer, E49).
-        bookingState.setServices(reconcileServices(bookingState.getServices(), this.extraServices, this.getServiceContext()));
+        this.reconcileSelectedServices();
 
         // Der Gast soll sofort erfahren, warum es nicht weitergeht — nicht erst beim Absenden.
         const message = desired > clamped.value ? getLimitMessage(clamped.limitedBy, availability.roomsFree, roomLimit) : null;
@@ -1273,7 +1281,7 @@ export class BookingView extends AbstractView {
                 // Direkt statt über `setRoomQuantity()`: Entfernen muss auch gehen, wenn die
                 // Kategorie gerade keine Verfügbarkeit hat (Zeitraum zurückgesetzt).
                 bookingState.setRoomQuantity(id, 0);
-                bookingState.setServices(reconcileServices(bookingState.getServices(), this.extraServices, this.getServiceContext()));
+                this.reconcileSelectedServices();
                 this.updateQuantityUi(null);
                 break;
             case 'breakfast':
@@ -1292,10 +1300,28 @@ export class BookingView extends AbstractView {
         document.getElementById('booking-summary-title')?.focus();
     }
 
+    /**
+     * Der Router baut bei jeder Navigation eine neue View; eine alte Instanz lebt weiter,
+     * bis ihre Anfragen zurück sind. Ob sie noch angezeigt wird, verrät ihr Container: Den
+     * hat der Router beim Seitenwechsel aus dem DOM genommen.
+     */
+    private isDisplayed(): boolean {
+        return this.roomsEl?.isConnected === true;
+    }
+
+    /**
+     * Antwort verwerfen, wenn eine neuere Suche läuft – oder die View nicht mehr angezeigt
+     * wird: `roomsRequestId` gilt nur je Instanz, und eine verspätete Antwort der alten
+     * würde sonst mit veralteten Zimmern und Gästen in den globalen `bookingState` schreiben.
+     */
+    private isStale(requestId: number): boolean {
+        return requestId !== this.roomsRequestId || !this.isDisplayed();
+    }
+
     /** Die eine Zeile aus `hotels` (E14). */
     private async loadHotel(): Promise<void> {
         const { data, error } = await supabase.from('hotels').select('name, address_line1, postal_code, city, country_code, check_in_time, check_out_time').limit(1).maybeSingle();
-        if (error) return;
+        if (error || !this.isDisplayed()) return;
 
         this.hotel = data;
         this.renderSummary();
@@ -1336,7 +1362,7 @@ export class BookingView extends AbstractView {
             ]);
 
             // Eine überholte Antwort darf das Ergebnis der aktuellen Suche nicht ersetzen.
-            if (requestId !== this.roomsRequestId) return;
+            if (this.isStale(requestId)) return;
 
             if (details.error) throw new Error(details.error.message);
             if (availability !== null && availability.error) throw new Error(availability.error.message);
@@ -1352,12 +1378,12 @@ export class BookingView extends AbstractView {
             bookingState.setRoomQuantities(reconciled.quantities);
             this.quantityNotice = reconciled.notice;
             // … und damit auch die Leistungen: weniger Kinder, weniger Kinderbetten.
-            bookingState.setServices(reconcileServices(bookingState.getServices(), this.extraServices, this.getServiceContext()));
+            this.reconcileSelectedServices();
 
             this.roomsState = 'ready';
             this.roomsError = null;
         } catch (error) {
-            if (requestId !== this.roomsRequestId) return;
+            if (this.isStale(requestId)) return;
             this.roomsState = 'error';
             this.roomsError = error instanceof Error ? error.message : 'Unbekannter Fehler';
         }

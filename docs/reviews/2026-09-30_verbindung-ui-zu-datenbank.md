@@ -31,18 +31,18 @@ Die Reihenfolge: zuerst Bugs, dann schnelle Aufräumarbeiten, dann Struktur, dan
   - Lösung: `src/shared/ui/html.ts` mit `escapeHtml()` anlegen.
   - Anwenden auf `room.name/description/imageAlt`, `service.name/description`, `line.name` (auch im `aria-label`), die Hotelzeilen und `roomsError`.
   - Stellen in `Booking.ts`: ca. Z. 434, 486, 580, 586, 918, 925, 1137, 1165, 1216, 1225.
-- [ ] **A4: Späte Antworten aus einer alten View-Instanz überschreiben den globalen Zustand.**
+- [x] **A4: Späte Antworten aus einer alten View-Instanz überschreiben den globalen Zustand.**
   - Wo: `loadRooms` (`Booking.ts:1332–1348`).
   - Lösung: Vor dem Schreiben in den Store `if (!this.roomsEl?.isConnected) return;` prüfen, oder einen `AbortController` verwenden.
-- [ ] **A5: Kinderbetten werden erst nach dem Laden abgeglichen.**
+- [x] **A5: Kinderbetten werden erst nach dem Laden abgeglichen.**
   - Wird die Zahl der Kinder verringert und schlägt `loadRooms` danach fehl, bleiben zu viele Kinderbetten übrig. `create_booking` antwortet dann mit `ungueltige_leistung`.
   - Lösung: Den Abgleich schon in `handleGuestChange` synchron ausführen.
 - [ ] **A6: Überzähliges `</output>` entfernen** (`Booking.ts:1138`).
 
 ### B. Schnelle Aufräumarbeiten
 
-- [ ] B1: Lint wieder grün machen: `checker` in `vite.config.ts` benutzen oder entfernen, den Label-Verweis im Tagebuch reparieren.
-- [ ] B2: Veraltete Kommentare korrigieren:
+- [x] B1: Lint wieder grün machen: `checker` in `vite.config.ts` benutzen oder entfernen, den Label-Verweis im Tagebuch reparieren.
+- [x] B2: Veraltete Kommentare korrigieren:
   - den TODO-Block in `Booking.ts:27-30`,
   - `breakfast.ts:1` (dort steht „je Kategorie“, es gilt inzwischen „je Vorgang“),
   - den JSDoc von `ROOM_AMENITIES`, der jetzt über `SERVICE_ICONS` hängt (`:156`).

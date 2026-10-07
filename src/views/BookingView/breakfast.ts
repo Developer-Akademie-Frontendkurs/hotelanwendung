@@ -1,5 +1,5 @@
 /**
- * Frühstück je Zimmerkategorie (E47).
+ * Frühstück je Buchungsvorgang (E47).
  *
  * Die Rechnung hier ist eine **Bequemlichkeit, keine zweite Wahrheit** – dasselbe
  * Verhältnis wie bei der Ausgrauung des Mengenwählers (Phase 9b, Punkt 3). Verbindlich
