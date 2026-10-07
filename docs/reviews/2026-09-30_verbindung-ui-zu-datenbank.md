@@ -27,7 +27,7 @@ Die Reihenfolge: zuerst Bugs, dann schnelle Aufräumarbeiten, dann Struktur, dan
   - Wo: `booking.service.ts:109`. Dort wird jeder `error` zu `{ ok: false }`.
   - Das widerspricht V15: „Ablehnung als Ergebnis, Infrastrukturfehler werfen“.
   - Lösung: Nur `P0001` mit `DETAIL`-JSON ist eine Ablehnung, alles andere wird geworfen. Bei einem Wurf bleibt der Knopf gesperrt, und der Hinweis sagt „Status unklar, bitte nicht erneut buchen“.
-- [ ] **A3: Werte aus der Datenbank landen ungeschützt in `innerHTML` (XSS).**
+- [x] **A3: Werte aus der Datenbank landen ungeschützt in `innerHTML` (XSS).**
   - Lösung: `src/shared/ui/html.ts` mit `escapeHtml()` anlegen.
   - Anwenden auf `room.name/description/imageAlt`, `service.name/description`, `line.name` (auch im `aria-label`), die Hotelzeilen und `roomsError`.
   - Stellen in `Booking.ts`: ca. Z. 434, 486, 580, 586, 918, 925, 1137, 1165, 1216, 1225.
@@ -92,7 +92,7 @@ src/shared/
 - [ ] D6: Aktionen im Store bündeln, zum Beispiel `selectRoomQuantity()`. Sie setzt die Menge, gleicht die Leistungen ab (heute dreimal kopiert in `:811`, `:1269`, `:1346`) und löst genau ein `notify` aus.
 - [ ] D7: Einen `destroy()`-Hook in `AbstractView` und `router.ts` einführen. Die Abo-Behelfslösung in `renderSummary` (`:1087`) wird dann entfernt, ebenso die versteckte Abhängigkeit vom `reset()` in `MainHeader.destroy()`.
 - [ ] D8: Die Templates schrittweise nach `templates/*.ts` verschieben, in dieser Reihenfolge: Icons, Kalender, Zimmer, Checkout. `Booking.ts` hat aktuell 2073 Zeilen.
-- [ ] D9: `CLAUDE.md` aktualisieren. Dort steht noch „keine Service-Schicht“, es gibt aber inzwischen eine.
+- [x] D9: `CLAUDE.md` aktualisieren. Dort steht noch „keine Service-Schicht“, es gibt aber inzwischen eine.
 
 ### E. Tests
 

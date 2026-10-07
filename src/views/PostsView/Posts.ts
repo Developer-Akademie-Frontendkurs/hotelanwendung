@@ -1,6 +1,7 @@
 import AbstractView from '../AbstractView';
 import { Post } from './post.interface';
 import { supabase } from '../../shared/services/supabase';
+import { escapeHtml } from '../../shared/ui/html';
 
 export class PostsView extends AbstractView {
     posts: Post[] = [];
@@ -37,8 +38,8 @@ export class PostsView extends AbstractView {
                     (post) => `
                         <li class="mb-2">
                             <strong>
-                                <a href="/posts/${post.id}" data-link class="text-blue-500 hover:underline">
-                                    ${post.title}
+                                <a href="/posts/${escapeHtml(encodeURIComponent(post.id))}" data-link class="text-blue-500 hover:underline">
+                                    ${escapeHtml(post.title)}
                                 </a>
                             </strong>
                         </li>

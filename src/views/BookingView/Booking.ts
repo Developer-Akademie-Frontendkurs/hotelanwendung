@@ -4,6 +4,7 @@ import { supabase } from '../../shared/services/supabase';
 import { BookingFailedError, createBooking, type BookingRejection, type CreatedBooking } from '../../shared/services/booking.service';
 import { openModal } from '../../shared/ui/modal';
 import { scrollToSection } from '../../shared/ui/scroll';
+import { escapeHtml } from '../../shared/ui/html';
 import logo from '../../assets/img/logo-small.svg';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
 import { clampQuantity, getLimitMessage, getMissingBeds, getRoomLimit, getRoomMax, getTotalRooms, normalizeQuantityInput, reconcileQuantities } from './roomQuantity';
@@ -444,7 +445,7 @@ export class BookingView extends AbstractView {
                     <div class="flex flex-col gap-8 768:gap-11">
                         ${this.rooms.map((room: RoomCard): string => this.getRoomCardHtml(room)).join('')}
                     </div>
-                    <p data-capacity-notice role="status" aria-live="polite" class="${this.getCapacityText() === '' ? 'hidden' : ''} mt-8 768:mt-11 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-4 py-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">${this.getCapacityText()}</p>
+                    <p data-capacity-notice role="status" aria-live="polite" class="${this.getCapacityText() === '' ? 'hidden' : ''} mt-8 768:mt-11 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-4 py-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">${escapeHtml(this.getCapacityText())}</p>
                     ${this.getServicesSectionHtml()}
                 `;
         }
@@ -455,13 +456,13 @@ export class BookingView extends AbstractView {
 
         return /*html*/ `
             <p role="status" class="mb-8 768:mb-11 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-4 py-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">
-                ${this.quantityNotice}
+                ${escapeHtml(this.quantityNotice)}
             </p>
         `;
     }
 
     private getRoomsNoticeHtml(message: string): string {
-        return /*html*/ `<p class="font-antic-didone text-18 768:text-20 text-purple-haze-dark/70">${message}</p>`;
+        return /*html*/ `<p class="font-antic-didone text-18 768:text-20 text-purple-haze-dark/70">${escapeHtml(message)}</p>`;
     }
 
     private getRoomCardHtml(room: RoomCard): string {
@@ -486,11 +487,11 @@ export class BookingView extends AbstractView {
                     </ul>
                 `;
 
-        const description = room.description === null ? '' : /*html*/ `<p class="font-antic-didone text-18 768:text-20 text-purple-haze-dark">${room.description}</p>`;
+        const description = room.description === null ? '' : /*html*/ `<p class="font-antic-didone text-18 768:text-20 text-purple-haze-dark">${escapeHtml(room.description)}</p>`;
         const isSelected = bookingState.getRoomQuantity(room.roomTypeId) > 0;
 
         return /*html*/ `
-            <article data-room-card="${room.roomTypeId}" class="flex flex-col 768:flex-row overflow-hidden ${isBookable ? '' : 'opacity-60'} ${isSelected ? 'ring-2 ring-purple-haze' : ''}">
+            <article data-room-card="${escapeHtml(room.roomTypeId)}" class="flex flex-col 768:flex-row overflow-hidden ${isBookable ? '' : 'opacity-60'} ${isSelected ? 'ring-2 ring-purple-haze' : ''}">
                 ${this.getRoomImageHtml(room)}
                 <div class="flex-1 flex flex-col justify-center gap-3 bg-purple-haze-light px-5 py-6 768:px-8 768:py-8">
                     ${amenitiesHtml}
@@ -524,7 +525,7 @@ export class BookingView extends AbstractView {
         const quantity = bookingState.getRoomQuantity(room.roomTypeId);
         const otherRooms = getTotalRooms(bookingState.getRoomQuantities()) - quantity;
         const max = getRoomMax(availability.roomsFree, otherRooms, getRoomLimit(this.guests.adults));
-        const inputId = `booking-rooms-${room.slug}`;
+        const inputId = escapeHtml(`booking-rooms-${room.slug}`);
 
         return /*html*/ `
             <div class="flex flex-col gap-1.5">
@@ -534,7 +535,7 @@ export class BookingView extends AbstractView {
                         ${this.getQuantityStepHtml(room, -1, `Ein Zimmer weniger – ${room.name}`, '&minus;', quantity === 0)}
                         <input
                             id="${inputId}"
-                            data-room-quantity="${room.roomTypeId}"
+                            data-room-quantity="${escapeHtml(room.roomTypeId)}"
                             type="number"
                             inputmode="numeric"
                             min="0"
@@ -546,7 +547,7 @@ export class BookingView extends AbstractView {
                         ${this.getQuantityStepHtml(room, 1, `Ein Zimmer mehr – ${room.name}`, '+', quantity >= (availability.roomsFree ?? 0))}
                     </div>
                 </div>
-                <p data-room-quantity-notice="${room.roomTypeId}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze text-right"></p>
+                <p data-room-quantity-notice="${escapeHtml(room.roomTypeId)}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze text-right"></p>
             </div>
         `;
     }
@@ -579,16 +580,18 @@ export class BookingView extends AbstractView {
     }
 
     /** Eine Zeile der Sektion – Icon, Text, Preis und das Bedienelement rechts. */
+    /** `control` ist fertiges Markup; alle anderen Werte sind Text und werden hier escapt. */
     private getServiceRowShellHtml(code: string, inputId: string, name: string, description: string | null, label: string, control: string, selected: boolean): string {
-        const descriptionHtml = description === null ? '' : /*html*/ `<p class="font-antic-didone text-14 768:text-16 leading-tight text-purple-haze-dark/80">${description}</p>`;
+        const descriptionHtml =
+            description === null ? '' : /*html*/ `<p class="font-antic-didone text-14 768:text-16 leading-tight text-purple-haze-dark/80">${escapeHtml(description)}</p>`;
 
         return /*html*/ `
-            <li data-service-row="${code}" class="flex items-center gap-4 bg-purple-haze-light px-5 py-4 768:px-8 768:py-5 ${selected ? 'ring-2 ring-purple-haze' : ''}">
+            <li data-service-row="${escapeHtml(code)}" class="flex items-center gap-4 bg-purple-haze-light px-5 py-4 768:px-8 768:py-5 ${selected ? 'ring-2 ring-purple-haze' : ''}">
                 ${SERVICE_ICONS[code] ?? ''}
                 <div class="flex-1 min-w-0 flex flex-col gap-1">
-                    <label for="${inputId}" class="font-playfair-display font-medium text-16 768:text-18 leading-tight text-purple-haze-dark cursor-pointer">${name}</label>
+                    <label for="${escapeHtml(inputId)}" class="font-playfair-display font-medium text-16 768:text-18 leading-tight text-purple-haze-dark cursor-pointer">${escapeHtml(name)}</label>
                     ${descriptionHtml}
-                    <p data-service-amount="${code}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze">${label}</p>
+                    <p data-service-amount="${escapeHtml(code)}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze">${escapeHtml(label)}</p>
                 </div>
                 ${control}
             </li>
@@ -598,7 +601,7 @@ export class BookingView extends AbstractView {
     private getCheckboxHtml(inputId: string, dataAttribute: string, checked: boolean, disabled: boolean): string {
         return /*html*/ `
             <input
-                id="${inputId}"
+                id="${escapeHtml(inputId)}"
                 ${dataAttribute}
                 type="checkbox"
                 ${checked ? 'checked' : ''}
@@ -622,17 +625,18 @@ export class BookingView extends AbstractView {
         const quantity = bookingState.getServiceQuantity(service.code);
         const max = getServiceMax(service, this.getServiceContext());
         const inputId = `booking-service-${service.code.toLowerCase()}`;
+        const code = escapeHtml(service.code);
 
         const control =
             service.chargeBasis === 'per_unit'
                 ? /*html*/ `
                     <div class="shrink-0 flex items-center gap-2">
                         ${this.getServiceStepHtml(service, -1, '&minus;', quantity === 0)}
-                        <output id="${inputId}" data-service-quantity="${service.code}" aria-live="polite" class="w-8 text-center font-antic-didone text-18 456:text-24 leading-tight text-purple-haze-dark">${quantity.toString()}</output>
+                        <output id="${escapeHtml(inputId)}" data-service-quantity="${code}" aria-live="polite" class="w-8 text-center font-antic-didone text-18 456:text-24 leading-tight text-purple-haze-dark">${quantity.toString()}</output>
                         ${this.getServiceStepHtml(service, 1, '+', quantity >= max)}
                     </div>
                 `
-                : this.getCheckboxHtml(inputId, `data-service-code="${service.code}"`, quantity > 0, max === 0);
+                : this.getCheckboxHtml(inputId, `data-service-code="${code}"`, quantity > 0, max === 0);
 
         return this.getServiceRowShellHtml(service.code, inputId, service.name, service.description, this.getServiceLabel(service), control, quantity > 0);
     }
@@ -643,8 +647,8 @@ export class BookingView extends AbstractView {
             <button
                 type="button"
                 data-service-step="${step.toString()}"
-                data-service-code="${service.code}"
-                aria-label="${ariaLabel}"
+                data-service-code="${escapeHtml(service.code)}"
+                aria-label="${escapeHtml(ariaLabel)}"
                 ${disabled ? 'disabled' : ''}
                 class="shrink-0 flex items-center justify-center w-9 h-9 456:w-10 456:h-10 rounded-full bg-purple-haze font-antic-didone text-24 leading-none text-white cursor-pointer transition-colors hover:bg-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-haze"
             >${glyph}</button>
@@ -743,8 +747,8 @@ export class BookingView extends AbstractView {
             <button
                 type="button"
                 data-room-step="${step.toString()}"
-                data-room-type="${room.roomTypeId}"
-                aria-label="${ariaLabel}"
+                data-room-type="${escapeHtml(room.roomTypeId)}"
+                aria-label="${escapeHtml(ariaLabel)}"
                 ${disabled ? 'disabled' : ''}
                 class="shrink-0 flex items-center justify-center w-9 h-9 456:w-10 456:h-10 rounded-full bg-purple-haze font-antic-didone text-24 leading-none text-white cursor-pointer transition-colors hover:bg-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-haze"
             >${glyph}</button>
@@ -918,14 +922,14 @@ export class BookingView extends AbstractView {
         const image =
             room.imageUrl === null
                 ? /*html*/ `<div class="absolute inset-0 bg-purple-haze-dark"></div>`
-                : /*html*/ `<img src="${room.imageUrl}" alt="${room.imageAlt}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />`;
+                : /*html*/ `<img src="${escapeHtml(room.imageUrl)}" alt="${escapeHtml(room.imageAlt)}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />`;
 
         return /*html*/ `
             <div class="relative shrink-0 768:w-76 aspect-[304/321]">
                 ${image}
                 <div class="absolute inset-0 bg-gradient-to-b from-transparent from-35% to-purple-haze/75 to-90%"></div>
-                ${room.availability?.priceLabel == null ? '' : /*html*/ `<span class="absolute top-4 right-0 bg-purple-haze px-4 py-1 font-antic-didone text-20 768:text-24 text-white">${room.availability.priceLabel}</span>`}
-                <h3 class="absolute left-4 bottom-4 right-4 font-playfair-display font-medium text-32 768:text-36 leading-tight text-eggshell break-words">${room.name}</h3>
+                ${room.availability?.priceLabel == null ? '' : /*html*/ `<span class="absolute top-4 right-0 bg-purple-haze px-4 py-1 font-antic-didone text-20 768:text-24 text-white">${escapeHtml(room.availability.priceLabel)}</span>`}
+                <h3 class="absolute left-4 bottom-4 right-4 font-playfair-display font-medium text-32 768:text-36 leading-tight text-eggshell break-words">${escapeHtml(room.name)}</h3>
             </div>
         `;
     }
@@ -1137,7 +1141,7 @@ export class BookingView extends AbstractView {
 
         return /*html*/ `
             <div class="flex flex-col gap-4">
-                <address class="not-italic font-antic-didone text-16 leading-tight text-purple-haze-dark">${lines.join('<br>')}</address>
+                <address class="not-italic font-antic-didone text-16 leading-tight text-purple-haze-dark">${lines.map(escapeHtml).join('<br>')}</address>
                 <hr class="border-t-[0.5px] border-purple-haze/45">
             </div>
         `;
@@ -1158,14 +1162,14 @@ export class BookingView extends AbstractView {
                         const image =
                             room.imageUrl === null
                                 ? /*html*/ `<div class="shrink-0 w-24 h-18 rounded-[0.6875rem] bg-purple-haze-dark"></div>`
-                                : /*html*/ `<img src="${room.imageUrl}" alt="" loading="lazy" class="shrink-0 w-24 h-18 rounded-[0.6875rem] object-cover" />`;
+                                : /*html*/ `<img src="${escapeHtml(room.imageUrl)}" alt="" loading="lazy" class="shrink-0 w-24 h-18 rounded-[0.6875rem] object-cover" />`;
                         const amenities = (ROOM_AMENITIES[room.slug] ?? []).map((amenity: RoomAmenity): string => amenity.label).join(' · ');
 
                         return /*html*/ `
                             <li class="flex items-center gap-4">
                                 ${image}
                                 <div class="flex flex-col gap-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">
-                                    <span class="font-playfair-display font-medium">${room.name}</span>
+                                    <span class="font-playfair-display font-medium">${escapeHtml(room.name)}</span>
                                     ${amenities === '' ? '' : /*html*/ `<span>${amenities}</span>`}
                                 </div>
                             </li>
@@ -1191,7 +1195,7 @@ export class BookingView extends AbstractView {
                     ${this.getCheckTileHtml('Check-in', formatStayDate(checkIn, 'ab', this.hotel?.check_in_time ?? null))}
                     ${this.getCheckTileHtml('Check-out', formatStayDate(checkOut, 'bis', this.hotel?.check_out_time ?? null))}
                 </div>
-                <p class="font-antic-didone text-16 leading-tight text-purple-haze-dark text-center">${stay}</p>
+                <p class="font-antic-didone text-16 leading-tight text-purple-haze-dark text-center">${escapeHtml(stay)}</p>
             </div>
         `;
     }
@@ -1200,8 +1204,8 @@ export class BookingView extends AbstractView {
         return /*html*/ `
             <div class="flex-1 flex items-center justify-center rounded-[0.625rem] bg-[#f6f2f2] p-3 text-center font-antic-didone text-16 leading-tight text-purple-haze-dark">
                 <span>
-                    <span class="block font-playfair-display font-medium">${label}</span>
-                    ${value}
+                    <span class="block font-playfair-display font-medium">${escapeHtml(label)}</span>
+                    ${escapeHtml(value)}
                 </span>
             </div>
         `;
@@ -1210,22 +1214,22 @@ export class BookingView extends AbstractView {
     /** Eine Bestellzeile. Das Kreuz aus dem Entwurf entfernt sie: Zimmer auf 0, Leistung abgewählt. */
     private getOrderRowHtml(line: OrderLine): string {
         const detail = this.getOrderLineDetail(line);
-        const detailHtml = detail === '' ? '' : /*html*/ `<span class="block font-antic-didone">${detail}</span>`;
+        const detailHtml = detail === '' ? '' : /*html*/ `<span class="block font-antic-didone">${escapeHtml(detail)}</span>`;
         const price = line.amountCents === null ? '–' : line.amountCents === 0 ? 'kostenlos' : formatPrice(line.amountCents, line.currency);
 
         return /*html*/ `
             <div class="flex items-center justify-between gap-4 rounded-[0.625rem] border border-purple-haze p-3">
                 <p class="font-playfair-display font-medium text-16 leading-tight text-purple-haze-dark">
-                    ${line.name}
+                    ${escapeHtml(line.name)}
                     ${detailHtml}
                 </p>
                 <div class="flex shrink-0 items-center gap-2">
-                    <span class="font-antic-didone text-20 768:text-24 leading-none text-purple-haze-dark">${price}</span>
+                    <span class="font-antic-didone text-20 768:text-24 leading-none text-purple-haze-dark">${escapeHtml(price)}</span>
                     <button
                         type="button"
                         data-summary-remove="${line.kind}"
-                        data-summary-id="${line.id}"
-                        aria-label="${line.name} entfernen"
+                        data-summary-id="${escapeHtml(line.id)}"
+                        aria-label="${escapeHtml(`${line.name} entfernen`)}"
                         class="shrink-0 rounded-full cursor-pointer transition-opacity hover:opacity-70 focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
                     >${ICON_REMOVE}</button>
                 </div>
@@ -1705,9 +1709,9 @@ export class BookingView extends AbstractView {
                     <h2 id="booking-confirmation-title" class="font-playfair-display text-28 768:text-36 leading-tight">Vielen Dank für Ihre Buchung.</h2>
                     <p class="font-antic-didone text-18 768:text-20 leading-snug">Ihre Buchung ist bestätigt.<br>Wir freuen uns auf Sie.</p>
                     <dl class="w-full flex flex-col gap-3 border-y-[0.5px] border-purple-haze/45 py-4 font-antic-didone text-16 768:text-18">
-                        ${this.getConfirmationRowHtml(references.length === 1 ? 'Buchungsnummer' : 'Buchungsnummern', references.join('<br>'))}
-                        ${this.getConfirmationRowHtml('Zeitraum', `${stay}<br>${formatNights(created.nights)}`)}
-                        ${this.getConfirmationRowHtml('Gesamtpreis', formatPrice(created.grandTotalCents, currency))}
+                        ${this.getConfirmationRowHtml(references.length === 1 ? 'Buchungsnummer' : 'Buchungsnummern', references)}
+                        ${this.getConfirmationRowHtml('Zeitraum', [stay, formatNights(created.nights)])}
+                        ${this.getConfirmationRowHtml('Gesamtpreis', [formatPrice(created.grandTotalCents, currency)])}
                     </dl>
                     <button type="button" data-modal-close class="w-full bg-purple-haze px-5 py-2.5 font-lato font-bold text-20 768:text-24 text-white opacity-85 hover:opacity-100 cursor-pointer">
                         zurück zur Homepage
@@ -1723,12 +1727,12 @@ export class BookingView extends AbstractView {
         });
     }
 
-    /** Werte kommen aus `create_booking` bzw. sind formatierte Zahlen – keine Eingaben des Gastes. */
-    private getConfirmationRowHtml(label: string, value: string): string {
+    /** Eine Zeile je Wert – escapt, weil Buchungsnummer und Währung aus der Datenbank kommen. */
+    private getConfirmationRowHtml(label: string, values: readonly string[]): string {
         return /*html*/ `
             <div class="flex items-start justify-between gap-4">
-                <dt>${label}</dt>
-                <dd class="text-right font-lato font-bold tracking-wide">${value}</dd>
+                <dt>${escapeHtml(label)}</dt>
+                <dd class="text-right font-lato font-bold tracking-wide">${values.map(escapeHtml).join('<br>')}</dd>
             </div>
         `;
     }

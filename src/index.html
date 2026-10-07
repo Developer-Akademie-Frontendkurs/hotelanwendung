@@ -3,6 +3,17 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!--
+            Zweite Verteidigungslinie gegen XSS: Selbst wenn ein Wert unescapt im HTML landet,
+            führt der Browser keine Inline-Skripte und keine on*-Handler aus. Erlaubt sind nur
+            Skripte vom eigenen Origin und Anfragen an Supabase (die URL setzt Vite
+            aus der .env ein). `'unsafe-inline'` bei Styles braucht der Vite-Dev-Server und die
+            `style`-Attribute der Header-Hintergründe.
+        -->
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: %VITE_SUPABASE_URL%; font-src 'self' data:; connect-src 'self' %VITE_SUPABASE_URL%; object-src 'none'; base-uri 'self'; form-action 'self'"
+        />
         <title>Startseite</title>
     </head>
 

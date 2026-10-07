@@ -8,7 +8,7 @@
  */
 
 export type ModalOptions = {
-    /** Inhalt des Popups als HTML-String. */
+    /** Inhalt des Popups als HTML-String – wird ungeprüft eingesetzt, Werte von außen also vorher mit `escapeHtml()` behandeln. */
     html: string;
     /** Beschriftet den Dialog für Screenreader – die `id` einer Überschrift im Inhalt. */
     labelledBy: string;

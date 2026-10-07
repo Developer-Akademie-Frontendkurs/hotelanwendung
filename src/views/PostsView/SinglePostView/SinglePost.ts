@@ -1,6 +1,7 @@
 import AbstractView from '../../AbstractView';
 import { Post } from './../post.interface';
 import { supabase } from '../../../shared/services/supabase';
+import { escapeHtml } from '../../../shared/ui/html';
 
 export class SinglePostView extends AbstractView {
     post: Post | undefined;
@@ -42,8 +43,8 @@ export class SinglePostView extends AbstractView {
         return `
             <h1 class="bg-yellow-500 text-3xl">Single Post View</h1>
             <div class="mt-4">
-                <h2 class="text-2xl font-semibold">${this.post.title}</h2>
-                <p class="mt-2 text-gray-700">${this.post.description}</p>
+                <h2 class="text-2xl font-semibold">${escapeHtml(this.post.title)}</h2>
+                <p class="mt-2 text-gray-700">${escapeHtml(this.post.description)}</p>
             </div>
         `;
     }

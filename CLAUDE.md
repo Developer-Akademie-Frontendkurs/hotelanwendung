@@ -50,14 +50,24 @@ Es gibt keine separate `vitest.config.ts` – Vitest nutzt die Standardkonfigura
 
 ### Supabase
 
-- Client liegt in `src/shared/services/supabase.ts` und wird dort direkt mit URL/Key initialisiert (aktuell nicht aus `.env` gelesen, obwohl `VITE_SUPABASE_URL`/`VITE_SUPABASE_API_KEY` dort als Platzhalter existieren). Beim Ändern der Zugangsdaten also `supabase.ts` direkt anpassen, nicht nur `.env`.
-- Datenzugriff erfolgt direkt in den Views (`onInit`/eigene `fetch*`-Methoden), keine separate Repository-/Service-Schicht pro Entität. Typen für Tabellen liegen als `*.interface.ts` neben der jeweiligen View (z. B. `src/views/PostsView/post.interface.ts`).
+- Client liegt in `src/shared/services/supabase.ts` und liest `VITE_SUPABASE_URL` und `VITE_SUPABASE_PUBLISHABLE_KEY` aus der `.env` im Projektwurzelverzeichnis (Vorlage: `.env.example`; `vite.config.ts` setzt dafür `envDir: '..'`). Fehlt eins davon, wirft der Client beim Start. Zugangsdaten also nur in der `.env` ändern. `SUPABASE_SERVICE_ROLE_KEY` bekommt bewusst kein `VITE_`-Präfix – er umgeht RLS und darf nie ins Frontend gebündelt werden.
+- Service-Schicht unter `src/shared/services/`: `booking.service.ts` kapselt den RPC `create_booking` (Mapping camelCase → `p_*`, Laufzeitprüfung der Antwort). Ablehnungen aus `reject_booking` kommen als Ergebnis `{ ok: false, error }` zurück, alle anderen Fehler werden als `BookingFailedError` geworfen – mit `outcomeUnknown`, falls die Buchung trotzdem angelegt sein kann (V15). Zustand der Buchungsseite liegt in `src/shared/state/bookingState.ts`.
+- Ziel laut `docs/datenbank/umsetzungsplan.md` (V9, Phase 8.4): `supabase` wird nur noch innerhalb von `services/` importiert. Aktuell greifen `Booking.ts` (Lesezugriffe auf `room_types`, `services`, `hotels`, `search_availability`, Storage-URLs) sowie `Posts.ts`/`SinglePost.ts` noch direkt zu – neue Datenzugriffe deshalb als Service-Funktion anlegen, nicht in der View. Typen für Tabellen liegen derzeit als `*.interface.ts` neben der jeweiligen View (z. B. `src/views/BookingView/room.interface.ts`), generierte Typen (`pnpm db:types`) stehen noch aus.
 
 ### Styling
 
 - Tailwind v4 wird über `@import 'tailwindcss'` in `src/style.css` eingebunden; Theme-Werte (Farben, Fonts, Font-Größen, **eigene Breakpoint-Namen**: `456`, `576`, `768`, `992`, `1140`, `1440`, `1920`) werden im `@theme`-Block definiert und dann als Utility-Klassen genutzt (z. B. `768:flex`, `text-24`, `text-purple-haze-dark`).
 - Eigene Fonts liegen unter `src/assets/fonts`, eingebunden über `src/css/fonts.css`.
 - Neben Tailwind-Utilities gibt es pro View/Layout ergänzende CSS-Dateien für Fälle, die sich nicht sinnvoll mit Utilities abbilden lassen (z. B. `activities__*`-Klassen in `home.css` für die Radio-Button-Tabs, `.mobile-menu__*` in `layout.css`).
+
+### Sicherheit (XSS)
+
+Weil alle Views ihr HTML als String bauen und per `innerHTML` einsetzen, ist XSS das Hauptrisiko. Zwei Schichten schützen davor:
+
+- **Escapen beim Einsetzen:** Jeder Wert, der nicht wörtlich im Quelltext steht (Datenbank, Route-Params/URL, Supabase-Fehlermeldungen, alles daraus Zusammengesetzte wie Hinweistexte mit Zimmernamen), geht nur über `escapeHtml()` aus `src/shared/ui/html.ts` ins Template – in Text wie in Attributwerten (Attribute immer in doppelten Anführungszeichen). Escapt wird erst an der Ausgabe, nicht schon beim Laden/Mappen der Daten. Werte, die in eine URL gehören (z. B. eine ID im `href`), vorher zusätzlich durch `encodeURIComponent()`.
+- **Fertiges Markup** (Icons, Teil-Templates, `options.html` von `openModal()`) wird nicht escapt – Funktionen, die Markup entgegennehmen, escapen deshalb ihre Text-Parameter selbst (Beispiel: `getServiceRowShellHtml` in `Booking.ts`). Mehrzeilige Werte als Liste übergeben, einzeln escapen und erst dann mit `<br>` verbinden.
+- **Eingaben des Gastes** werden nicht ins Template interpoliert, sondern nach dem Rendern per `textContent` gesetzt.
+- **Content-Security-Policy** als `<meta>` in `src/index.html`: nur Skripte vom eigenen Origin (keine Inline-Skripte, keine `on*`-Attribute), Netzwerk und Bilder nur zu `'self'` und `%VITE_SUPABASE_URL%` (setzt Vite beim Build/Dev-Start aus der `.env` ein). Kommt eine neue externe Quelle dazu (CDN, Fonts, weitere API), muss sie dort ergänzt werden, sonst blockiert der Browser sie. Inline-Event-Handler im Markup funktionieren deshalb nicht – Listener immer in `afterRender()` per `addEventListener` binden.
 
 ### Admin-Bereich
 
@@ -67,4 +77,5 @@ Es gibt keine separate `vitest.config.ts` – Vitest nutzt die Standardkonfigura
 
 - TypeScript ist strikt konfiguriert (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noUnusedLocals/Parameters`, u. a. – siehe `tsconfig.json`). ESLint erzwingt zusätzlich `strictTypeChecked` von typescript-eslint sowie explizite Rückgabetypen für Funktionen (`@typescript-eslint/explicit-function-return-type`).
 - Prettier läuft als ESLint-Regel (nicht nur als Formatter) – `pnpm lint` schlägt bei Formatierungsabweichungen fehl. Kernwerte: 4 Spaces, Single Quotes, Semikolons, `printWidth: 180` (siehe `.prettierrc`).
+- Werte von außen in HTML-Templates nur über `escapeHtml()` – kein Linter prüft das, es ist Review-Pflicht (Details unter „Sicherheit (XSS)").
 - Synchrone Methoden ohne `await` im Body, die aber die `ViewInstance`-Schnittstelle (`Promise<...>`) erfüllen müssen, bekommen `// eslint-disable-next-line @typescript-eslint/require-await` – das ist ein bewusstes, wiederkehrendes Muster in den Views, kein Einzelfall zum Beheben.
