@@ -48,7 +48,7 @@ In `docs/datenbank/README.md` steht die neue Entscheidung mit drei Begründungen
 
 Für Lernende ist Grund 1 der wichtigste: Es ist eine Frage der **Bezugsgröße**. Ein Doppelzimmer kostet dasselbe, egal ob eine oder zwei Personen darin schlafen – das Frühstück nicht. Zwei Preise mit unterschiedlicher Bezugsgröße gehören nicht in dieselbe Spalte.
 
-Ausdrücklich verworfen wird auch der naheliegende Zwischenweg, einen zweiten Tarif „Übernachtung mit Frühstück" anzulegen: Dann müsste jede Saison und jede Kategorie doppelt gepflegt werden, „und eine vergessene [Preisänderung] wäre stillschweigend ein falscher Preis".
+Ausdrücklich verworfen wird auch der naheliegende Zwischenweg, einen zweiten Tarif „Übernachtung mit Frühstück" anzulegen: Dann müsste jede Saison und jede Kategorie doppelt gepflegt werden, „und eine vergessene \[Preisänderung\] wäre stillschweigend ein falscher Preis".
 
 Ebenso bemerkenswert ist ein kleiner Nachtrag an anderer Stelle der README. Zusatzleistungen standen bisher auf der Liste der Dinge, die **absichtlich** nicht Teil des Schemas sind (Entscheidung `E15`, der „Scope-Zaun"), mit dem Versprechen, dass sie sich später additiv ergänzen lassen. Der Commit hält fest:
 

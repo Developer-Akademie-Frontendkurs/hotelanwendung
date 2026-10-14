@@ -5,6 +5,7 @@ import { BookingFailedError, createBooking, type BookingRejection, type CreatedB
 import { openModal } from '../../shared/ui/modal';
 import { scrollToSection } from '../../shared/ui/scroll';
 import { escapeHtml } from '../../shared/ui/html';
+import { formatAdults, formatChildren, formatDate, formatGuests, formatNights, formatPrice, formatStayDate } from '../../shared/format';
 import type { BookingPosition, BookingRequest, BookingServiceSelection, CustomerDetails, ServiceRow } from '../../shared/types/booking.types';
 import logo from '../../assets/img/logo-small.svg';
 import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
@@ -26,19 +27,8 @@ import { buildOrderLines, DEFAULT_CURRENCY, getOrderTotalCents, type OrderLine }
 import type { HotelRow } from './hotel.interface';
 import { formatUnavailableReason, getRejectionMessage } from './messages';
 import { isUnavailableReason } from '../../shared/types/booking.codes';
+import { buildDays, countNights, parseISODate, stripTime, toISODate, type DayCell } from './domain/calendar';
 import './booking.css';
-
-type DayCell = {
-    date: Date;
-    inCurrentMonth: boolean;
-    isPast: boolean;
-    isToday: boolean;
-    isStart: boolean;
-    isEnd: boolean;
-    inRange: boolean;
-    isWeekend: boolean;
-    selectable: boolean;
-};
 
 /** Die Anfrage an `create_booking` plus die Nächte, die das Bestätigungs-Popup anzeigt. */
 type Booking = BookingRequest & {
@@ -67,8 +57,6 @@ type RoomsState = 'loading' | 'ready' | 'error';
 
 const WEEKDAYS: readonly string[] = ['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO'];
 const MONTHS: readonly string[] = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-
-const MS_PER_DAY = 86_400_000;
 
 // Sprungziele der Steps im Sticky-Header: Abstand nach oben, damit der Header den
 // Anfang des Bereichs nicht verdeckt (mobil ist er zweizeilig und höher).
@@ -1427,7 +1415,8 @@ export class BookingView extends AbstractView {
     }
 
     private getGridHtml(): string {
-        const cells = this.buildDays();
+        const { checkIn, checkOut } = bookingState.getDates();
+        const cells = buildDays({ year: this.displayedYear, month: this.displayedMonth, checkIn, checkOut, today: this.today });
         return /*html*/ `
             <div class="grid grid-cols-7 gap-1.5 456:gap-2 768:gap-3">
                 ${cells.map((cell: DayCell): string => this.getDayCellHtml(cell)).join('')}
@@ -1502,36 +1491,6 @@ export class BookingView extends AbstractView {
                 </button>
             </div>
         `;
-    }
-
-    private buildDays(): DayCell[] {
-        const year = this.displayedYear;
-        const month = this.displayedMonth;
-        const { checkIn, checkOut } = bookingState.getDates();
-
-        const firstOfMonth = new Date(year, month, 1);
-        const leading = (firstOfMonth.getDay() + 6) % 7;
-        const totalCells = 42;
-
-        const cells: DayCell[] = [];
-        for (let i = 0; i < totalCells; i++) {
-            const date = new Date(year, month, 1 - leading + i);
-            const inCurrentMonth = date.getMonth() === month;
-            const isPast = date < this.today;
-
-            cells.push({
-                date,
-                inCurrentMonth,
-                isPast,
-                isToday: isSameDay(date, this.today),
-                isStart: checkIn !== null && isSameDay(date, checkIn),
-                isEnd: checkOut !== null && isSameDay(date, checkOut),
-                inRange: checkIn !== null && checkOut !== null && date > checkIn && date < checkOut,
-                isWeekend: date.getDay() === 0 || date.getDay() === 6,
-                selectable: !isPast,
-            });
-        }
-        return cells;
     }
 
     private handleCalendarClick(event: MouseEvent): void {
@@ -1678,7 +1637,7 @@ export class BookingView extends AbstractView {
      */
     private getRejectionText(rejection: BookingRejection): string {
         const roomName = this.rooms.find((card: RoomCard): boolean => card.roomTypeId === rejection.roomTypeId)?.name ?? null;
-        const night = rejection.date === null ? null : formatStayDate(parseISODate(rejection.date), '', null);
+        const night = rejection.date === null ? null : formatDate(parseISODate(rejection.date));
         return getRejectionMessage(rejection.code, { roomName, night });
     }
 
@@ -1690,7 +1649,7 @@ export class BookingView extends AbstractView {
     private showConfirmation(booking: Booking, created: CreatedBooking): void {
         const references = created.bookings.map((room: { bookingReference: string }): string => room.bookingReference);
         const currency = created.bookings[0]?.currency ?? DEFAULT_CURRENCY;
-        const stay = `${formatStayDate(parseISODate(booking.checkIn), '', null)} – ${formatStayDate(parseISODate(booking.checkOut), '', null)}`;
+        const stay = `${formatDate(parseISODate(booking.checkIn))} – ${formatDate(parseISODate(booking.checkOut))}`;
 
         openModal({
             labelledBy: 'booking-confirmation-title',
@@ -1980,22 +1939,6 @@ function pickImage(images: RoomTypeImage[]): RoomTypeImage | null {
     return [...images].sort((a: RoomTypeImage, b: RoomTypeImage): number => a.sort_order - b.sort_order)[0] ?? null;
 }
 
-/** Währungen mit eigenem Symbol – alle anderen erscheinen mit ihrem ISO-Code. */
-const CURRENCY_SYMBOLS: Readonly<Record<string, string>> = { EUR: '€' };
-
-/**
- * Zahl vor dem Symbol wie im Design ("732€") – `style: 'currency'` stellt das € bei de-AT voran.
- *
- * Volle Euro bleiben ohne Nachkommastellen, alles andere bekommt genau zwei: Sonst
- * stünde der Kinderpreis von 850 ct als „8,5€" da – als Betrag gelesen ein Tippfehler.
- */
-function formatPrice(cents: number, currency: string): string {
-    const digits = cents % 100 === 0 ? 0 : 2;
-    const amount = new Intl.NumberFormat('de-AT', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(cents / 100);
-    const symbol = CURRENCY_SYMBOLS[currency];
-    return symbol === undefined ? `${amount} ${currency}` : `${amount}${symbol}`;
-}
-
 /**
  * Runder `−`/`+`-Knopf der Mengenwähler – für Zimmer und Kinderbett derselbe.
  *
@@ -2016,35 +1959,10 @@ function getStepButtonHtml(step: Step, dataAttributes: Readonly<Record<string, s
     `;
 }
 
-/** Nächte zwischen An- und Abreise – `null`, solange der Zeitraum nicht vollständig ist. */
-function countNights(checkIn: Date | null, checkOut: Date | null): number | null {
-    if (checkIn === null || checkOut === null) return null;
-    return Math.round((checkOut.getTime() - checkIn.getTime()) / MS_PER_DAY);
-}
-
-/** „13.06.2026 ab 14:00 Uhr" wie im Entwurf – ohne geladene Hotelzeile nur das Datum. */
-function formatStayDate(date: Date | null, preposition: string, time: string | null): string {
-    if (date === null) return 'noch offen';
-
-    const day = `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear().toString()}`;
-    // `time` kommt als "14:00:00" – die Sekunden interessieren niemanden.
-    return time === null ? day : `${day} ${preposition} ${time.slice(0, 5)} Uhr`;
-}
-
-function formatGuests(adults: number, children: number): string {
-    const adultText = adults === 1 ? '1 Erwachsener' : `${adults.toString()} Erwachsene`;
-    if (children === 0) return adultText;
-    return `${adultText}, ${children === 1 ? '1 Kind' : `${children.toString()} Kinder`}`;
-}
-
-function formatNights(nights: number): string {
-    return nights === 1 ? '1 Nacht' : `${nights.toString()} Nächte`;
-}
-
 function buildAdultOptions(): readonly GuestOption[] {
     return Array.from({ length: MAX_ADULTS }, (_unused: unknown, index: number): GuestOption => {
         const value = index + 1;
-        return { value, label: value === 1 ? '1 Erwachsener' : `${value.toString()} Erwachsene` };
+        return { value, label: formatAdults(value) };
     });
 }
 
@@ -2052,26 +1970,6 @@ function buildAdultOptions(): readonly GuestOption[] {
 function buildChildOptions(): readonly GuestOption[] {
     return Array.from({ length: MAX_CHILDREN }, (_unused: unknown, index: number): GuestOption => {
         const value = index + 1;
-        return { value, label: value === 1 ? '1 Kind' : `${value.toString()} Kinder` };
+        return { value, label: formatChildren(value) };
     });
-}
-
-function stripTime(date: Date): Date {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function toISODate(date: Date): string {
-    const year = date.getFullYear().toString().padStart(4, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
-function parseISODate(iso: string): Date {
-    const [year, month, day] = iso.split('-').map((part: string): number => Number(part));
-    return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
 }
