@@ -221,4 +221,4 @@ Mit diesem Commit ist **Gruppe C des Reviews vollständig abgehakt** (Gruppen A 
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md) · [Nächster Commit →](024_2026-10-07_project-diary-update.md)

@@ -2,7 +2,7 @@
 
 # 008 – Branch `verbindung-ui-zu-datenbank`
 
-**Erster Commit:** 2026-09-09 · **Commits:** 23 · **Status:** offen
+**Erster Commit:** 2026-09-09 · **Commits:** 27 · **Status:** offen
 
 ## Ziel des Branches
 
@@ -50,6 +50,10 @@ Vertagt bleibt allein Phase 10 (Cloud-Deployment).
 | [021](008_2026-09-09_verbindung-ui-zu-datenbank/021_2026-10-07_constants-breakfast-default-currency.md)         | 2026-10-07 | B4: Konstanten `BREAKFAST` und `DEFAULT_CURRENCY` statt Magic Strings                   |
 | [022](008_2026-09-09_verbindung-ui-zu-datenbank/022_2026-10-07_booking-codes-and-types.md)                      | 2026-10-07 | B5–B8, C1–C3: `RejectionCode`-Union, Texttabellen, gemeinsame Buchungstypen             |
 | [023](008_2026-09-09_verbindung-ui-zu-datenbank/023_2026-10-07_room-quantity-handling-availability-messages.md) | 2026-10-07 | C4/C5: Zimmer-frei-Texte sauber benannt, gemeinsamer Schritt-Knopf                      |
+| [024](008_2026-09-09_verbindung-ui-zu-datenbank/024_2026-10-07_project-diary-update.md)                         | 2026-10-07 | Projekttagebuch um die Einträge 015–023 ergänzt (reiner Doku-Commit)                    |
+| [025](008_2026-09-09_verbindung-ui-zu-datenbank/025_2026-10-14_formatting-functions-calendar-logic.md)          | 2026-10-14 | D1/D2: `shared/format.ts` und `domain/calendar.ts` mit Tests                            |
+| [026](008_2026-09-09_verbindung-ui-zu-datenbank/026_2026-10-14_checkout-error-handling-completed-steps.md)      | 2026-10-14 | D3: `domain/validation.ts` – Code statt Textvergleich                                   |
+| [027](008_2026-09-09_verbindung-ui-zu-datenbank/027_2026-10-14_catalog-service-booking-state-destroy-hook.md)   | 2026-10-14 | D4–D7: `catalog.service.ts`, Store als Entwurf, `destroy()`                             |
 
 Merge-Commits gibt es in diesem Branch nicht – er ist seit seinem Start nicht mit `main` synchronisiert worden.
 
@@ -145,6 +149,24 @@ Commit 016 legt `docs/reviews/2026-09-30_verbindung-ui-zu-datenbank.md` an – e
 Ein Muster zieht sich durch die Commits 021–023: **ungültige Zustände nicht darstellbar machen.** Erst Konstanten statt freier Strings, dann Union-Typen mit `Record`-Tabellen (ein fehlender Text ist ein Compilerfehler), schließlich ein Literal-Typ `-1 | 1` für die Richtung eines Knopfs. Daten von außen werden dabei **einmal an der Grenze** geprüft; unbekannte Datenbank-Codes werden zu `null` statt zu einem Absturz.
 
 Damit sind die Gruppen **A, B und C vollständig erledigt**. Offen sind Gruppe D (u. a. `catalog.service.ts` für die Lesezugriffe – das würde zugleich `V9`/Phase 8.4 erfüllen –, Formatierer und Kalender auslagern, `Booking.ts` mit über 2000 Zeilen in Templates aufteilen), Gruppe E (weitere Tests) und F. Der Branch ist weiterhin **nicht in `main` gemergt**.
+
+### Nachtrag (Commits 024–027)
+
+Commit 024 trägt die Tagebuch-Einträge 015–023 nach (reiner Doku-Commit). Danach geht es mit **Gruppe D** des Reviews weiter – der Trennung von Design, Datenfluss und Logik in `Booking.ts`.
+
+| Commits | Review-Punkte | Kern                                                                                                          |
+| ------- | ------------- | ------------------------------------------------------------------------------------------------------------- |
+| 025     | D1, D2        | Formatierer nach `shared/format.ts`, Kalender als reine Funktion nach `domain/calendar.ts`, jeweils mit Tests |
+| 026     | D3            | `getCheckoutError` liefert `{ section, message }`, Bettenprüfung über die Zahl statt über den Hinweistext     |
+| 027     | D4–D7         | `catalog.service.ts`, `bookingState` als vollständiger Entwurf, Aktionen mit einem `notify`, `destroy()`-Hook |
+
+Der rote Faden: **Logik aus der View in reine Funktionen und Services ziehen** – erst die Hilfsfunktionen, dann die Regeln, schließlich Datenzugriff und Zustand. Zwei Einsichten ragen heraus. Erstens: Entscheidungen hängen an Codes und Zahlen, nie an Anzeigetexten (`section === 'form'` statt `message === FORM_INCOMPLETE`). Zweitens: Abgeleiteter Zustand wird berechnet statt gespeichert – der Header leitet die erledigten Schritte jetzt selbst aus dem Entwurf ab, `setCompletedSteps` und die Endlosschleifen-Sperre entfallen.
+
+Mit Commit 027 ist das Prüfkriterium aus Phase 8.4 für die Buchungsseite erfüllt: `Booking.ts` importiert `supabase` nicht mehr. Nur `Posts.ts`/`SinglePost.ts` greifen noch direkt zu (Review-Punkt F2).
+
+Eine Warnung steckt in Commit 026: Automatisch auf Tailwind-v4-Schreibweise umgeschriebene Klassen haben drei `class`-Attribute beschädigt, eins davon ohne schließendes `">` – die Zimmerkarte lag dadurch über dem Kalender. Weder `tsc` noch ESLint noch die Tests sehen in Template-Strings hinein; repariert wurde es in Commit 027.
+
+Offen sind damit noch **D8** (Templates aus `Booking.ts` in eigene Dateien), Gruppe E (weitere Tests) und F. Der Branch ist weiterhin **nicht in `main` gemergt**.
 
 ---
 

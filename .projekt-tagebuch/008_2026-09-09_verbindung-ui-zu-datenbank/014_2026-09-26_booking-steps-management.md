@@ -440,4 +440,4 @@ Die Steps im Header zeigen wieder, was sie versprechen: welcher Schritt erledigt
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md) · [Nächster Commit →](015_2026-09-26_update-project-diary.md)
