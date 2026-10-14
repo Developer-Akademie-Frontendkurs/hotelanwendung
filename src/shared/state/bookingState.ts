@@ -1,6 +1,4 @@
-import type { RoomQuantities, ServiceQuantities } from '../types/booking.types';
-
-export type BookingStep = 1 | 2 | 3;
+import type { BookingStep, RoomQuantities, ServiceQuantities } from '../types/booking.types';
 
 export const BOOKING_STEP_ORDER: readonly BookingStep[] = [1, 2, 3];
 

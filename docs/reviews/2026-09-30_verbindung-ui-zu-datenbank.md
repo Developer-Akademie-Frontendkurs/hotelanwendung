@@ -4,6 +4,7 @@ Umfang: 15 Commits von `e724f6c` bis `813760d`.
 Grundlagen: `CLAUDE.md`, `tsconfig.json`, `eslint.config.ts` und `.prettierrc` für die Standards; `docs/datenbank/umsetzungsplan.md` (0c, 7b, 8, 9, 9b) für die Spec.
 
 Tooling:
+
 - `pnpm build` läuft durch.
 - `pnpm vitest run src` läuft durch (29 Tests).
 - `pnpm lint` schlägt mit 2 Fehlern fehl:
@@ -86,7 +87,7 @@ src/shared/
 
 - [x] D1: Die Formatierer (`Booking.ts:1980–2073`) nach `src/shared/format.ts` verschieben und Tests dafür schreiben. Umgesetzt mit `format.spec.ts`; zusätzlich `formatDate` (statt `formatStayDate(…, '', null)`) sowie `formatAdults`/`formatChildren`, die auch die Gäste-Auswahl nutzt. `countNights` bleibt für D2 in `Booking.ts`.
 - [x] D2: Die Kalenderfunktionen (`buildDays`, `countNights`, `toISODate`, `parseISODate`) nach `domain/calendar.ts` verschieben. `buildDays` bekommt `today` als Parameter. Tests schreiben. Umgesetzt in `src/views/BookingView/domain/calendar.ts` mit `calendar.spec.ts`, samt `DayCell`, `stripTime` und `isSameDay`. `buildDays` bekommt ein Objekt (`year`, `month`, `checkIn`, `checkOut`, `today`) und liest nichts mehr aus dem Store.
-- [ ] D3: `domain/validation.ts` anlegen mit `getCheckoutError(draft, rooms)` und `getCompletedSteps(state)`. Beide stützen sich auf `getMissingBeds() === 0`, **nicht** auf den Anzeigetext `getCapacityText() === ''` (`Booking.ts:1734, 1752`).
+- [x] D3: `domain/validation.ts` anlegen mit `getCheckoutError(draft, rooms)` und `getCompletedSteps(state)`. Beide stützen sich auf `getMissingBeds() === 0`, **nicht** auf den Anzeigetext `getCapacityText() === ''` (`Booking.ts:1734, 1752`). Umgesetzt mit `validation.spec.ts`: `getCheckoutError(draft, rooms)` liefert `{ section, message }`, die View springt nur bei `section === 'form'` ins Formular (statt Textvergleich mit `FORM_INCOMPLETE`). Der Hinweistext zu fehlenden Betten steht als `formatMissingBedsNotice` in `roomQuantity.ts`; `BookingDraft` und `BookingStep` liegen jetzt in `shared/types/booking.types.ts`.
 - [ ] D4: `catalog.service.ts` anlegen und alle Lesezugriffe dorthin verschieben: `hotels`, `room_types`, `services`, `search_availability`, `getPublicUrl` sowie das Mapping `buildRoomCards`/`pickImage` (`Booking.ts:1289–1359, 1925–1972`). Das erfüllt zugleich V9 und Phase 8.4.
 - [ ] D5: `guests` und die Kontakt-/Adressdaten in den `bookingState` übernehmen (V10). `completedSteps` fliegt aus dem Store, stattdessen leitet `MainHeader` die Schritte über `getCompletedSteps` ab. Damit entfällt auch die Sperre gegen Endlosschleifen in `bookingState.ts:130`.
 - [ ] D6: Aktionen im Store bündeln, zum Beispiel `selectRoomQuantity()`. Sie setzt die Menge, gleicht die Leistungen ab (heute dreimal kopiert in `:811`, `:1269`, `:1346`) und löst genau ein `notify` aus.

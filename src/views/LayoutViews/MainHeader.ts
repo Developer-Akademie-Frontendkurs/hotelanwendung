@@ -2,7 +2,8 @@ import AbstractView from '../AbstractView';
 import logo from '../../assets/img/logo.svg';
 import stars from '../../assets/img/icons/stars.png';
 import mainHeaderBg from '../../assets/img/main-header-bg.jpg';
-import { bookingState, type BookingStep } from '../../shared/state/bookingState';
+import { bookingState } from '../../shared/state/bookingState';
+import type { BookingStep } from '../../shared/types/booking.types';
 import { scrollToSection } from '../../shared/ui/scroll';
 import type { PageHeaderConfig, HeaderConfig, StepState } from './header.types';
 

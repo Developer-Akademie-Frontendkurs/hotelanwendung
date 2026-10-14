@@ -99,3 +99,14 @@ export type BookingRequest = CustomerDetails & {
     withBreakfast: boolean;
     services: readonly BookingServiceSelection[];
 };
+
+/** Stand der Buchung während der Eingabe – was noch fehlt, ist `null`. */
+export type BookingDraft = Omit<BookingRequest, 'checkIn' | 'checkOut' | 'adults'> & {
+    checkIn: string | null;
+    checkOut: string | null;
+    nights: number | null;
+    adults: number | null;
+};
+
+/** Die Schritte im Header: 1 = Zeitraum und Gäste, 2 = Zimmer, 3 = Kontaktdaten. */
+export type BookingStep = 1 | 2 | 3;

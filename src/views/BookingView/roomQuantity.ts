@@ -159,3 +159,9 @@ export function getMissingBeds(quantities: RoomQuantities, rooms: readonly RoomC
     const beds = rooms.reduce((sum: number, room: RoomCard): number => sum + (quantities[room.roomTypeId] ?? 0) * room.maxOccupancy, 0);
     return Math.max(0, persons - beds);
 }
+
+/** Hinweis unter der Zimmerliste, solange Betten fehlen – leer, wenn alle Gäste eins haben. */
+export function formatMissingBedsNotice(missingBeds: number): string {
+    if (missingBeds === 0) return '';
+    return missingBeds === 1 ? 'Noch 1 Person ohne Bett – bitte ein weiteres Zimmer wählen.' : `Noch ${missingBeds.toString()} Personen ohne Bett – bitte weitere Zimmer wählen.`;
+}
