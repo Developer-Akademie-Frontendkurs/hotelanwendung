@@ -110,3 +110,20 @@ export type BookingDraft = Omit<BookingRequest, 'checkIn' | 'checkOut' | 'adults
 
 /** Die Schritte im Header: 1 = Zeitraum und Gäste, 2 = Zimmer, 3 = Kontaktdaten. */
 export type BookingStep = 1 | 2 | 3;
+
+/** Belegung des Vorgangs (E48) – `null`, solange nichts gewählt ist; leere Kinder heißen „keine Kinder". */
+export type Guests = {
+    adults: number | null;
+    children: number | null;
+};
+
+/** Alles, was der Gast bisher gewählt und eingegeben hat – der Inhalt von `bookingState` (V10). */
+export type BookingSnapshot = {
+    checkIn: Date | null;
+    checkOut: Date | null;
+    guests: Guests;
+    roomQuantities: RoomQuantities;
+    breakfast: boolean;
+    services: ServiceQuantities;
+    customerDetails: CustomerDetails;
+};

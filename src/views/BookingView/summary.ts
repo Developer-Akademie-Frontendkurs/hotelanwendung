@@ -8,7 +8,7 @@
 
 import type { RoomQuantities, ServiceQuantities } from '../../shared/types/booking.types';
 import { getBreakfastAmountCents, type BreakfastService, type Occupancy } from './breakfast';
-import type { RoomCard } from './room.interface';
+import type { RoomCard } from '../../shared/types/catalog.types';
 import { BREAKFAST, getServiceAmountCents, type ExtraService } from './services';
 
 /** Rückfall, solange keine Zeile eine Währung mitbringt – das Hotel rechnet in Euro. */

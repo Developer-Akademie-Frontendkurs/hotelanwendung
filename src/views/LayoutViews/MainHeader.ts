@@ -4,6 +4,8 @@ import stars from '../../assets/img/icons/stars.png';
 import mainHeaderBg from '../../assets/img/main-header-bg.jpg';
 import { bookingState } from '../../shared/state/bookingState';
 import type { BookingStep } from '../../shared/types/booking.types';
+import { buildBookingDraft } from '../BookingView/domain/draft';
+import { getCompletedSteps, getCurrentStep } from '../BookingView/domain/validation';
 import { scrollToSection } from '../../shared/ui/scroll';
 import type { PageHeaderConfig, HeaderConfig, StepState } from './header.types';
 
@@ -32,12 +34,17 @@ const STEP_LABEL_CLASSES: Record<StepState, string> = {
     done: 'text-purple-haze-dark',
 };
 
-function getStepState(step: BookingStep): StepState {
-    if (bookingState.isStepComplete(step)) {
+function getStepState(step: BookingStep, completedSteps: readonly BookingStep[]): StepState {
+    if (completedSteps.includes(step)) {
         return 'done';
     }
 
-    return step === bookingState.getCurrentStep() ? 'current' : 'pending';
+    return step === getCurrentStep(completedSteps) ? 'current' : 'pending';
+}
+
+/** Die erledigten Schritte, abgeleitet aus dem Entwurf – der Store merkt sich keine Schritte. */
+function getCompletedBookingSteps(): BookingStep[] {
+    return getCompletedSteps(buildBookingDraft(bookingState.getSnapshot()), bookingState.getRooms());
 }
 
 export const homeHeader: HeaderConfig = {
@@ -99,20 +106,10 @@ export class MainHeader extends AbstractView {
         });
     }
 
-    /**
-     * Räumt den Header ab, bevor der Router das Layout neu aufbaut.
-     * Reihenfolge ist wichtig: erst abmelden, dann zurücksetzen – so erreicht die
-     * Reset-Benachrichtigung diesen Header nicht mehr. Mehrfachaufrufe sind unschädlich.
-     */
+    /** Löst das Abo, bevor der Router das Layout neu aufbaut. Den Entwurf setzt die BookingView zurück. */
     destroy(): void {
-        if (this.unsubscribe) {
-            this.unsubscribe();
-            this.unsubscribe = null;
-        }
-
-        if (this.config.variant === 'booking') {
-            bookingState.reset();
-        }
+        this.unsubscribe?.();
+        this.unsubscribe = null;
     }
 
     private getPageHeaderHtml(config: PageHeaderConfig): string {
@@ -221,7 +218,8 @@ export class MainHeader extends AbstractView {
     }
 
     private getBookingStepsHtml(): string {
-        const states: StepState[] = BOOKING_STEPS.map((definition: BookingStepDefinition): StepState => getStepState(definition.step));
+        const completedSteps = getCompletedBookingSteps();
+        const states: StepState[] = BOOKING_STEPS.map((definition: BookingStepDefinition): StepState => getStepState(definition.step, completedSteps));
         const items: string[] = BOOKING_STEPS.map((definition: BookingStepDefinition, index: number): string => {
             return this.getBookingStepHtml(definition, states[index] ?? 'pending', states[index - 1]);
         });

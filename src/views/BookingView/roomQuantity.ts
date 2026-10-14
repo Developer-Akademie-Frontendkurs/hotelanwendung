@@ -1,5 +1,5 @@
 import type { RoomQuantities } from '../../shared/types/booking.types';
-import { RoomCard } from './room.interface';
+import { RoomCard } from '../../shared/types/catalog.types';
 
 /**
  * Obergrenze eines Buchungsvorgangs.

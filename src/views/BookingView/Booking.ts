@@ -1,14 +1,14 @@
 import AbstractView from '../AbstractView';
 import { bookingState } from '../../shared/state/bookingState';
-import { supabase } from '../../shared/services/supabase';
 import { BookingFailedError, createBooking, type BookingRejection, type CreatedBooking } from '../../shared/services/booking.service';
+import { buildRoomCards, fetchHotel, fetchRoomTypes, fetchServices, searchAvailability } from '../../shared/services/catalog.service';
 import { openModal } from '../../shared/ui/modal';
 import { scrollToSection } from '../../shared/ui/scroll';
 import { escapeHtml } from '../../shared/ui/html';
 import { formatAdults, formatChildren, formatDate, formatGuests, formatNights, formatPrice, formatStayDate } from '../../shared/format';
-import type { BookingDraft, BookingPosition, BookingRequest, BookingServiceSelection, CustomerDetails, ServiceRow } from '../../shared/types/booking.types';
+import type { BookingDraft, BookingRequest, CustomerDetails, Guests, ServiceRow } from '../../shared/types/booking.types';
 import logo from '../../assets/img/logo-small.svg';
-import { RoomAmenity, RoomAvailability, RoomCard, RoomCardAvailability, RoomTypeDetail, RoomTypeImage } from './room.interface';
+import type { HotelRow, RoomCard, RoomCardAvailability } from '../../shared/types/catalog.types';
 import {
     clampQuantity,
     getLimitMessage,
@@ -17,19 +17,17 @@ import {
     getRoomMax,
     getTotalRooms,
     normalizeQuantityInput,
-    reconcileQuantities,
     formatRoomsFreeLabel,
     formatMissingBedsNotice,
 } from './roomQuantity';
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
-import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, reconcileServices, type ExtraService } from './services';
+import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, type ExtraService } from './services';
 import { COUNTRIES, DEFAULT_COUNTRY, formatAddressLines, getCountryLabel, getInvalidFields, isCountryCode, emptyToNull, type CountryCode, type InvalidField } from './address';
 import { buildOrderLines, DEFAULT_CURRENCY, getOrderTotalCents, type OrderLine } from './summary';
-import type { HotelRow } from './hotel.interface';
 import { formatUnavailableReason, getRejectionMessage } from './messages';
-import { isUnavailableReason } from '../../shared/types/booking.codes';
 import { buildDays, countNights, parseISODate, stripTime, toISODate, type DayCell } from './domain/calendar';
-import { getCheckoutError, getCompletedSteps } from './domain/validation';
+import { getCheckoutError } from './domain/validation';
+import { buildBookingDraft } from './domain/draft';
 import './booking.css';
 
 /** Die Anfrage an `create_booking` plus die Nächte, die das Bestätigungs-Popup anzeigt. */
@@ -37,7 +35,18 @@ type Booking = BookingRequest & {
     nights: number;
 };
 
-type GuestField = 'adults' | 'children';
+/**
+ * Ausstattungsmerkmal einer Zimmerkategorie.
+ *
+ * Bewusst kein Datenbankfeld: für die Icons im Design (Bett, Klimaanlage, Bad, Gym)
+ * gibt es kein Schema. Die Zuordnung steht in `ROOM_AMENITIES`.
+ */
+interface RoomAmenity {
+    icon: string;
+    label: string;
+}
+
+type GuestField = keyof Guests;
 
 /** Richtung eines Schritt-Knopfs im Mengenwähler. */
 type Step = -1 | 1;
@@ -169,8 +178,6 @@ const ROOM_AMENITIES: Readonly<Record<string, readonly RoomAmenity[]>> = {
     ],
 };
 
-const ROOM_IMAGE_BUCKET = 'room-images';
-
 const CHECKOUT_LABEL = 'zahlungspflichtig buchen';
 const CHECKOUT_BUSY_LABEL = 'Buchung wird gesendet …';
 const HOTEL_LOAD_ERROR = 'Hoteladresse und Check-in-Zeiten konnten gerade nicht geladen werden. Ihre Buchung ist davon nicht betroffen.';
@@ -218,14 +225,10 @@ export class BookingView extends AbstractView {
     private calendarEl: HTMLElement | null = null;
     private roomsEl: HTMLElement | null = null;
     private customerFormEl: HTMLFormElement | null = null;
-    private readonly guests: Record<GuestField, number | null> = { adults: null, children: null };
-    private rooms: RoomCard[] = [];
     // `null` heißt: für dieses Hotel ist kein Frühstück hinterlegt. Dann wird auch keins
     // angeboten – `create_booking` würde eine Buchung mit Frühstück ablehnen (E25), und
     // eine Checkbox, die in eine Ablehnung führt, ist eine Falle.
     private breakfastService: BreakfastService | null = null;
-    // Leistungen je Vorgang aus `services`, ohne Frühstück, nach `sort_order` (E49).
-    private extraServices: ExtraService[] = [];
     private roomsState: RoomsState = 'loading';
     private roomsError: string | null = null;
     // Hinweis über der Liste, wenn eine neue Suche gewählte Mengen angepasst hat (V16.6).
@@ -240,6 +243,9 @@ export class BookingView extends AbstractView {
     private hotelError: string | null = null;
     private summaryEl: HTMLElement | null = null;
     private unsubscribeSummary: (() => void) | null = null;
+    // Setzt `destroy()`. Laufende Anfragen kommen danach noch zurück und dürfen dann
+    // nichts mehr anfassen.
+    private destroyed = false;
     // Solange `create_booking` läuft, zählt kein weiterer Klick: ein Doppelklick wären
     // sonst zwei verbindliche Buchungen.
     private submitting = false;
@@ -287,13 +293,12 @@ export class BookingView extends AbstractView {
         this.summaryEl?.addEventListener('click', (event: MouseEvent): void => {
             this.handleSummaryClick(event);
         });
-        this.unsubscribeSummary?.();
         this.unsubscribeSummary = bookingState.subscribe((): void => {
             this.renderSummary();
-            this.updateBookingSteps();
+            this.renderCustomerSummary();
         });
         this.renderSummary();
-        this.updateBookingSteps();
+        this.renderCustomerSummary();
         void this.loadHotel();
 
         this.calendarEl = document.getElementById('booking-calendar');
@@ -317,7 +322,7 @@ export class BookingView extends AbstractView {
     }
 
     private getGuestFieldHtml(field: GuestField, placeholder: string, ariaLabel: string, options: readonly GuestOption[], icon: string): string {
-        const selected = this.guests[field];
+        const selected = bookingState.getGuests()[field];
 
         const optionsHtml = options
             .map((option: GuestOption): string => {
@@ -346,7 +351,7 @@ export class BookingView extends AbstractView {
                         <path d="M1.5 1.5 7.5 10 14 1.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
                 </div>
-                <span class="shrink-0 flex items-center justify-center w-10 h-10 768:w-10.5-[2.625rem] rounded-full bg-purple-haze text-white">
+                <span class="shrink-0 flex items-center justify-center w-10 h-10 768:w-10.5 768:h-10.5 rounded-full bg-purple-haze text-white">
                     ${icon}
                 </span>
             </div>
@@ -366,7 +371,7 @@ export class BookingView extends AbstractView {
         if (!noticeEl) return;
 
         const { checkIn, checkOut } = bookingState.getDates();
-        const isMissing = checkIn !== null && checkOut !== null && this.guests.adults === null;
+        const isMissing = checkIn !== null && checkOut !== null && bookingState.getGuests().adults === null;
         noticeEl.textContent = isMissing ? 'Bitte wählen Sie die Anzahl der Erwachsenen.' : '';
     }
 
@@ -377,13 +382,9 @@ export class BookingView extends AbstractView {
         const field = target.dataset.guests;
         if (field !== 'adults' && field !== 'children') return;
 
-        this.guests[field] = target.value === '' ? null : Number(target.value);
-        // Sofort, nicht erst nach `loadRooms()`: Schlägt das Neuladen fehl, stünden sonst
-        // mehr Kinderbetten als Kinder in der Bestellung, und `create_booking` lehnt mit
-        // `ungueltige_leistung` ab.
-        if (field === 'children') this.reconcileSelectedServices();
+        // Gleicht die Kinderbetten gleich mit ab (siehe `setGuests`).
+        bookingState.setGuests({ ...bookingState.getGuests(), [field]: target.value === '' ? null : Number(target.value) });
         this.renderGuestsNotice();
-        this.updateBookingSteps();
         // Der weiter-Knopf hängt jetzt mit an der Belegung.
         this.renderCalendar();
         void this.loadRooms();
@@ -404,13 +405,16 @@ export class BookingView extends AbstractView {
             case 'error':
                 return this.getRoomsNoticeHtml(`Die Zimmer konnten nicht geladen werden: ${this.roomsError ?? 'Unbekannter Fehler'}`);
             case 'ready':
-                if (this.rooms.length === 0) {
+                if (bookingState.getRooms().length === 0) {
                     return this.getRoomsNoticeHtml('Zurzeit sind keine Zimmerkategorien hinterlegt.');
                 }
                 return /*html*/ `
                     ${this.getQuantityNoticeHtml()}
                     <div class="flex flex-col gap-8 768:gap-11">
-                        ${this.rooms.map((room: RoomCard): string => this.getRoomCardHtml(room)).join('')}
+                        ${bookingState
+                            .getRooms()
+                            .map((room: RoomCard): string => this.getRoomCardHtml(room))
+                            .join('')}
                     </div>
                     <p data-capacity-notice role="status" aria-live="polite" class="${this.getMissingBedsNotice() === '' ? 'hidden' : ''} mt-8 768:mt-11 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-4 py-3 font-antic-didone text-16 leading-tight text-purple-haze-dark">${escapeHtml(this.getMissingBedsNotice())}</p>
                     ${this.getServicesSectionHtml()}
@@ -491,7 +495,7 @@ export class BookingView extends AbstractView {
 
         const quantity = bookingState.getRoomQuantity(room.roomTypeId);
         const otherRooms = getTotalRooms(bookingState.getRoomQuantities()) - quantity;
-        const max = getRoomMax(availability.roomsFree, otherRooms, getRoomLimit(this.guests.adults));
+        const max = getRoomMax(availability.roomsFree, otherRooms, getRoomLimit(bookingState.getGuests().adults));
         const inputId = escapeHtml(`booking-rooms-${room.slug}`);
 
         return /*html*/ `
@@ -527,7 +531,7 @@ export class BookingView extends AbstractView {
      * folgt der Zimmerkarte – heller Lila-Grund, Ring bei Auswahl.
      */
     private getServicesSectionHtml(): string {
-        if (this.breakfastService === null && this.extraServices.length === 0) return '';
+        if (this.breakfastService === null && bookingState.getExtraServices().length === 0) return '';
 
         const hasRooms = getTotalRooms(bookingState.getRoomQuantities()) > 0;
 
@@ -540,7 +544,10 @@ export class BookingView extends AbstractView {
                 <p data-services-hint class="${hasRooms ? 'hidden' : ''} mb-4 font-antic-didone text-16 text-purple-haze text-center">Bitte zuerst ein Zimmer wählen.</p>
                 <ul class="flex flex-col gap-4 768:gap-5">
                     ${this.getBreakfastRowHtml()}
-                    ${this.extraServices.map((service: ExtraService): string => this.getServiceRowHtml(service)).join('')}
+                    ${bookingState
+                        .getExtraServices()
+                        .map((service: ExtraService): string => this.getServiceRowHtml(service))
+                        .join('')}
                 </ul>
             </section>
         `;
@@ -613,22 +620,13 @@ export class BookingView extends AbstractView {
         return getStepButtonHtml(step, { 'data-service-step': step.toString(), 'data-service-code': service.code }, ariaLabel, disabled);
     }
 
-    /**
-     * Zieht die gewählten Leistungen auf das nach, was Zimmer und Kinder gerade erlauben –
-     * das Kinderbett sinkt mit (1 je Zimmer und Kind, E49). Rein lokal, ohne Anfrage: Der
-     * Abgleich darf nicht davon abhängen, dass ein Neuladen gelingt.
-     */
-    private reconcileSelectedServices(): void {
-        bookingState.setServices(reconcileServices(bookingState.getServices(), this.extraServices, this.getServiceContext()));
-    }
-
     private getServiceContext(): { rooms: number; children: number } {
-        return { rooms: getTotalRooms(bookingState.getRoomQuantities()), children: this.guests.children ?? 0 };
+        return { rooms: getTotalRooms(bookingState.getRoomQuantities()), children: bookingState.getGuests().children ?? 0 };
     }
 
     /** Alle Kategorien haben denselben Zeitraum und damit dieselbe Zahl an Nächten. */
     private getNights(): number | undefined {
-        return this.rooms.find((room: RoomCard): boolean => room.availability !== null)?.availability?.nights;
+        return bookingState.getRooms().find((room: RoomCard): boolean => room.availability !== null)?.availability?.nights;
     }
 
     /**
@@ -649,7 +647,8 @@ export class BookingView extends AbstractView {
         const nights = this.getNights();
         if (nights === undefined || !bookingState.getBreakfast()) return priceText;
 
-        const occupancy = { adults: this.guests.adults ?? 0, children: this.guests.children ?? 0 };
+        const { adults, children } = bookingState.getGuests();
+        const occupancy = { adults: adults ?? 0, children: children ?? 0 };
         const amount = getBreakfastAmountCents(service, occupancy, nights);
         return `+ ${formatPrice(amount, service.currency)} · ${priceText}`;
     }
@@ -660,7 +659,7 @@ export class BookingView extends AbstractView {
         const quantity = bookingState.getServiceQuantity(service.code);
 
         if (service.code === CHILD_BED) {
-            if ((this.guests.children ?? 0) === 0) return 'Nur mit Kind buchbar';
+            if ((bookingState.getGuests().children ?? 0) === 0) return 'Nur mit Kind buchbar';
             const max = getServiceMax(service, this.getServiceContext());
             const limitText = max > 1 ? `bis zu ${max.toString()}, 1 je Zimmer` : '1 je Zimmer';
             return `${unitPrice} · ${limitText}`;
@@ -681,18 +680,18 @@ export class BookingView extends AbstractView {
      * und dann das zweite – dazwischen soll dort stehen, was noch fehlt.
      */
     private getMissingBedsNotice(): string {
-        const adults = this.guests.adults;
+        const { adults, children } = bookingState.getGuests();
         const quantities = bookingState.getRoomQuantities();
         if (adults === null || getTotalRooms(quantities) === 0) return '';
 
-        return formatMissingBedsNotice(getMissingBeds(quantities, this.rooms, adults + (this.guests.children ?? 0)));
+        return formatMissingBedsNotice(getMissingBeds(quantities, bookingState.getRooms(), adults + (children ?? 0)));
     }
 
     /** Der Wähler hat zwei Vorbedingungen: einen Zeitraum und eine Belegung (V16.7 — kein stiller Suchdefault). */
     private getMissingSelectionHint(): string {
         const { checkIn, checkOut } = bookingState.getDates();
         const needsDates = checkIn === null || checkOut === null;
-        const needsGuests = this.guests.adults === null;
+        const needsGuests = bookingState.getGuests().adults === null;
 
         if (needsDates && needsGuests) return 'Bitte zuerst Zeitraum und Anzahl der Gäste wählen';
         if (needsDates) return 'Bitte zuerst Zeitraum wählen';
@@ -760,16 +759,14 @@ export class BookingView extends AbstractView {
     }
 
     private setRoomQuantity(roomTypeId: string, desired: number): void {
-        const room = this.rooms.find((candidate: RoomCard): boolean => candidate.roomTypeId === roomTypeId);
+        const room = bookingState.getRooms().find((candidate: RoomCard): boolean => candidate.roomTypeId === roomTypeId);
         const availability = room?.availability;
         if (!availability?.isBookable) return;
 
         const otherRooms = getTotalRooms(bookingState.getRoomQuantities()) - bookingState.getRoomQuantity(roomTypeId);
-        const roomLimit = getRoomLimit(this.guests.adults);
+        const roomLimit = getRoomLimit(bookingState.getGuests().adults);
         const clamped = clampQuantity(desired, availability.roomsFree, otherRooms, roomLimit);
-        bookingState.setRoomQuantity(roomTypeId, clamped.value);
-        // Weniger Zimmer können das Kinderbett-Maximum senken (1 je Zimmer, E49).
-        this.reconcileSelectedServices();
+        bookingState.selectRoomQuantity(roomTypeId, clamped.value);
 
         // Der Gast soll sofort erfahren, warum es nicht weitergeht — nicht erst beim Absenden.
         const message = desired > clamped.value ? getLimitMessage(clamped.limitedBy, availability.roomsFree, roomLimit) : null;
@@ -777,7 +774,7 @@ export class BookingView extends AbstractView {
     }
 
     private setServiceQuantity(code: string, desired: number): void {
-        const service = this.extraServices.find((candidate: ExtraService): boolean => candidate.code === code);
+        const service = bookingState.getExtraServices().find((candidate: ExtraService): boolean => candidate.code === code);
         if (service === undefined) return;
 
         const value = Math.max(0, Math.min(desired, getServiceMax(service, this.getServiceContext())));
@@ -796,9 +793,9 @@ export class BookingView extends AbstractView {
 
         const quantities = bookingState.getRoomQuantities();
         const totalRooms = getTotalRooms(quantities);
-        const roomLimit = getRoomLimit(this.guests.adults);
+        const roomLimit = getRoomLimit(bookingState.getGuests().adults);
 
-        this.rooms.forEach((room: RoomCard): void => {
+        bookingState.getRooms().forEach((room: RoomCard): void => {
             const quantity = quantities[room.roomTypeId] ?? 0;
             const roomsFree = room.availability?.roomsFree ?? 0;
 
@@ -856,7 +853,7 @@ export class BookingView extends AbstractView {
         updateServiceRow(BREAKFAST, bookingState.getBreakfast(), this.getBreakfastLabel());
 
         const context = this.getServiceContext();
-        this.extraServices.forEach((service: ExtraService): void => {
+        bookingState.getExtraServices().forEach((service: ExtraService): void => {
             const quantity = bookingState.getServiceQuantity(service.code);
             const max = getServiceMax(service, context);
 
@@ -884,11 +881,11 @@ export class BookingView extends AbstractView {
                 : /*html*/ `<img src="${escapeHtml(room.imageUrl)}" alt="${escapeHtml(room.imageAlt)}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />`;
 
         return /*html*/ `
-            <div class="relative shrink-0 768:w-76 aspect-304/321
+            <div class="relative shrink-0 768:w-76 aspect-304/321">
                 ${image}
                 <div class="absolute inset-0 bg-linear-to-b from-transparent from-35% to-purple-haze/75 to-90%"></div>
                 ${room.availability?.priceLabel == null ? '' : /*html*/ `<span class="absolute top-4 right-0 bg-purple-haze px-4 py-1 font-antic-didone text-20 768:text-24 text-white">${escapeHtml(room.availability.priceLabel)}</span>`}
-                <h3 class="absolute left-4 bottom-4 right-4 font-playfair-display font-medium text-32 768:text-36 leading-tight text-eggshell wrap-break-wordword">${escapeHtml(room.name)}</h3>
+                <h3 class="absolute left-4 bottom-4 right-4 font-playfair-display font-medium text-32 768:text-36 leading-tight text-eggshell wrap-break-word">${escapeHtml(room.name)}</h3>
             </div>
         `;
     }
@@ -1049,15 +1046,9 @@ export class BookingView extends AbstractView {
      * es in der Zusammenfassung kein Feld, in dem gerade getippt wird.
      */
     private renderSummary(): void {
-        // Kein Destroy-Hook: Nach einem Seitenwechsel meldet sich die View hier selbst ab.
-        if (this.summaryEl?.isConnected !== true) {
-            this.unsubscribeSummary?.();
-            this.unsubscribeSummary = null;
-            return;
-        }
-
+        const summaryEl = this.summaryEl;
         const orderEl = document.getElementById('booking-summary-order');
-        if (!orderEl) return;
+        if (!summaryEl || !orderEl) return;
 
         const lines = this.getOrderLines();
         orderEl.innerHTML = /*html*/ `
@@ -1069,7 +1060,7 @@ export class BookingView extends AbstractView {
             </div>
         `;
 
-        const totalEl = this.summaryEl.querySelector<HTMLElement>('[data-summary-total]');
+        const totalEl = summaryEl.querySelector<HTMLElement>('[data-summary-total]');
         if (totalEl) {
             const total = getOrderTotalCents(lines);
             totalEl.textContent = total === null ? '–' : formatPrice(total, lines[0]?.currency ?? DEFAULT_CURRENCY);
@@ -1078,14 +1069,15 @@ export class BookingView extends AbstractView {
 
     private getOrderLines(): OrderLine[] {
         const { checkIn, checkOut } = bookingState.getDates();
+        const { adults, children } = bookingState.getGuests();
         return buildOrderLines({
-            rooms: this.rooms,
+            rooms: bookingState.getRooms(),
             quantities: bookingState.getRoomQuantities(),
             nights: countNights(checkIn, checkOut),
-            occupancy: { adults: this.guests.adults ?? 0, children: this.guests.children ?? 0 },
+            occupancy: { adults: adults ?? 0, children: children ?? 0 },
             breakfast: this.breakfastService,
             withBreakfast: bookingState.getBreakfast(),
-            services: this.extraServices,
+            services: bookingState.getExtraServices(),
             serviceQuantities: bookingState.getServices(),
         });
     }
@@ -1117,7 +1109,7 @@ export class BookingView extends AbstractView {
 
     /** Bild, Name und Ausstattung je gewählter Kategorie – der Block aus dem Entwurf, einmal je Kategorie. */
     private getSummaryRoomsHtml(): string {
-        const selected = this.rooms.filter((room: RoomCard): boolean => bookingState.getRoomQuantity(room.roomTypeId) > 0);
+        const selected = bookingState.getRooms().filter((room: RoomCard): boolean => bookingState.getRoomQuantity(room.roomTypeId) > 0);
         if (selected.length === 0) {
             return /*html*/ `<p class="font-antic-didone text-16 leading-tight text-purple-haze-dark/70">Noch kein Zimmer gewählt.</p>`;
         }
@@ -1153,8 +1145,8 @@ export class BookingView extends AbstractView {
         const { checkIn, checkOut } = bookingState.getDates();
         const nights = countNights(checkIn, checkOut);
 
-        const adults = this.guests.adults;
-        const guests = adults === null ? 'Anzahl der Gäste noch offen' : formatGuests(adults, this.guests.children ?? 0);
+        const { adults, children } = bookingState.getGuests();
+        const guests = adults === null ? 'Anzahl der Gäste noch offen' : formatGuests(adults, children ?? 0);
         const stay = nights === null ? guests : `${guests} · ${formatNights(nights)}`;
 
         return /*html*/ `
@@ -1216,7 +1208,7 @@ export class BookingView extends AbstractView {
             case 'breakfast':
                 return withNights(line.quantity === 1 ? 'für 1 Gast' : `für ${line.quantity.toString()} Gäste`);
             case 'service': {
-                const service = this.extraServices.find((candidate: ExtraService): boolean => candidate.code === line.id);
+                const service = bookingState.getExtraServices().find((candidate: ExtraService): boolean => candidate.code === line.id);
                 switch (service?.chargeBasis) {
                     case 'per_night':
                         return nights === null ? 'pro Nacht' : formatNights(nights);
@@ -1242,8 +1234,7 @@ export class BookingView extends AbstractView {
             case 'room':
                 // Direkt statt über `setRoomQuantity()`: Entfernen muss auch gehen, wenn die
                 // Kategorie gerade keine Verfügbarkeit hat (Zeitraum zurückgesetzt).
-                bookingState.setRoomQuantity(id, 0);
-                this.reconcileSelectedServices();
+                bookingState.selectRoomQuantity(id, 0);
                 this.updateQuantityUi(null);
                 break;
             case 'breakfast':
@@ -1263,12 +1254,22 @@ export class BookingView extends AbstractView {
     }
 
     /**
+     * Meldet sich ab und verwirft den Entwurf: Wer die Buchungsseite verlässt, fängt beim
+     * nächsten Besuch von vorn an (V10, kein `sessionStorage`).
+     */
+    destroy(): void {
+        this.destroyed = true;
+        this.unsubscribeSummary?.();
+        this.unsubscribeSummary = null;
+        bookingState.reset();
+    }
+
+    /**
      * Der Router baut bei jeder Navigation eine neue View; eine alte Instanz lebt weiter,
-     * bis ihre Anfragen zurück sind. Ob sie noch angezeigt wird, verrät ihr Container: Den
-     * hat der Router beim Seitenwechsel aus dem DOM genommen.
+     * bis ihre Anfragen zurück sind – dann darf sie nichts mehr rendern oder speichern.
      */
     private isDisplayed(): boolean {
-        return this.roomsEl?.isConnected === true;
+        return !this.destroyed;
     }
 
     /**
@@ -1282,20 +1283,26 @@ export class BookingView extends AbstractView {
 
     /** Die eine Zeile aus `hotels` (E14). */
     private async loadHotel(): Promise<void> {
-        const { data, error } = await supabase.from('hotels').select('name, address_line1, postal_code, city, country_code, check_in_time, check_out_time').limit(1).maybeSingle();
+        let hotel: HotelRow | null = null;
+        let failure: unknown = null;
+        try {
+            hotel = await fetchHotel();
+        } catch (error: unknown) {
+            failure = error;
+        }
         if (!this.isDisplayed()) return;
 
-        if (error) {
-            console.error('Hoteldaten konnten nicht geladen werden:', error);
+        if (failure !== null) {
+            console.error('Hoteldaten konnten nicht geladen werden:', failure);
             this.hotelError = HOTEL_LOAD_ERROR;
-        } else if (data === null) {
+        } else if (hotel === null) {
             // Kein Fehler der Abfrage, aber auch kein Hotel – ein Fehler in den Stammdaten (E14).
             console.error('In der Tabelle `hotels` ist kein Hotel hinterlegt.');
             this.hotelError = HOTEL_LOAD_ERROR;
         } else {
             this.hotelError = null;
         }
-        this.hotel = data;
+        this.hotel = hotel;
         this.renderSummary();
     }
 
@@ -1305,52 +1312,37 @@ export class BookingView extends AbstractView {
      */
     private async loadRooms(): Promise<void> {
         const { checkIn, checkOut } = bookingState.getDates();
-        const adults = this.guests.adults;
+        const { adults, children } = bookingState.getGuests();
 
         const requestId = ++this.roomsRequestId;
         this.roomsState = 'loading';
         this.renderRooms();
 
         try {
-            const [details, services, availability] = await Promise.all([
-                supabase.from('room_types').select('id, name, slug, description, max_occupancy, room_type_images(storage_path, alt_text, sort_order)').order('name'),
-                // Preise der Zusatzleistungen kommen aus der Datenbank, nicht als Konstante
-                // aus dem Frontend – dasselbe Argument wie beim Buchungshorizont (E30). Ohne
-                // `hotel_id`-Filter, weil es genau ein Hotel gibt; `search_availability`
-                // nimmt oben dieselbe Abkürzung.
-                supabase.from('services').select('id, code, name, description, charge_basis, amount_cents, child_amount_cents, currency, sort_order').order('sort_order'),
+            const [roomTypes, serviceRows, availability] = await Promise.all([
+                fetchRoomTypes(),
+                fetchServices(),
                 // Ohne gewählte Erwachsenenzahl wird nicht gesucht: eine geratene Belegung
                 // liefert Preise und Restbestände, die niemand bestellt hat (V16.7).
                 checkIn === null || checkOut === null || adults === null
                     ? null
-                    : supabase.rpc('search_availability', {
-                          p_check_in: toISODate(checkIn),
-                          p_check_out: toISODate(checkOut),
-                          p_adults: adults,
+                    : searchAvailability({
+                          checkIn: toISODate(checkIn),
+                          checkOut: toISODate(checkOut),
+                          adults,
                           // Leeres Kinderfeld heißt „keine Kinder" — das ist keine Vermutung,
                           // sondern die Abwesenheit von Kindern.
-                          p_children: this.guests.children ?? 0,
+                          children: children ?? 0,
                       }),
             ]);
 
             // Eine überholte Antwort darf das Ergebnis der aktuellen Suche nicht ersetzen.
             if (this.isStale(requestId)) return;
 
-            if (details.error) throw new Error(details.error.message);
-            if (availability !== null && availability.error) throw new Error(availability.error.message);
-            if (services.error) throw new Error(services.error.message);
-
-            this.rooms = buildRoomCards(details.data, availability === null ? null : (availability.data as RoomAvailability[]));
-            const serviceRows = services.data as ServiceRow[];
             this.breakfastService = buildBreakfastService(serviceRows.find((row: ServiceRow): boolean => row.code === BREAKFAST) ?? null);
-            this.extraServices = buildExtraServices(serviceRows);
-
-            // Ein neues Suchergebnis kann gewählte Mengen unmöglich gemacht haben (V16.6).
-            const reconciled = reconcileQuantities(bookingState.getRoomQuantities(), this.rooms, getRoomLimit(this.guests.adults));
-            bookingState.setRoomQuantities(reconciled.quantities);
-            this.quantityNotice = reconciled.notice;
-            // … und damit auch die Leistungen: weniger Kinder, weniger Kinderbetten.
-            this.reconcileSelectedServices();
+            // Ein neues Suchergebnis kann gewählte Mengen unmöglich gemacht haben (V16.6) –
+            // der Store gleicht Mengen und Leistungen ab und meldet sich einmal.
+            this.quantityNotice = bookingState.applySearchResult(buildRoomCards(roomTypes, availability), buildExtraServices(serviceRows));
 
             this.roomsState = 'ready';
             this.roomsError = null;
@@ -1469,7 +1461,7 @@ export class BookingView extends AbstractView {
 
     private getFooterHtml(): string {
         const { checkIn, checkOut } = bookingState.getDates();
-        const canContinue = checkIn !== null && checkOut !== null && this.guests.adults !== null;
+        const canContinue = checkIn !== null && checkOut !== null && bookingState.getGuests().adults !== null;
         return /*html*/ `
             <div class="flex justify-center mt-8 768:mt-10">
                 <button
@@ -1565,7 +1557,7 @@ export class BookingView extends AbstractView {
         const draft = this.getBookingDraft();
         const { checkIn, checkOut, nights, adults } = draft;
         const invalid = getInvalidFields(draft);
-        const checkoutError = getCheckoutError(draft, this.rooms);
+        const checkoutError = getCheckoutError(draft, bookingState.getRooms());
         // In das Formular springen nur, wenn dort auch das Problem liegt – nicht, wenn
         // noch das Zimmer fehlt.
         this.markInvalidFields(invalid, checkoutError?.section === 'form');
@@ -1627,7 +1619,7 @@ export class BookingView extends AbstractView {
      * stehen in `messages.ts`; hier kommt nur dazu, was die View kennt.
      */
     private getRejectionText(rejection: BookingRejection): string {
-        const roomName = this.rooms.find((card: RoomCard): boolean => card.roomTypeId === rejection.roomTypeId)?.name ?? null;
+        const roomName = bookingState.getRooms().find((card: RoomCard): boolean => card.roomTypeId === rejection.roomTypeId)?.name ?? null;
         const night = rejection.date === null ? null : formatDate(parseISODate(rejection.date));
         return getRejectionMessage(rejection.code, { roomName, night });
     }
@@ -1681,32 +1673,8 @@ export class BookingView extends AbstractView {
         `;
     }
 
-    /** Meldet dem Header, welche Buchungsschritte erledigt sind (Regeln in `getCompletedSteps`). */
-    private updateBookingSteps(): void {
-        // Nach einem Seitenwechsel nichts mehr melden – der Zustand gehört dann nicht mehr dieser View.
-        if (this.summaryEl?.isConnected !== true) return;
-
-        bookingState.setCompletedSteps(getCompletedSteps(this.getBookingDraft(), this.rooms));
-    }
-
     private getBookingDraft(): BookingDraft {
-        const { checkIn, checkOut } = bookingState.getDates();
-        const quantities = bookingState.getRoomQuantities();
-
-        return {
-            checkIn: checkIn === null ? null : toISODate(checkIn),
-            checkOut: checkOut === null ? null : toISODate(checkOut),
-            nights: countNights(checkIn, checkOut),
-            adults: this.guests.adults,
-            children: this.guests.children ?? 0,
-            // Eine Position je Kategorie – die Form von `p_positions` in `create_booking`
-            // (E44). Frühstück und Gäste gelten für den ganzen Vorgang (E48).
-            positions: Object.entries(quantities).map(([roomTypeId, rooms]: [string, number]): BookingPosition => ({ roomTypeId, rooms })),
-            withBreakfast: bookingState.getBreakfast(),
-            // Die Form von `p_services` (E49). Die Menge ist nur beim Kinderbett mehr als 1.
-            services: Object.entries(bookingState.getServices()).map(([code, quantity]: [string, number]): BookingServiceSelection => ({ code, quantity })),
-            ...this.readCustomerDetails(),
-        };
+        return buildBookingDraft(bookingState.getSnapshot());
     }
 
     private bindCustomerForm(): void {
@@ -1718,8 +1686,7 @@ export class BookingView extends AbstractView {
             // Wer ein markiertes Feld korrigiert, soll die Markierung nicht bis zum
             // nächsten Klick behalten.
             if (event.target instanceof Element) event.target.removeAttribute('aria-invalid');
-            this.renderCustomerSummary();
-            this.updateBookingSteps();
+            this.saveCustomerDetails();
         });
         form.addEventListener('change', (event: Event): void => {
             const target = event.target;
@@ -1727,8 +1694,7 @@ export class BookingView extends AbstractView {
 
             const billingEl = document.getElementById('booking-billing');
             if (billingEl) billingEl.hidden = !target.checked;
-            this.renderCustomerSummary();
-            this.updateBookingSteps();
+            this.saveCustomerDetails();
         });
         form.addEventListener('submit', (event: Event): void => {
             // Enter in einem Feld soll nicht die Seite neu laden.
@@ -1739,7 +1705,13 @@ export class BookingView extends AbstractView {
             void this.submit();
         });
 
-        this.renderCustomerSummary();
+        // Der Store kennt sonst bis zum ersten Tippen nicht einmal das vorgeschlagene Land.
+        this.saveCustomerDetails();
+    }
+
+    /** Übernimmt das Formular in den Store – Zusammenfassung und Header folgen über `subscribe`. */
+    private saveCustomerDetails(): void {
+        bookingState.setCustomerDetails(this.readCustomerDetails());
     }
 
     /**
@@ -1816,7 +1788,7 @@ export class BookingView extends AbstractView {
         const summaryEl = document.getElementById('booking-summary-customer');
         if (!summaryEl) return;
 
-        const { customer, residence, billing } = this.readCustomerDetails();
+        const { customer, residence, billing } = bookingState.getCustomerDetails();
         const name = `${customer.firstName} ${customer.lastName}`.trim();
         // Das Land steht schon da, bevor etwas eingegeben ist – das allein ist noch keine
         // Adresse.
@@ -1850,43 +1822,6 @@ export class BookingView extends AbstractView {
     }
 }
 
-/**
- * Baut die Karten aus den Kategorien und ergänzt – falls vorhanden – die Verfügbarkeit.
- *
- * Die Kategorien geben die Reihenfolge vor, damit die Liste beim Wählen eines Zeitraums
- * nicht umspringt.
- */
-function buildRoomCards(details: RoomTypeDetail[], availability: RoomAvailability[] | null): RoomCard[] {
-    const availabilityBySlug = new Map<string, RoomAvailability>((availability ?? []).map((room: RoomAvailability): [string, RoomAvailability] => [room.slug, room]));
-
-    return details.map((detail: RoomTypeDetail): RoomCard => {
-        const image = pickImage(detail.room_type_images);
-        const room = availabilityBySlug.get(detail.slug);
-
-        return {
-            roomTypeId: detail.id,
-            slug: detail.slug,
-            name: detail.name,
-            description: detail.description,
-            imageUrl: image === null ? null : supabase.storage.from(ROOM_IMAGE_BUCKET).getPublicUrl(image.storage_path).data.publicUrl,
-            imageAlt: image?.alt_text ?? '',
-            maxOccupancy: detail.max_occupancy,
-            availability:
-                room === undefined
-                    ? null
-                    : {
-                          priceLabel: room.total_amount_cents === null ? null : formatPrice(room.total_amount_cents, room.currency),
-                          amountCents: room.total_amount_cents,
-                          currency: room.currency,
-                          nights: room.nights,
-                          roomsFree: room.rooms_free,
-                          isBookable: room.is_bookable,
-                          unavailableReason: room.unavailable_reason !== null && isUnavailableReason(room.unavailable_reason) ? room.unavailable_reason : null,
-                      },
-        };
-    });
-}
-
 /** Zeile unter der Beschreibung – ohne gewählten Zeitraum bleibt sie weg. */
 function getAvailabilityHtml(availability: RoomCardAvailability | null): string {
     if (availability === null) return '';
@@ -1897,12 +1832,6 @@ function getAvailabilityHtml(availability: RoomCardAvailability | null): string 
 
     const roomsFree = availability.roomsFree === null ? '' : `${formatRoomsFreeLabel(availability.roomsFree)} · `;
     return /*html*/ `<p class="font-antic-didone text-16 text-purple-haze-dark/70">${roomsFree}${formatNights(availability.nights)}</p>`;
-}
-
-/** Erstes Bild nach `sort_order` – Kategorien ohne Bild sind ein vorgesehener Fall. */
-function pickImage(images: RoomTypeImage[]): RoomTypeImage | null {
-    if (images.length === 0) return null;
-    return [...images].sort((a: RoomTypeImage, b: RoomTypeImage): number => a.sort_order - b.sort_order)[0] ?? null;
 }
 
 /**

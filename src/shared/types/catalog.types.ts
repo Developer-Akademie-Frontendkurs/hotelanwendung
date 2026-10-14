@@ -1,4 +1,12 @@
-import type { UnavailableReason } from '../../shared/types/booking.codes';
+/**
+ * Stammdaten und Verfügbarkeit, wie `catalog.service.ts` sie liest, und die Zimmerkarte,
+ * die daraus entsteht.
+ *
+ * Die `*Row`-/`*Detail`-Typen bilden die Antworten von PostgREST ab (snake_case); sie
+ * fallen weg, sobald die generierten Typen da sind (V8, `pnpm db:types`).
+ */
+
+import type { UnavailableReason } from './booking.codes';
 
 /** Eine Zeile aus der Datenbankfunktion `search_availability`. */
 export interface RoomAvailability {
@@ -34,17 +42,6 @@ export interface RoomTypeDetail {
     room_type_images: RoomTypeImage[];
 }
 
-/**
- * Ausstattungsmerkmal einer Zimmerkategorie.
- *
- * Bewusst kein Datenbankfeld: für die Icons im Design (Bett, Klimaanlage, Bad, Gym)
- * gibt es kein Schema. Die Zuordnung steht als Konstante in `Booking.ts`.
- */
-export interface RoomAmenity {
-    icon: string;
-    label: string;
-}
-
 /** Preis und Verfügbarkeit einer Kategorie – gibt es nur mit gewähltem Zeitraum. */
 export interface RoomCardAvailability {
     priceLabel: string | null;
@@ -70,4 +67,16 @@ export interface RoomCard {
     maxOccupancy: number;
     /** `null`, solange kein Zeitraum gewählt ist: ohne Datum gibt es weder Preis noch Restbestand. */
     availability: RoomCardAvailability | null;
+}
+
+/** Die Stammdaten aus `hotels`, die die Zusammenfassung braucht (genau eine Zeile, E14). */
+export interface HotelRow {
+    name: string;
+    address_line1: string | null;
+    postal_code: string | null;
+    city: string | null;
+    country_code: string | null;
+    /** `time` kommt über PostgREST als `"14:00:00"`. */
+    check_in_time: string;
+    check_out_time: string;
 }

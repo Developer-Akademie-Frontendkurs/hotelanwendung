@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BookingDraft } from '../../../shared/types/booking.types';
-import type { RoomCard } from '../room.interface';
-import { getCheckoutError, getCompletedSteps } from './validation';
+import type { RoomCard } from '../../../shared/types/catalog.types';
+import { getCheckoutError, getCompletedSteps, getCurrentStep } from './validation';
 
 function card(roomTypeId: string, maxOccupancy: number): RoomCard {
     return {
@@ -98,5 +98,17 @@ describe('getCompletedSteps', () => {
     it('meldet Schritt 3 unabhängig von den anderen', () => {
         expect(getCompletedSteps(draft({ checkIn: null, positions: [] }), ROOMS)).toEqual([3]);
         expect(getCompletedSteps(draft(EMPTY_FORM), ROOMS)).toEqual([1, 2]);
+    });
+});
+
+describe('getCurrentStep', () => {
+    it('nennt den ersten offenen Schritt', () => {
+        expect(getCurrentStep([])).toBe(1);
+        expect(getCurrentStep([1])).toBe(2);
+        expect(getCurrentStep([1, 3])).toBe(2);
+    });
+
+    it('meldet null, wenn alles erledigt ist', () => {
+        expect(getCurrentStep([1, 2, 3])).toBeNull();
     });
 });

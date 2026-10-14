@@ -7,6 +7,7 @@ export type ViewInstance = {
     onInit: () => Promise<void>;
     getHtml: () => Promise<string>;
     afterRender: () => Promise<void>;
+    destroy: () => void;
 };
 
 export type StaticRoute = {

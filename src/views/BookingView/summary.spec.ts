@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BreakfastService } from './breakfast';
-import type { RoomCard } from './room.interface';
+import type { RoomCard } from '../../shared/types/catalog.types';
 import { BREAKFAST, type ExtraService } from './services';
 import { buildOrderLines, getOrderTotalCents, type OrderInput } from './summary';
 

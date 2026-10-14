@@ -1,7 +1,10 @@
 import type { BookingDraft, BookingStep, RoomQuantities } from '../../../shared/types/booking.types';
 import { getInvalidFields } from '../address';
-import type { RoomCard } from '../room.interface';
+import type { RoomCard } from '../../../shared/types/catalog.types';
 import { formatMissingBedsNotice, getMissingBeds } from '../roomQuantity';
+
+/** Reihenfolge der Schritte im Header – zugleich die Reihenfolge der Seite. */
+export const BOOKING_STEP_ORDER: readonly BookingStep[] = [1, 2, 3];
 
 /** Bereich der Seite, in dem das Problem liegt – die View entscheidet daran, wohin sie springt. */
 export type CheckoutSection = 'dates' | 'guests' | 'rooms' | 'form';
@@ -38,6 +41,11 @@ export function getCompletedSteps(draft: BookingDraft, rooms: readonly RoomCard[
     if (draft.positions.length > 0 && getDraftMissingBeds(draft, rooms) === 0) steps.push(2);
     if (getInvalidFields(draft).length === 0) steps.push(3);
     return steps;
+}
+
+/** Der fällige Schritt ist der erste, der noch nicht erledigt ist – `null`, wenn alles erledigt ist. */
+export function getCurrentStep(completedSteps: readonly BookingStep[]): BookingStep | null {
+    return BOOKING_STEP_ORDER.find((step: BookingStep): boolean => !completedSteps.includes(step)) ?? null;
 }
 
 /**

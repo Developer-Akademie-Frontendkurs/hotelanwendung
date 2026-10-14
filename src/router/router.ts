@@ -7,6 +7,7 @@ export class Router {
     private readonly routes: Route[];
     private readonly layoutWrapper: HTMLElement | null;
     private currentHeader: MainHeader | null = null;
+    private currentView: ViewInstance | null = null;
 
     constructor(routes: Route[], layoutWrapper: HTMLElement | null) {
         this.routes = routes;
@@ -50,6 +51,17 @@ export class Router {
 
     async render(): Promise<void> {
         const locationPath: string = window.location.pathname;
+
+        // Erst umleiten, dann rendern: `navigateTo` rendert selbst – ginge es danach hier
+        // weiter, entstünde dieselbe Seite ein zweites Mal, und die erste View bliebe ohne
+        // `destroy()` am Leben.
+        if (locationPath.length > 1 && locationPath.endsWith('/')) {
+            const correctedLocationPath = locationPath.slice(0, -1);
+            console.log('corrected path: ', correctedLocationPath);
+            await this.navigateTo(correctedLocationPath);
+            return;
+        }
+
         const potentialMatches: Match[] = this.getPotentialMatches(locationPath);
         let match: Match | undefined = potentialMatches.find((match: Match): boolean => match.result !== null);
 
@@ -64,6 +76,7 @@ export class Router {
             };
         }
 
+        this.teardown();
         await this.getBaseLayout(locationPath, match.route);
 
         const contentContainer: HTMLElement | null = document.getElementById('content');
@@ -72,6 +85,9 @@ export class Router {
         }
 
         const view: ViewInstance = match.route.kind === 'dynamic' ? new match.route.view(this.getParams(match)) : new match.route.view();
+        // Schon vor `onInit` merken: Navigiert der Gast weiter, während die View noch lädt,
+        // muss auch sie abgeräumt werden.
+        this.currentView = view;
         await view.onInit();
         contentContainer.innerHTML = await view.getHtml();
         await view.afterRender();
@@ -82,17 +98,7 @@ export class Router {
             throw new Error('Fehler beim Laden der Seite');
         }
 
-        // Vor jedem Layout-Neubau den alten Header abräumen (Abo lösen, Zustand zurücksetzen).
-        // Steht vor allen Zweigen, greift also auch für /admin und den Trailing-Slash-Fall.
-        this.currentHeader?.destroy();
-        this.currentHeader = null;
-
-        if (locationPath.length > 1 && locationPath.endsWith('/')) {
-            const correctedLocationPath = locationPath.slice(0, -1);
-            console.log('corrected path: ', correctedLocationPath);
-            await this.navigateTo(correctedLocationPath);
-            return;
-        } else if (locationPath.startsWith('/admin')) {
+        if (locationPath.startsWith('/admin')) {
             this.layoutWrapper.innerHTML = await new AdminLayout().getHtml();
         } else {
             const header: MainHeader = new MainHeader(route.header ?? homeHeader);
@@ -101,6 +107,19 @@ export class Router {
             this.currentHeader = header;
             await header.afterRender();
         }
+    }
+
+    /**
+     * Räumt Header und View der bisherigen Seite ab, bevor die neue entsteht.
+     *
+     * Erst der Header, dann die View: Setzt die View dabei Zustand zurück (BookingView),
+     * erreicht die Benachrichtigung so keinen Header mehr, der gleich ersetzt wird.
+     */
+    private teardown(): void {
+        this.currentHeader?.destroy();
+        this.currentHeader = null;
+        this.currentView?.destroy();
+        this.currentView = null;
     }
 
     private getPotentialMatches(locationPath: string): Match[] {
