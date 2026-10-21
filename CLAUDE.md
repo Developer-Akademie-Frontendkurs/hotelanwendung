@@ -47,7 +47,8 @@ Es gibt keine separate `vitest.config.ts` – Vitest nutzt die Standardkonfigura
     - `destroy()` – ruft der Router vor dem Rendern der nächsten Seite auf (erst Header, dann View). Hier Abos von `bookingState` lösen und seitengebundenen Zustand zurücksetzen (Beispiel: `BookingView` setzt den Entwurf zurück). Asynchrone Antworten, die danach eintreffen, dürfen nichts mehr rendern oder speichern.
     - Dynamische Views erhalten `params: Record<string, string>` im Konstruktor (Beispiel: `SinglePostView`).
 - Views liegen unter `src/views/<Name>View/<Name>.ts`, oft mit einer eigenen `<name>.css` daneben, die per Import in der `.ts`-Datei eingebunden wird.
-- Es gibt bislang keine Wiederverwendungs-/Komponentenschicht – jede View baut ihr HTML komplett selbst als String zusammen (inkl. Tailwind-Klassen direkt im Markup).
+- Es gibt keine viewübergreifende Komponentenschicht – jede View baut ihr HTML selbst als String zusammen (inkl. Tailwind-Klassen direkt im Markup).
+- Die `BookingView` trennt Markup und Logik: Ihre Templates liegen unter `src/views/BookingView/templates/` (`icons.ts`, `calendar.template.ts`, `rooms.template.ts`, `checkout.template.ts`) und sind reine Funktionen – Daten rein, HTML raus, höchstens Bedingungen für Klassen oder optionale Teile. Was angezeigt wird (Texte, Mengen, Maxima, welche Zeilen), rechnet `Booking.ts` aus und übergibt fertige Werte. Neues Markup der Buchungsseite gehört in ein Template, nicht in `Booking.ts`; `Booking.ts` importiert die Templates als Namensraum (`roomsTemplate.getRoomCardHtml(...)`).
 
 ### Supabase
 
@@ -66,7 +67,7 @@ Es gibt keine separate `vitest.config.ts` – Vitest nutzt die Standardkonfigura
 Weil alle Views ihr HTML als String bauen und per `innerHTML` einsetzen, ist XSS das Hauptrisiko. Zwei Schichten schützen davor:
 
 - **Escapen beim Einsetzen:** Jeder Wert, der nicht wörtlich im Quelltext steht (Datenbank, Route-Params/URL, Supabase-Fehlermeldungen, alles daraus Zusammengesetzte wie Hinweistexte mit Zimmernamen), geht nur über `escapeHtml()` aus `src/shared/ui/html.ts` ins Template – in Text wie in Attributwerten (Attribute immer in doppelten Anführungszeichen). Escapt wird erst an der Ausgabe, nicht schon beim Laden/Mappen der Daten. Werte, die in eine URL gehören (z. B. eine ID im `href`), vorher zusätzlich durch `encodeURIComponent()`.
-- **Fertiges Markup** (Icons, Teil-Templates, `options.html` von `openModal()`) wird nicht escapt – Funktionen, die Markup entgegennehmen, escapen deshalb ihre Text-Parameter selbst (Beispiel: `getServiceRowShellHtml` in `Booking.ts`). Mehrzeilige Werte als Liste übergeben, einzeln escapen und erst dann mit `<br>` verbinden.
+- **Fertiges Markup** (Icons, Teil-Templates, `options.html` von `openModal()`) wird nicht escapt – Funktionen, die Markup entgegennehmen, escapen deshalb ihre Text-Parameter selbst (Beispiel: die Templates unter `BookingView/templates/` – Parameter mit `Html` im Namen sind Markup, alle anderen Text). Mehrzeilige Werte als Liste übergeben, einzeln escapen und erst dann mit `<br>` verbinden.
 - **Eingaben des Gastes** werden nicht ins Template interpoliert, sondern nach dem Rendern per `textContent` gesetzt.
 - **Content-Security-Policy** als `<meta>` in `src/index.html`: nur Skripte vom eigenen Origin (keine Inline-Skripte, keine `on*`-Attribute), Netzwerk und Bilder nur zu `'self'` und `%VITE_SUPABASE_URL%` (setzt Vite beim Build/Dev-Start aus der `.env` ein). Kommt eine neue externe Quelle dazu (CDN, Fonts, weitere API), muss sie dort ergänzt werden, sonst blockiert der Browser sie. Inline-Event-Handler im Markup funktionieren deshalb nicht – Listener immer in `afterRender()` per `addEventListener` binden.
 
