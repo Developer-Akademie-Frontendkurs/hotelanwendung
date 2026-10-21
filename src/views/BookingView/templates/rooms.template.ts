@@ -42,6 +42,8 @@ export type RoomCardView = {
     description: string | null;
     quantityHtml: string;
     availabilityHtml: string;
+    /** Nach einer Ablehnung genau dieser Kategorie (Phase 9b, Punkt 8). */
+    rejectionHint: string | null;
 };
 
 export type RoomImageView = {
@@ -162,6 +164,7 @@ export function getRoomCardHtml(view: RoomCardView): string {
                 ${description}
                 ${view.quantityHtml}
                 ${view.availabilityHtml}
+                ${view.rejectionHint === null ? '' : /*html*/ `<p class="font-antic-didone text-16 leading-tight text-red-600">${escapeHtml(view.rejectionHint)}</p>`}
             </div>
         </article>
     `;

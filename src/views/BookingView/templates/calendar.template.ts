@@ -47,8 +47,10 @@ export type DayCellView = {
      * deaktivierten Knöpfen keinen Tooltip zeigen – und der Tooltip ist hier der Punkt (E24).
      */
     blocked: boolean;
-    /** Datum und Grund für gesperrte Tage. */
+    /** Datum und Grund für gesperrte Tage – oder der Hinweis an der abgelehnten Nacht. */
     tooltip: string | null;
+    /** Die Nacht, an der `create_booking` gerade abgelehnt hat (Phase 9b, Punkt 8). */
+    flagged: boolean;
     /** Nur am Anreisetag sitzt das „ד zum Zurücksetzen. */
     withClearButton: boolean;
 };
@@ -168,7 +170,7 @@ function getDayCellHtml(cell: DayCellView): string {
             data-date="${escapeHtml(cell.iso)}"
             ${cell.selectable ? '' : cell.blocked ? 'aria-disabled="true"' : 'disabled'}
             ${cell.tooltip === null ? '' : `title="${escapeHtml(cell.tooltip)}"`}
-            class="relative flex flex-col items-center justify-center gap-0.5 456:gap-1 rounded-lg border border-purple-haze/20 py-2 456:py-3 768:py-4 transition-colors ${cell.stateClass}"
+            class="relative flex flex-col items-center justify-center gap-0.5 456:gap-1 rounded-lg border border-purple-haze/20 py-2 456:py-3 768:py-4 transition-colors ${cell.stateClass} ${cell.flagged ? 'ring-2 ring-red-600' : ''}"
         >
             ${clearButton}
             <span class="text-[0.625rem] 456:text-14 768:text-16 tracking-wide${strike}">${escapeHtml(cell.weekday)}</span>
@@ -178,8 +180,10 @@ function getDayCellHtml(cell: DayCellView): string {
     `;
 }
 
-export function getCalendarFooterHtml(canContinue: boolean): string {
+/** `rejectionHint`: nach einer Ablehnung die betroffene Nacht, über dem Knopf. */
+export function getCalendarFooterHtml(canContinue: boolean, rejectionHint: string | null): string {
     return /*html*/ `
+        ${rejectionHint === null ? '' : /*html*/ `<p class="mt-6 768:mt-8 font-antic-didone text-16 leading-tight text-red-600 text-center">${escapeHtml(rejectionHint)}</p>`}
         <div class="flex justify-center mt-8 768:mt-10">
             <button
                 type="button"

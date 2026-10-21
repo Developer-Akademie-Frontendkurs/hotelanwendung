@@ -73,3 +73,26 @@ export function getRejectionMessage(code: RejectionCode | null, context: Rejecti
 export function formatBlockedNight(day: string, reason: UnavailableReason): string {
     return `${day}: ${NIGHT_BLOCKED_TEXTS[reason]}`;
 }
+
+/** Ablehnungen, die heißen: Die Verfügbarkeit hat sich zwischen Anzeige und Buchen geändert. */
+const AVAILABILITY_REJECTIONS: ReadonlySet<RejectionCode> = new Set<RejectionCode>(['nicht_buchbar', 'ausgebucht', 'kein_preis', 'zu_klein']);
+
+/** Die Hinweise am Ort des Problems (Phase 9b, Punkt 8) – zusätzlich zur Meldung am Buchen-Knopf. */
+export type RejectionHints = {
+    /** An der Zimmerkarte der abgelehnten Kategorie. */
+    room: string;
+    /** Unter dem Kalender – nur, wenn die Datenbank eine Nacht nennt. */
+    calendar: string | null;
+};
+
+/**
+ * `null` für Ablehnungen, die nichts mit Karte und Kalender zu tun haben (Adresse,
+ * Leistungen, Belegung) – die stehen nur am Buchen-Knopf.
+ */
+export function getRejectionHints(code: RejectionCode | null, night: string | null): RejectionHints | null {
+    if (code === null || !AVAILABILITY_REJECTIONS.has(code)) return null;
+    return {
+        room: night === null ? 'Nicht mehr buchbar – bitte prüfen Sie Ihre Auswahl.' : `Für die Nacht vom ${night} nicht mehr buchbar.`,
+        calendar: night === null ? null : `Die Nacht vom ${night} ist nicht mehr buchbar – bitte prüfen Sie Ihren Zeitraum.`,
+    };
+}

@@ -31,13 +31,14 @@ import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService }
 import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, type ExtraService } from './services';
 import { COUNTRIES, DEFAULT_COUNTRY, formatAddressLines, getCountryLabel, getInvalidFields, isCountryCode, emptyToNull, type CountryCode, type InvalidField } from './address';
 import { buildOrderLines, DEFAULT_CURRENCY, formatSelectionSummary, getOrderTotalCents, type OrderLine } from './summary';
-import { formatBlockedNight, formatUnavailableReason, getRejectionMessage } from './messages';
+import { formatBlockedNight, formatUnavailableReason, getRejectionHints, getRejectionMessage } from './messages';
 import {
     addDays,
     buildDays,
     canGoNext,
     canGoPrev,
     countNights,
+    isSameDay,
     isSelectableAsCheckOut,
     parseISODate,
     stripTime,
@@ -149,6 +150,10 @@ export class BookingView extends AbstractView {
     private readonly calendarCache = new Map<string, NightAvailability>();
     // Wie `roomsRequestId`: Eine Antwort für eine überholte Belegung wird verworfen.
     private calendarRequestId = 0;
+    // Die letzte Ablehnung aus `create_booking`, am Ort des Problems angezeigt (Phase 9b,
+    // Punkt 8): an der Zimmerkarte und am Kalendertag. Weg, sobald Zeitraum oder Belegung
+    // sich ändern – dann gilt die Aussage nicht mehr.
+    private rejection: { roomTypeId: string | null; night: Date | null; roomHint: string; calendarHint: string | null } | null = null;
     private summaryEl: HTMLElement | null = null;
     private unsubscribeSummary: (() => void) | null = null;
     // Setzt `destroy()`. Laufende Anfragen kommen danach noch zurück und dürfen dann
@@ -257,6 +262,7 @@ export class BookingView extends AbstractView {
         const field = target.dataset.guests;
         if (field !== 'adults' && field !== 'children') return;
 
+        this.rejection = null;
         // Gleicht die Kinderbetten gleich mit ab (siehe `setGuests`).
         bookingState.setGuests({ ...bookingState.getGuests(), [field]: target.value === '' ? null : Number(target.value) });
         this.renderGuestsNotice();
@@ -321,6 +327,7 @@ export class BookingView extends AbstractView {
             description: room.description,
             quantityHtml: this.getRoomQuantityHtml(room),
             availabilityHtml: getAvailabilityHtml(room.availability),
+            rejectionHint: this.rejection !== null && this.rejection.roomTypeId === room.roomTypeId ? this.rejection.roomHint : null,
         });
     }
 
@@ -1035,9 +1042,22 @@ export class BookingView extends AbstractView {
             stateClass: this.getCellStateClass(cell),
             selectable: cell.selectable,
             blocked: cell.blocked,
-            tooltip: cell.blocked && cell.blockReason !== null ? formatBlockedNight(formatDate(cell.date), cell.blockReason) : null,
+            tooltip: this.getDayTooltip(cell),
+            flagged: this.isRejectedNight(cell.date),
             withClearButton: cell.isStart,
         };
+    }
+
+    /** Die abgelehnte Nacht nennt ihre Ablehnung, alle anderen gesperrten Tage ihren Grund. */
+    private getDayTooltip(cell: DayCell): string | null {
+        const calendarHint = this.rejection?.calendarHint ?? null;
+        if (calendarHint !== null && this.isRejectedNight(cell.date)) return calendarHint;
+        return cell.blocked && cell.blockReason !== null ? formatBlockedNight(formatDate(cell.date), cell.blockReason) : null;
+    }
+
+    private isRejectedNight(date: Date): boolean {
+        const night = this.rejection?.night ?? null;
+        return night !== null && isSameDay(night, date);
     }
 
     private getCellStateClass(cell: DayCell): string {
@@ -1072,7 +1092,7 @@ export class BookingView extends AbstractView {
 
     private getCalendarFooterHtml(): string {
         const { checkIn, checkOut } = bookingState.getDates();
-        return calendarTemplate.getCalendarFooterHtml(checkIn !== null && checkOut !== null && bookingState.getGuests().adults !== null);
+        return calendarTemplate.getCalendarFooterHtml(checkIn !== null && checkOut !== null && bookingState.getGuests().adults !== null, this.rejection?.calendarHint ?? null);
     }
 
     private handleCalendarClick(event: MouseEvent): void {
@@ -1110,6 +1130,7 @@ export class BookingView extends AbstractView {
     }
 
     private selectDate(iso: string): void {
+        this.rejection = null;
         const date = parseISODate(iso);
         const { checkIn, checkOut } = bookingState.getDates();
 
@@ -1126,6 +1147,7 @@ export class BookingView extends AbstractView {
     }
 
     private clearSelection(): void {
+        this.rejection = null;
         bookingState.setDates(null, null);
         this.renderCalendar();
         this.renderGuestsNotice();
@@ -1183,6 +1205,7 @@ export class BookingView extends AbstractView {
         if (!result.ok) {
             this.setSubmitting(false);
             this.showCheckoutError(this.getRejectionText(result.error));
+            this.rememberRejection(result.error);
             // Eine Ablehnung heißt fast immer: Die Verfügbarkeit hat sich geändert. Die
             // neue Liste passt unmögliche Mengen an und sagt es über der Liste – und der
             // Kalender darf nicht aus dem Speicher weiter alte Nächte anbieten.
@@ -1218,6 +1241,22 @@ export class BookingView extends AbstractView {
      * Ablehnung aus `create_booking` als Satz mit Kategorie und Nacht (E31). Die Texte
      * stehen in `messages.ts`; hier kommt nur dazu, was die View kennt.
      */
+    /**
+     * Merkt sich die Ablehnung für Zimmerkarte und Kalender – angezeigt wird sie mit dem
+     * Neuladen, das direkt danach folgt. Der Kalender springt in den Monat der Nacht,
+     * sonst stünde der Hinweis womöglich auf einem Blatt, das gerade nicht zu sehen ist.
+     */
+    private rememberRejection(rejection: BookingRejection): void {
+        const night = rejection.date === null ? null : parseISODate(rejection.date);
+        const hints = getRejectionHints(rejection.code, night === null ? null : formatDate(night));
+        this.rejection = hints === null ? null : { roomTypeId: rejection.roomTypeId, night, roomHint: hints.room, calendarHint: hints.calendar };
+
+        if (this.rejection !== null && night !== null) {
+            this.displayedYear = night.getFullYear();
+            this.displayedMonth = night.getMonth();
+        }
+    }
+
     private getRejectionText(rejection: BookingRejection): string {
         const roomName = bookingState.getRooms().find((card: RoomCard): boolean => card.roomTypeId === rejection.roomTypeId)?.name ?? null;
         const night = rejection.date === null ? null : formatDate(parseISODate(rejection.date));
