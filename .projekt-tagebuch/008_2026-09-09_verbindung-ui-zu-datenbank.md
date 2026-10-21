@@ -2,7 +2,7 @@
 
 # 008 – Branch `verbindung-ui-zu-datenbank`
 
-**Erster Commit:** 2026-09-09 · **Commits:** 27 · **Status:** offen
+**Erster Commit:** 2026-09-09 · **Commits:** 35 · **Status:** offen
 
 ## Ziel des Branches
 
@@ -54,6 +54,14 @@ Vertagt bleibt allein Phase 10 (Cloud-Deployment).
 | [025](008_2026-09-09_verbindung-ui-zu-datenbank/025_2026-10-14_formatting-functions-calendar-logic.md)          | 2026-10-14 | D1/D2: `shared/format.ts` und `domain/calendar.ts` mit Tests                            |
 | [026](008_2026-09-09_verbindung-ui-zu-datenbank/026_2026-10-14_checkout-error-handling-completed-steps.md)      | 2026-10-14 | D3: `domain/validation.ts` – Code statt Textvergleich                                   |
 | [027](008_2026-09-09_verbindung-ui-zu-datenbank/027_2026-10-14_catalog-service-booking-state-destroy-hook.md)   | 2026-10-14 | D4–D7: `catalog.service.ts`, Store als Entwurf, `destroy()`                             |
+| [028](008_2026-09-09_verbindung-ui-zu-datenbank/028_2026-10-14_update-project-diary.md)                         | 2026-10-14 | Projekttagebuch um die Einträge 024–027 ergänzt (reiner Doku-Commit)                    |
+| [029](008_2026-09-09_verbindung-ui-zu-datenbank/029_2026-10-21_move-markup-into-templates.md)                   | 2026-10-21 | D8: Markup aus `Booking.ts` in vier Template-Dateien                                    |
+| [030](008_2026-09-09_verbindung-ui-zu-datenbank/030_2026-10-21_tests-addresses-service-store-rules.md)          | 2026-10-21 | E1–E5: Tests für Adressen, Service, Store und Datenbank                                 |
+| [031](008_2026-09-09_verbindung-ui-zu-datenbank/031_2026-10-21_posts-spike-migration.md)                        | 2026-10-21 | `E36`: Kurs-Spike `posts` als eigene, letzte Migration                                  |
+| [032](008_2026-09-09_verbindung-ui-zu-datenbank/032_2026-10-21_generated-database-types-posts-service.md)       | 2026-10-21 | F1/F2: generierte Typen, `createClient<Database>`, `posts.service.ts`                   |
+| [033](008_2026-09-09_verbindung-ui-zu-datenbank/033_2026-10-21_calendar-availability-horizon-night-rules.md)    | 2026-10-21 | F3: Kalender mit `availability_calendar`, Horizont, Nachtregeln                         |
+| [034](008_2026-09-09_verbindung-ui-zu-datenbank/034_2026-10-21_selection-bar-below-room-list.md)                | 2026-10-21 | F4: Auswahlleiste unter Schritt 2 mit Sprung zu den Daten                               |
+| [035](008_2026-09-09_verbindung-ui-zu-datenbank/035_2026-10-21_rejections-at-room-card-and-calendar-day.md)     | 2026-10-21 | F5: Ablehnungen an Zimmerkarte und Kalendertag                                          |
 
 Merge-Commits gibt es in diesem Branch nicht – er ist seit seinem Start nicht mit `main` synchronisiert worden.
 
@@ -167,6 +175,23 @@ Mit Commit 027 ist das Prüfkriterium aus Phase 8.4 für die Buchungsseite erfü
 Eine Warnung steckt in Commit 026: Automatisch auf Tailwind-v4-Schreibweise umgeschriebene Klassen haben drei `class`-Attribute beschädigt, eins davon ohne schließendes `">` – die Zimmerkarte lag dadurch über dem Kalender. Weder `tsc` noch ESLint noch die Tests sehen in Template-Strings hinein; repariert wurde es in Commit 027.
 
 Offen sind damit noch **D8** (Templates aus `Booking.ts` in eigene Dateien), Gruppe E (weitere Tests) und F. Der Branch ist weiterhin **nicht in `main` gemergt**.
+
+### Nachtrag (Commits 028–035)
+
+Commit 028 trägt die Tagebuch-Einträge 024–027 nach (reiner Doku-Commit) und flickt dabei die Navigationskette an 014 und 023. Danach werden die restlichen Review-Gruppen abgearbeitet – alle Commits ab 029 stammen vom selben Tag.
+
+| Commits | Review-Punkte | Kern                                                                                                   |
+| ------- | ------------- | ------------------------------------------------------------------------------------------------------ |
+| 029     | D8            | Templates unter `BookingView/templates/`: Daten rein, HTML raus; `Booking.ts` von 1870 auf 1304 Zeilen |
+| 030     | E1–E5         | Tests auf allen Schichten, dazu ein Datenbanktest, der mit der Zeit von selbst rot wurde               |
+| 031–032 | F1, F2        | `posts` als Spike-Migration (`E36`), generierte Typen, `createClient<Database>`, `posts.service.ts`    |
+| 033     | F3            | Kalender aus `availability_calendar`: Anreise-/Abreiseregeln (`E29`), Horizont (`E30`), Tooltips       |
+| 034     | F4            | Auswahlleiste „Zimmer · Nächte · Summe" mit Sprung zu den persönlichen Daten                           |
+| 035     | F5            | Ablehnungen aus `create_booking` zusätzlich an Zimmerkarte und Kalendertag                             |
+
+Zwei Einsichten ragen heraus. Erstens: **Der typisierte Client hat echte Fehler gefunden** – `null` für Parameter, die einen Default haben und deshalb weggelassen werden müssen. Zugleich bleiben Rückgaben von Datenbankfunktionen bewusst handgeschrieben, weil der Generator sie nie als nullbar beschreibt. Generierte Typen sind nur so gut wie die Information, die der Generator hat. Zweitens: Nach Gruppe D passen neue Funktionen ohne Sonderwege in die Struktur. Die Auswahlleiste (034) verteilt sich auf Text (`summary.ts`), Markup (Template), Koordination (View) und Test, und der Kalender (033) trennt Laden (Service), Regeln (`domain/calendar.ts`) und Zeichnen (Template).
+
+Damit ist das Prüfkriterium aus Phase 8.4 vollständig erfüllt – außerhalb von `services/` importiert nichts mehr `supabase` –, und die Phasen 8, 9 und 9b sind umgesetzt. Im Review-Dokument sind die Gruppen **A bis E vollständig** und aus **F** die Punkte F1–F5 abgehakt. Offen sind noch **F6** (den Umsetzungsplan auf den aktuellen Stand bringen) und Gruppe **G** (Barrierefreiheit, u. a. `aria-describedby` an den Formularfeldern und ein eigener Knopf für das „ד im Kalender). Der Branch ist weiterhin **nicht in `main` gemergt**.
 
 ---
 

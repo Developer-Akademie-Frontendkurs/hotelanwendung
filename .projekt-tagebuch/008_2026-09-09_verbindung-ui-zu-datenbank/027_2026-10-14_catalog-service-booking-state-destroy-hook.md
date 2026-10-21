@@ -574,4 +574,4 @@ In `CLAUDE.md` kommt `destroy()` zur Liste der View-Methoden, und der Supabase-A
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md) · [Nächster Commit →](028_2026-10-14_update-project-diary.md)
