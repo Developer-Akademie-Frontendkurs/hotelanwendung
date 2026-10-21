@@ -30,7 +30,7 @@ import {
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
 import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, type ExtraService } from './services';
 import { COUNTRIES, DEFAULT_COUNTRY, formatAddressLines, getCountryLabel, getInvalidFields, isCountryCode, emptyToNull, type CountryCode, type InvalidField } from './address';
-import { buildOrderLines, DEFAULT_CURRENCY, getOrderTotalCents, type OrderLine } from './summary';
+import { buildOrderLines, DEFAULT_CURRENCY, formatSelectionSummary, getOrderTotalCents, type OrderLine } from './summary';
 import { formatBlockedNight, formatUnavailableReason, getRejectionMessage } from './messages';
 import {
     addDays,
@@ -195,6 +195,7 @@ export class BookingView extends AbstractView {
         this.unsubscribeSummary = bookingState.subscribe((): void => {
             this.renderSummary();
             this.renderCustomerSummary();
+            this.renderSelectionBar();
         });
         this.renderSummary();
         this.renderCustomerSummary();
@@ -273,6 +274,23 @@ export class BookingView extends AbstractView {
         this.renderSummary();
     }
 
+    /** Nur die Leiste neu – Mengen ändern sich ohne `renderRooms()` (siehe `updateQuantityUi`). */
+    private renderSelectionBar(): void {
+        const barEl = this.roomsEl?.querySelector<HTMLElement>('[data-selection-bar]');
+        if (barEl) barEl.innerHTML = this.getSelectionBarHtml();
+    }
+
+    /** Erst mit einem Zimmer gibt es etwas zusammenzufassen. */
+    private getSelectionBarHtml(): string {
+        const totalRooms = getTotalRooms(bookingState.getRoomQuantities());
+        if (totalRooms === 0) return '';
+
+        const { checkIn, checkOut } = bookingState.getDates();
+        const lines = this.getOrderLines();
+        const summary = formatSelectionSummary(totalRooms, countNights(checkIn, checkOut), getOrderTotalCents(lines), lines[0]?.currency ?? DEFAULT_CURRENCY);
+        return roomsTemplate.getSelectionBarHtml(summary);
+    }
+
     private getRoomsBodyHtml(): string {
         switch (this.roomsState) {
             case 'loading':
@@ -288,6 +306,7 @@ export class BookingView extends AbstractView {
                     cardsHtml: bookingState.getRooms().map((room: RoomCard): string => this.getRoomCardHtml(room)),
                     missingBedsNotice: this.getMissingBedsNotice(),
                     servicesHtml: this.getServicesSectionHtml(),
+                    selectionBarHtml: this.getSelectionBarHtml(),
                 });
         }
     }
@@ -497,6 +516,11 @@ export class BookingView extends AbstractView {
         // `Element` statt `HTMLElement`: Ein Klick auf ein Icon trifft ein SVG-Element.
         const target = event.target;
         if (!(target instanceof Element)) return;
+
+        if (target.closest('[data-action="to-checkout"]')) {
+            scrollToSection('booking-details');
+            return;
+        }
 
         const serviceStepEl = target.closest<HTMLElement>('[data-service-step]');
         if (serviceStepEl) {

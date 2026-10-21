@@ -29,6 +29,8 @@ export type RoomsListView = {
     /** Leer, solange die Betten reichen – dann bleibt der Hinweis ausgeblendet. */
     missingBedsNotice: string;
     servicesHtml: string;
+    /** Inhalt der Auswahlleiste – leer, solange kein Zimmer gewählt ist. */
+    selectionBarHtml: string;
 };
 
 export type RoomCardView = {
@@ -108,6 +110,27 @@ export function getRoomsListHtml(view: RoomsListView): string {
         </div>
         <p data-capacity-notice role="status" aria-live="polite" class="${view.missingBedsNotice === '' ? 'hidden' : ''} mt-8 768:mt-11 ${NOTICE_CLASSES}">${escapeHtml(view.missingBedsNotice)}</p>
         ${view.servicesHtml}
+        <div data-selection-bar>${view.selectionBarHtml}</div>
+    `;
+}
+
+/**
+ * Auswahlleiste am Ende von Schritt 2 (Phase 9b, Punkt 2): was gewählt ist, was es kostet,
+ * und der Sprung zu den persönlichen Daten. Steht unter den Zusatzleistungen, damit der
+ * Sprung sie nicht überspringt.
+ */
+export function getSelectionBarHtml(summary: string): string {
+    return /*html*/ `
+        <div class="mt-10 768:mt-16 flex flex-col 576:flex-row 576:items-center 576:justify-between gap-4 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-5 py-4 768:px-8">
+            <p class="font-playfair-display font-medium text-20 768:text-24 leading-tight text-purple-haze-dark text-center 576:text-left">${escapeHtml(summary)}</p>
+            <button
+                type="button"
+                data-action="to-checkout"
+                class="shrink-0 bg-purple-haze px-6 py-2.5 rounded-md font-lato font-bold text-18 768:text-20 text-white opacity-85 hover:opacity-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
+            >
+                weiter zu Ihren Daten
+            </button>
+        </div>
     `;
 }
 

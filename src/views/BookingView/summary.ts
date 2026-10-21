@@ -10,6 +10,7 @@ import type { RoomQuantities, ServiceQuantities } from '../../shared/types/booki
 import { getBreakfastAmountCents, type BreakfastService, type Occupancy } from './breakfast';
 import type { RoomCard } from '../../shared/types/catalog.types';
 import { BREAKFAST, getServiceAmountCents, type ExtraService } from './services';
+import { formatNights, formatPrice } from '../../shared/format';
 
 /** Rückfall, solange keine Zeile eine Währung mitbringt – das Hotel rechnet in Euro. */
 export const DEFAULT_CURRENCY = 'EUR';
@@ -110,4 +111,18 @@ export function getOrderTotalCents(lines: readonly OrderLine[]): number | null {
         total += line.amountCents;
     }
     return total;
+}
+
+/**
+ * Die Auswahlleiste unter Schritt 2 (Phase 9b, Punkt 2): „2 Zimmer · 4 Nächte · 1.464€".
+ *
+ * Die Summe ist dieselbe wie die Gesamtsumme in „Ihre Buchung" (`getOrderTotalCents`) –
+ * zwei verschiedene Summen auf einer Seite wären ein Rechenfehler vor den Augen des Gastes.
+ * Fehlt eine Angabe (kein Zeitraum, ein Preis unbekannt), fällt nur dieser Teil weg.
+ */
+export function formatSelectionSummary(rooms: number, nights: number | null, totalCents: number | null, currency: string): string {
+    const parts = [`${rooms.toString()} Zimmer`];
+    if (nights !== null) parts.push(formatNights(nights));
+    if (totalCents !== null) parts.push(formatPrice(totalCents, currency));
+    return parts.join(' · ');
 }

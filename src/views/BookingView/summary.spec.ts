@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BreakfastService } from './breakfast';
 import type { RoomCard } from '../../shared/types/catalog.types';
 import { BREAKFAST, type ExtraService } from './services';
-import { buildOrderLines, getOrderTotalCents, type OrderInput } from './summary';
+import { buildOrderLines, formatSelectionSummary, getOrderTotalCents, type OrderInput } from './summary';
 
 function room(roomTypeId: string, amountCents: number | null): RoomCard {
     return {
@@ -84,5 +84,20 @@ describe('getOrderTotalCents', () => {
 
     it('gibt keine Summe, sobald eine Zeile keinen Preis hat', () => {
         expect(getOrderTotalCents(buildOrderLines(input({ nights: null, rooms: [room('suite', null)] })))).toBeNull();
+    });
+});
+
+describe('formatSelectionSummary (Phase 9b, Punkt 2)', () => {
+    it('fasst Zimmer, Nächte und Summe wie im Entwurf zusammen', () => {
+        expect(formatSelectionSummary(2, 4, 146400, 'EUR')).toBe('2 Zimmer · 4 Nächte · 1.464€');
+    });
+
+    it('nimmt die Einzahl bei einer Nacht', () => {
+        expect(formatSelectionSummary(1, 1, 9500, 'EUR')).toBe('1 Zimmer · 1 Nacht · 95€');
+    });
+
+    it('lässt Nächte und Summe weg, solange sie unbekannt sind', () => {
+        expect(formatSelectionSummary(1, null, null, 'EUR')).toBe('1 Zimmer');
+        expect(formatSelectionSummary(2, 3, null, 'EUR')).toBe('2 Zimmer · 3 Nächte');
     });
 });
