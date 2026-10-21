@@ -1,0 +1,2 @@
+# Erzeugt von `pnpm db:types` – jede Formatierung wäre beim nächsten Lauf wieder weg.
+src/shared/types/database.types.ts

@@ -11,7 +11,7 @@
  */
 
 import { supabase } from './supabase';
-import type { BookingPosition, BookingRequest } from '../types/booking.types';
+import type { BookingPosition, BookingRequest, BookingServiceSelection } from '../types/booking.types';
 import { isRejectionCode, type RejectionCode } from '../types/booking.codes';
 
 /** Eine Zeile aus `bookings` – ein Zimmer des Vorgangs. */
@@ -64,8 +64,8 @@ export type CreateBookingResult = { ok: true; data: CreatedBooking } | { ok: fal
 export async function createBooking(request: BookingRequest): Promise<CreateBookingResult> {
     const { billing } = request;
 
-    // Ohne generierte Typen (V8 steht noch aus) ist `data` hier `any` – als `unknown`
-    // gelesen, prüft `parseCreatedBooking()` die Form selbst.
+    // `create_booking` liefert `jsonb` – die generierten Typen sagen dazu nur `Json` (E44).
+    // Als `unknown` gelesen, prüft `parseCreatedBooking()` die Form selbst.
     const response: { data: unknown; error: { message: string; details: string | null; code?: string } | null } = await supabase.rpc('create_booking', {
         p_check_in: request.checkIn,
         p_check_out: request.checkOut,
@@ -76,11 +76,13 @@ export async function createBooking(request: BookingRequest): Promise<CreateBook
         p_adults: request.adults,
         p_children: request.children,
         p_with_breakfast: request.withBreakfast,
-        p_services: request.services,
+        // Neue Objekte statt der `readonly`-Liste: `Json` verlangt ein veränderbares Array.
+        p_services: request.services.map(({ code, quantity }: BookingServiceSelection): BookingServiceSelection => ({ code, quantity })),
         p_email: request.customer.email,
         p_first_name: request.customer.firstName,
         p_last_name: request.customer.lastName,
-        p_phone: request.customer.phone,
+        // Ohne Telefon bleibt der Parameter weg – sein Default in `create_booking` ist NULL.
+        ...(request.customer.phone === null ? {} : { p_phone: request.customer.phone }),
         p_street: request.residence.street,
         p_house_number: request.residence.houseNumber,
         p_postal_code: request.residence.postalCode,
@@ -91,7 +93,8 @@ export async function createBooking(request: BookingRequest): Promise<CreateBook
         ...(billing === null
             ? {}
             : {
-                  p_billing_company: billing.company,
+                  // Firma optional: leer heißt Parameter weglassen, der Default ist NULL.
+                  ...(billing.company === null ? {} : { p_billing_company: billing.company }),
                   p_billing_street: billing.street,
                   p_billing_house_number: billing.houseNumber,
                   p_billing_postal_code: billing.postalCode,

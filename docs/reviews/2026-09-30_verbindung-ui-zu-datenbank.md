@@ -111,8 +111,8 @@ src/shared/
 
 ### F. Offene Punkte aus dem Umsetzungsplan
 
-- [ ] F1: **Phase 8 / V8:** `pnpm db:types` ausführen, `src/shared/types/database.types.ts` anlegen, auf `createClient<Database>` umstellen und `post.interface.ts` entfernen.
-- [ ] F2: **Phase 8.4 / V9:** Kein `supabase`-Import mehr außerhalb von `services/`. Das betrifft auch `Posts.ts` und `SinglePost.ts`. Siehe D4.
+- [x] F1: **Phase 8 / V8:** `pnpm db:types` ausführen, `src/shared/types/database.types.ts` anlegen, auf `createClient<Database>` umstellen und `post.interface.ts` entfernen. Umgesetzt: `database.types.ts` erzeugt, `createClient<Database>`, `HotelRow`/`RoomTypeDetail`/`RoomTypeImage`/`ServiceRow`/`Post` abgeleitet, `post.interface.ts` entfernt. `RoomAvailability` bleibt bewusst handgeschrieben (Funktionsrückgaben sind generiert nie nullbar, E37). Der typisierte Client fand `p_services` (readonly) und `p_phone`/`p_billing_company` (`null` statt weglassen). Dazu E36 nachgeholt: Migration `20261021101000_posts_spike.sql` plus Seed-Zeilen – `posts` fehlte lokal, `/posts` lief ins Leere. Gegenprobe: eine simulierte Spaltenumbenennung wird zum Typfehler.
+- [x] F2: **Phase 8.4 / V9:** Kein `supabase`-Import mehr außerhalb von `services/`. Das betrifft auch `Posts.ts` und `SinglePost.ts`. Siehe D4. Umgesetzt mit `posts.service.ts`; `grep -rn "from.*services/supabase" src/ --include=*.ts | grep -v src/shared/services/` findet nichts mehr.
 - [ ] F3: **Phase 9 / V14 / E29:** Den Kalender an `availability_calendar` anbinden:
   - `isSelectableAsCheckIn` und `isSelectableAsCheckOut` einführen,
   - ausgebuchte Tage durchgestrichen mit Tooltip zeigen,

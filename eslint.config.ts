@@ -8,7 +8,8 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
-    { ignores: ['dist/**', 'node_modules/**', 'pnpm-lock.yaml'] },
+    // `database.types.ts` erzeugt `pnpm db:types` – generierter Code wird nicht gelintet.
+    { ignores: ['dist/**', 'node_modules/**', 'pnpm-lock.yaml', 'src/shared/types/database.types.ts'] },
     {
         files: ['**/*.{js,mjs,cjs,ts,mts,cts}'],
         plugins: { js },

@@ -212,18 +212,36 @@ describe('createBooking – Parameter für create_booking (V13, E51)', () => {
         expect(params).toMatchObject({ p_street: 'Hauptstraße', p_house_number: '1', p_country_code: 'AT', p_positions: [{ room_type_id: 'rt-1', rooms: 1 }] });
     });
 
-    it('schickt mit Rechnungsadresse alle sechs Felder – auch eine leere Firma als null', async () => {
+    it('schickt mit Rechnungsadresse alle Felder – eine leere Firma bleibt weg, ihr Default ist NULL', async () => {
         rpc.mockResolvedValue(createdResponse({}));
         await createBooking({ ...request, billing: { ...address, company: null, city: 'Wien' } });
 
         const [, params] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+        expect(params).not.toHaveProperty('p_billing_company');
         expect(params).toMatchObject({
-            p_billing_company: null,
             p_billing_street: 'Hauptstraße',
             p_billing_house_number: '1',
             p_billing_postal_code: '9020',
             p_billing_city: 'Wien',
             p_billing_country_code: 'AT',
         });
+    });
+
+    it('schickt die Firma, wenn es eine gibt', async () => {
+        rpc.mockResolvedValue(createdResponse({}));
+        await createBooking({ ...request, billing: { ...address, company: 'Beispiel GmbH' } });
+
+        const [, params] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+        expect(params).toMatchObject({ p_billing_company: 'Beispiel GmbH' });
+    });
+
+    it('lässt ein fehlendes Telefon weg und schickt ein vorhandenes mit', async () => {
+        rpc.mockResolvedValue(createdResponse({}));
+        await createBooking(request);
+        await createBooking({ ...request, customer: { ...request.customer, phone: '+43 660 1' } });
+
+        const calls = rpc.mock.calls as [string, Record<string, unknown>][];
+        expect(calls[0]?.[1]).not.toHaveProperty('p_phone');
+        expect(calls[1]?.[1]).toMatchObject({ p_phone: '+43 660 1' });
     });
 });

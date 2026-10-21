@@ -1,6 +1,5 @@
 import AbstractView from '../AbstractView';
-import { Post } from './post.interface';
-import { supabase } from '../../shared/services/supabase';
+import { fetchPosts, type Post } from '../../shared/services/posts.service';
 import { escapeHtml } from '../../shared/ui/html';
 
 export class PostsView extends AbstractView {
@@ -13,18 +12,15 @@ export class PostsView extends AbstractView {
 
     async onInit(): Promise<void> {
         console.log('init');
-        await this.fetchPosts();
+        await this.loadPosts();
         console.log('Posts: ', this.posts);
     }
 
-    async fetchPosts(): Promise<void> {
-        const { data, error } = await supabase.from('posts').select();
-
-        if (error) {
+    async loadPosts(): Promise<void> {
+        try {
+            this.posts = await fetchPosts();
+        } catch (error: unknown) {
             console.error('Error fetching posts: ', error);
-            return;
-        } else {
-            this.posts = data as Post[];
         }
     }
 

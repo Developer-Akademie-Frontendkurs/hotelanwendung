@@ -1,6 +1,5 @@
 import AbstractView from '../../AbstractView';
-import { Post } from './../post.interface';
-import { supabase } from '../../../shared/services/supabase';
+import { fetchPost, type Post } from '../../../shared/services/posts.service';
 import { escapeHtml } from '../../../shared/ui/html';
 
 export class SinglePostView extends AbstractView {
@@ -14,22 +13,20 @@ export class SinglePostView extends AbstractView {
     }
 
     async onInit(): Promise<void> {
-        await this.fetchPost();
+        await this.loadPost();
     }
 
-    async fetchPost(): Promise<void> {
+    async loadPost(): Promise<void> {
         if (!this.params.id) {
             console.error('Missing route param "id" for single post view');
             return;
         }
 
-        const { data, error } = (await supabase.from('posts').select().eq('id', this.params.id).single()) as { data: Post; error: Error | null };
-
-        if (error) {
+        try {
+            this.post = (await fetchPost(this.params.id)) ?? undefined;
+        } catch (error: unknown) {
             console.error('Error fetching post: ', error);
-            return;
         }
-        this.post = data;
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await

@@ -2,13 +2,23 @@
  * Stammdaten und Verfügbarkeit, wie `catalog.service.ts` sie liest, und die Zimmerkarte,
  * die daraus entsteht.
  *
- * Die `*Row`-/`*Detail`-Typen bilden die Antworten von PostgREST ab (snake_case); sie
- * fallen weg, sobald die generierten Typen da sind (V8, `pnpm db:types`).
+ * Die `*Row`-/`*Detail`-Typen sind die Antworten von PostgREST (snake_case) und werden aus
+ * den generierten Typen abgeleitet (V8) – benennt eine Migration eine Spalte um, wird das
+ * nach `pnpm db:types` hier zum Typfehler. Handgeschrieben bleiben die Zimmerkarte (sie
+ * beschreibt die Oberfläche, keine Tabelle) und `RoomAvailability` (siehe dort).
  */
 
 import type { UnavailableReason } from './booking.codes';
+import type { Tables } from './database.types';
 
-/** Eine Zeile aus der Datenbankfunktion `search_availability`. */
+/**
+ * Eine Zeile aus der Datenbankfunktion `search_availability`.
+ *
+ * Bewusst NICHT aus `Database['public']['Functions']` abgeleitet: Für Rückgaben von
+ * Funktionen erzeugt der Generator jede Spalte als nicht-nullbar – `rooms_free` und
+ * `total_amount_cents` sind aber gerade dann NULL, wenn eine Kategorie nicht buchbar ist
+ * (E37). Abgeleitet würde der Typ diese Prüfung abschaffen.
+ */
 export interface RoomAvailability {
     room_type_id: string;
     name: string;
@@ -25,22 +35,15 @@ export interface RoomAvailability {
 }
 
 /** Ein Bild einer Zimmerkategorie aus `room_type_images`. */
-export interface RoomTypeImage {
-    storage_path: string;
-    alt_text: string;
-    sort_order: number;
-}
+export type RoomTypeImage = Pick<Tables<'room_type_images'>, 'storage_path' | 'alt_text' | 'sort_order'>;
 
-/** Stammdaten einer Kategorie samt Bildern – per Embed in einer Abfrage geholt. */
-export interface RoomTypeDetail {
-    /** `room_types.id` – Schlüssel der gewählten Menge und später der Position in `create_booking`. */
-    id: string;
-    name: string;
-    slug: string;
-    description: string | null;
-    max_occupancy: number;
+/**
+ * Stammdaten einer Kategorie samt Bildern – per Embed in einer Abfrage geholt.
+ * `id` ist der Schlüssel der gewählten Menge und der Position in `create_booking`.
+ */
+export type RoomTypeDetail = Pick<Tables<'room_types'>, 'id' | 'name' | 'slug' | 'description' | 'max_occupancy'> & {
     room_type_images: RoomTypeImage[];
-}
+};
 
 /** Preis und Verfügbarkeit einer Kategorie – gibt es nur mit gewähltem Zeitraum. */
 export interface RoomCardAvailability {
@@ -69,14 +72,8 @@ export interface RoomCard {
     availability: RoomCardAvailability | null;
 }
 
-/** Die Stammdaten aus `hotels`, die die Zusammenfassung braucht (genau eine Zeile, E14). */
-export interface HotelRow {
-    name: string;
-    address_line1: string | null;
-    postal_code: string | null;
-    city: string | null;
-    country_code: string | null;
-    /** `time` kommt über PostgREST als `"14:00:00"`. */
-    check_in_time: string;
-    check_out_time: string;
-}
+/**
+ * Die Stammdaten aus `hotels`, die die Zusammenfassung braucht (genau eine Zeile, E14).
+ * `check_in_time`/`check_out_time` kommen über PostgREST als `"14:00:00"`.
+ */
+export type HotelRow = Pick<Tables<'hotels'>, 'name' | 'address_line1' | 'postal_code' | 'city' | 'country_code' | 'check_in_time' | 'check_out_time'>;

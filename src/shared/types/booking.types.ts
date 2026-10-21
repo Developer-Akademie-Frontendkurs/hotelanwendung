@@ -6,6 +6,8 @@
  * Fachlogik und Store importieren beide von hier, die Fachlogik aber nichts aus dem Store.
  */
 
+import type { Tables } from './database.types';
+
 /**
  * Gewählte Zimmer je Kategorie, geschlüsselt nach `room_type_id`.
  *
@@ -24,20 +26,10 @@ export type ServiceQuantities = Readonly<Record<string, number>>;
 
 /**
  * Eine Zeile aus `services`, so wie PostgREST sie liefert – für Frühstück und Leistungen
- * je Vorgang dieselbe Tabelle, also auch derselbe Typ.
+ * je Vorgang dieselbe Tabelle, also auch derselbe Typ. `child_amount_cents` NULL heißt:
+ * kein eigener Kinderpreis hinterlegt.
  */
-export interface ServiceRow {
-    id: string;
-    code: string;
-    name: string;
-    description: string | null;
-    charge_basis: string;
-    amount_cents: number;
-    /** `null` heißt: kein eigener Kinderpreis hinterlegt. */
-    child_amount_cents: number | null;
-    currency: string;
-    sort_order: number;
-}
+export type ServiceRow = Pick<Tables<'services'>, 'id' | 'code' | 'name' | 'description' | 'charge_basis' | 'amount_cents' | 'child_amount_cents' | 'currency' | 'sort_order'>;
 
 export type Customer = {
     firstName: string;
