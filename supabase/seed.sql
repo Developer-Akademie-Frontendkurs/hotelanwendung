@@ -179,3 +179,14 @@ values
      'LATE_CHECKOUT', 'Late Check-out', 'Abreise bis 15 Uhr – nach Verfügbarkeit, wir bestätigen vor Ort.', 50, 'per_stay', 0),
     ('00000000-0000-4000-8000-000000000306', '00000000-0000-4000-8000-000000000001',
      'MASSAGE', 'Massage', 'Eine Ganzkörpermassage à 50 Minuten – den Termin vereinbaren wir vor Ort.', 60, 'per_stay', 7500);
+
+-- ---------------------------------------------------------------------------
+-- posts (E36) - Kurs-Spike, nicht Teil der Domaene
+-- ---------------------------------------------------------------------------
+--
+-- Zwei Zeilen genuegen, damit /posts eine Liste und /posts/:id einen Treffer zeigt.
+-- Feste IDs, damit ein Link aus dem Tutorial nach jedem Reset noch funktioniert.
+insert into public.posts (id, title, description)
+values
+    ('00000000-0000-4000-8000-000000000901', 'Willkommen im Karawanken Hof', 'Der erste Beitrag aus dem Supabase-Tutorial.'),
+    ('00000000-0000-4000-8000-000000000902', 'Frühling in den Alpen', 'Ein zweiter Beitrag, damit die Liste nicht nur aus einer Zeile besteht.');
