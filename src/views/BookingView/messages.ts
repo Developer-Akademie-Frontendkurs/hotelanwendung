@@ -24,6 +24,20 @@ const UNAVAILABLE_REASON_TEXTS: Record<UnavailableReason, string> = {
     zu_klein: 'Zu klein für die gewählte Belegung.',
 };
 
+/**
+ * Tooltip an einem gesperrten Kalendertag (E24) – über die Nacht, die an diesem Tag
+ * beginnt. Gäste sehen fast immer `nicht_buchbar` (E28): Der Satz muss also ohne feine
+ * Unterscheidung etwas sagen.
+ */
+const NIGHT_BLOCKED_TEXTS: Record<UnavailableReason, string> = {
+    nicht_buchbar: 'Anreise nicht möglich – für diese Nacht ist keine Buchung möglich.',
+    vergangenheit: 'Dieser Tag liegt in der Vergangenheit.',
+    ausserhalb_horizont: 'So weit im Voraus nehmen wir noch keine Buchungen an.',
+    ausgebucht: 'Anreise nicht möglich – diese Nacht ist ausgebucht.',
+    kein_preis: 'Anreise nicht möglich – für diese Nacht ist kein Preis hinterlegt.',
+    zu_klein: 'Anreise nicht möglich – für die gewählte Belegung ist in dieser Nacht nichts frei.',
+};
+
 /** Die Verfügbarkeit hat sich zwischen Anzeige und Buchen geändert – derselbe Satz für alle vier Gründe. */
 function noLongerBookable({ roomName, night }: RejectionContext): string {
     const nightText = night === null ? '' : ` für die Nacht vom ${night}`;
@@ -53,4 +67,9 @@ export function formatUnavailableReason(reason: UnavailableReason | null): strin
 export function getRejectionMessage(code: RejectionCode | null, context: RejectionContext): string {
     if (code === null) return 'Die Buchung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.';
     return REJECTION_MESSAGES[code](context);
+}
+
+/** Der Tooltip eines gesperrten Tages, z. B. „24.10.2026: Anreise nicht möglich – …". */
+export function formatBlockedNight(day: string, reason: UnavailableReason): string {
+    return `${day}: ${NIGHT_BLOCKED_TEXTS[reason]}`;
 }

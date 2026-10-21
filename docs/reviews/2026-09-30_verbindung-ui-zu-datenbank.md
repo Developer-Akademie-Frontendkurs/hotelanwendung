@@ -113,12 +113,14 @@ src/shared/
 
 - [x] F1: **Phase 8 / V8:** `pnpm db:types` ausführen, `src/shared/types/database.types.ts` anlegen, auf `createClient<Database>` umstellen und `post.interface.ts` entfernen. Umgesetzt: `database.types.ts` erzeugt, `createClient<Database>`, `HotelRow`/`RoomTypeDetail`/`RoomTypeImage`/`ServiceRow`/`Post` abgeleitet, `post.interface.ts` entfernt. `RoomAvailability` bleibt bewusst handgeschrieben (Funktionsrückgaben sind generiert nie nullbar, E37). Der typisierte Client fand `p_services` (readonly) und `p_phone`/`p_billing_company` (`null` statt weglassen). Dazu E36 nachgeholt: Migration `20261021101000_posts_spike.sql` plus Seed-Zeilen – `posts` fehlte lokal, `/posts` lief ins Leere. Gegenprobe: eine simulierte Spaltenumbenennung wird zum Typfehler.
 - [x] F2: **Phase 8.4 / V9:** Kein `supabase`-Import mehr außerhalb von `services/`. Das betrifft auch `Posts.ts` und `SinglePost.ts`. Siehe D4. Umgesetzt mit `posts.service.ts`; `grep -rn "from.*services/supabase" src/ --include=*.ts | grep -v src/shared/services/` findet nichts mehr.
-- [ ] F3: **Phase 9 / V14 / E29:** Den Kalender an `availability_calendar` anbinden:
+- [x] F3: **Phase 9 / V14 / E29:** Den Kalender an `availability_calendar` anbinden:
   - `isSelectableAsCheckIn` und `isSelectableAsCheckOut` einführen,
   - ausgebuchte Tage durchgestrichen mit Tooltip zeigen,
   - `canGoNext()` mit `hotels.booking_horizon_days` bauen.
 
   Heute ist Ausgebuchtes weiterhin wählbar.
+
+  Umgesetzt: `fetchAvailabilityCalendar` + `buildNightAvailability` (`catalog.service.ts`), einmal je Belegung über den ganzen Horizont geladen und gecacht (V14), ohne Belegung gar nicht (V16.7). In `domain/calendar.ts`: `getNightBlockReason`, `isSelectableAsCheckIn`, `isSelectableAsCheckOut` (prüft die ganze Kette bis zur Vornacht, nicht nur die Vornacht), `canGoPrev`/`canGoNext` mit `hotels.booking_horizon_days`. Gesperrte Tage sind durchgestrichen, tragen `aria-disabled` statt `disabled` (sonst zeigen manche Browser keinen Tooltip) und einen `title` mit Datum und Grund (`formatBlockedNight` in `messages.ts`). Nach einer Ablehnung wird der Cache geleert und der Kalender neu geladen (Teil von F5). Fertig-Kriterium im Browser geprüft: Eine gesperrte Nacht sperrt ihr Datum als Anreise und lässt es als Abreise zu; Blättern endet am Horizont.
 - [ ] F4: **9b.2:** Eine Auswahlleiste unter der Zimmerliste bauen, etwa „2 Zimmer · 4 Nächte · 1.464 €“, mit Sprung zum Checkout.
 - [ ] F5: **9b.8:** Bei einer Ablehnung den Hinweis zusätzlich an der Zimmerkarte und am Kalenderdatum zeigen und danach Kalender und Zimmerliste neu laden.
 - [ ] F6: **Den Plan pflegen:**

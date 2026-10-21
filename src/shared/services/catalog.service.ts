@@ -10,7 +10,7 @@ import { supabase } from './supabase';
 import { formatPrice } from '../format';
 import { isUnavailableReason } from '../types/booking.codes';
 import type { ServiceRow } from '../types/booking.types';
-import type { HotelRow, RoomAvailability, RoomCard, RoomTypeDetail, RoomTypeImage } from '../types/catalog.types';
+import type { AvailabilityNightRow, HotelRow, NightAvailability, NightStatus, RoomAvailability, RoomCard, RoomTypeDetail, RoomTypeImage } from '../types/catalog.types';
 
 const ROOM_IMAGE_BUCKET = 'room-images';
 
@@ -24,7 +24,11 @@ export type AvailabilitySearch = {
 
 /** Die eine Zeile aus `hotels` (E14) – `null`, wenn keine hinterlegt ist. */
 export async function fetchHotel(): Promise<HotelRow | null> {
-    const { data, error } = await supabase.from('hotels').select('name, address_line1, postal_code, city, country_code, check_in_time, check_out_time').limit(1).maybeSingle();
+    const { data, error } = await supabase
+        .from('hotels')
+        .select('name, address_line1, postal_code, city, country_code, check_in_time, check_out_time, booking_horizon_days')
+        .limit(1)
+        .maybeSingle();
     if (error) throw new Error(`hotels konnte nicht geladen werden: ${error.message}`);
     // postgrest-js leitet den Typ aus dem `select` ab – `HotelRow` muss dazu passen.
     return data;
@@ -68,6 +72,42 @@ export async function searchAvailability(search: AvailabilitySearch): Promise<Ro
     const { data, error } = response;
     if (error) throw new Error(error.message);
     return data as RoomAvailability[];
+}
+
+/** Zeitraum und Belegung für `availability_calendar` – `to` ist exklusiv, wie überall (E8). */
+export type CalendarSearch = {
+    from: string;
+    to: string;
+    adults: number;
+    children: number;
+};
+
+/** Eine Zeile je Nacht im Zeitraum, mit dem für Gäste maskierten Grund (E24, E28). */
+export async function fetchAvailabilityCalendar(search: CalendarSearch): Promise<AvailabilityNightRow[]> {
+    // Ohne `unknown`-Umweg wären `rooms_free` und `unavailable_reason` hier nie NULL –
+    // so beschreibt der Generator Rückgaben von Funktionen.
+    const response: { data: unknown; error: { message: string } | null } = await supabase.rpc('availability_calendar', {
+        p_from: search.from,
+        p_to: search.to,
+        p_adults: search.adults,
+        p_children: search.children,
+    });
+    const { data, error } = response;
+    if (error) throw new Error(error.message);
+    return data as AvailabilityNightRow[];
+}
+
+/** Die Nächte als Nachschlagetabelle für die Tagesregeln – unbekannte Gründe werden zu `nicht_buchbar`. */
+export function buildNightAvailability(rows: readonly AvailabilityNightRow[]): NightAvailability {
+    return new Map(
+        rows.map((row: AvailabilityNightRow): [string, NightStatus] => [
+            row.night,
+            {
+                available: row.is_available,
+                reason: row.is_available ? null : row.unavailable_reason !== null && isUnavailableReason(row.unavailable_reason) ? row.unavailable_reason : 'nicht_buchbar',
+            },
+        ]),
+    );
 }
 
 /**

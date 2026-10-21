@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { REJECTION_CODES, UNAVAILABLE_REASONS, isRejectionCode, isUnavailableReason } from '../../shared/types/booking.codes';
-import { formatUnavailableReason, getRejectionMessage } from './messages';
+import { formatBlockedNight, formatUnavailableReason, getRejectionMessage } from './messages';
 
 const noContext = { roomName: null, night: null };
 
@@ -42,5 +42,16 @@ describe('getRejectionMessage', () => {
 describe('formatUnavailableReason', () => {
     it('zeigt für unbekannte Gründe „nicht buchbar"', () => {
         expect(formatUnavailableReason(null)).toBe('Für diesen Zeitraum nicht buchbar.');
+    });
+});
+
+describe('formatBlockedNight (E24)', () => {
+    it('nennt Datum und Grund – für Gäste meist nicht_buchbar (E28)', () => {
+        expect(formatBlockedNight('24.10.2026', 'nicht_buchbar')).toBe('24.10.2026: Anreise nicht möglich – für diese Nacht ist keine Buchung möglich.');
+    });
+
+    it('hat für jeden Grund einen eigenen Satz', () => {
+        const texts = UNAVAILABLE_REASONS.map((reason) => formatBlockedNight('24.10.2026', reason));
+        expect(new Set(texts).size).toBe(UNAVAILABLE_REASONS.length);
     });
 });

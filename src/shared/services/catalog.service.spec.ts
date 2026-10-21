@@ -29,7 +29,7 @@ const storage = {
 };
 vi.mock('./supabase', () => ({ supabase: { rpc, from, storage } }));
 
-const { buildRoomCards, fetchHotel, fetchRoomTypes, fetchServices, searchAvailability } = await import('./catalog.service');
+const { buildNightAvailability, buildRoomCards, fetchAvailabilityCalendar, fetchHotel, fetchRoomTypes, fetchServices, searchAvailability } = await import('./catalog.service');
 
 function detail(id: string, slug: string, images: RoomTypeDetail['room_type_images'] = []): RoomTypeDetail {
     return { id, name: slug, slug, description: null, max_occupancy: 2, room_type_images: images };
@@ -132,5 +132,40 @@ describe('buildRoomCards', () => {
         );
         expect(cards.map((card) => card.availability?.unavailableReason)).toEqual(['ausgebucht', null]);
         expect(cards[0]?.availability?.priceLabel).toBeNull();
+    });
+});
+
+describe('Kalender (E24, V14)', () => {
+    it('fragt availability_calendar mit den p_*-Parametern ab', async () => {
+        response = { data: [], error: null };
+        await fetchAvailabilityCalendar({ from: '2026-10-21', to: '2027-10-21', adults: 2, children: 1 });
+        expect(rpc).toHaveBeenCalledWith('availability_calendar', { p_from: '2026-10-21', p_to: '2027-10-21', p_adults: 2, p_children: 1 });
+    });
+
+    it('wirft bei einem Fehler der Abfrage', async () => {
+        response = { data: null, error: { message: 'kaputt' } };
+        await expect(fetchAvailabilityCalendar({ from: '2026-10-21', to: '2026-10-22', adults: 1, children: 0 })).rejects.toThrow('kaputt');
+    });
+
+    it('macht aus den Zeilen eine Nachschlagetabelle je Nacht', () => {
+        const nights = buildNightAvailability([
+            { night: '2026-10-21', is_available: true, rooms_free: 3, unavailable_reason: null },
+            { night: '2026-10-22', is_available: false, rooms_free: null, unavailable_reason: 'nicht_buchbar' },
+            { night: '2026-10-23', is_available: false, rooms_free: null, unavailable_reason: 'ausserhalb_horizont' },
+        ]);
+        expect([...nights.entries()]).toEqual([
+            ['2026-10-21', { available: true, reason: null }],
+            ['2026-10-22', { available: false, reason: 'nicht_buchbar' }],
+            ['2026-10-23', { available: false, reason: 'ausserhalb_horizont' }],
+        ]);
+    });
+
+    it('macht einen unbekannten oder fehlenden Grund zu nicht_buchbar', () => {
+        const nights = buildNightAvailability([
+            { night: '2026-10-21', is_available: false, rooms_free: null, unavailable_reason: 'neuer_grund' },
+            { night: '2026-10-22', is_available: false, rooms_free: null, unavailable_reason: null },
+        ]);
+        expect(nights.get('2026-10-21')?.reason).toBe('nicht_buchbar');
+        expect(nights.get('2026-10-22')?.reason).toBe('nicht_buchbar');
     });
 });

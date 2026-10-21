@@ -34,6 +34,29 @@ export interface RoomAvailability {
     unavailable_reason: string | null;
 }
 
+/**
+ * Eine Nacht aus der Datenbankfunktion `availability_calendar` (E24) – handgeschrieben aus
+ * demselben Grund wie `RoomAvailability`: `rooms_free` und `unavailable_reason` sind NULL,
+ * sobald bzw. solange die Nacht buchbar ist.
+ */
+export interface AvailabilityNightRow {
+    /** `YYYY-MM-DD` – die Nacht, die an diesem Tag beginnt (E29). */
+    night: string;
+    is_available: boolean;
+    rooms_free: number | null;
+    unavailable_reason: string | null;
+}
+
+/** Eine Nacht, wie die Tagesregeln des Kalenders sie lesen (E24, E29). */
+export type NightStatus = {
+    available: boolean;
+    /** Für Gäste maskiert (E28) – meist `nicht_buchbar`. */
+    reason: UnavailableReason | null;
+};
+
+/** Die Nächte des Horizonts, geschlüsselt nach `YYYY-MM-DD`. */
+export type NightAvailability = ReadonlyMap<string, NightStatus>;
+
 /** Ein Bild einer Zimmerkategorie aus `room_type_images`. */
 export type RoomTypeImage = Pick<Tables<'room_type_images'>, 'storage_path' | 'alt_text' | 'sort_order'>;
 
@@ -73,7 +96,8 @@ export interface RoomCard {
 }
 
 /**
- * Die Stammdaten aus `hotels`, die die Zusammenfassung braucht (genau eine Zeile, E14).
- * `check_in_time`/`check_out_time` kommen über PostgREST als `"14:00:00"`.
+ * Die Stammdaten aus `hotels`, die Zusammenfassung und Kalender brauchen (genau eine Zeile,
+ * E14). `check_in_time`/`check_out_time` kommen über PostgREST als `"14:00:00"`;
+ * `booking_horizon_days` begrenzt den Kalender (E30).
  */
-export type HotelRow = Pick<Tables<'hotels'>, 'name' | 'address_line1' | 'postal_code' | 'city' | 'country_code' | 'check_in_time' | 'check_out_time'>;
+export type HotelRow = Pick<Tables<'hotels'>, 'name' | 'address_line1' | 'postal_code' | 'city' | 'country_code' | 'check_in_time' | 'check_out_time' | 'booking_horizon_days'>;

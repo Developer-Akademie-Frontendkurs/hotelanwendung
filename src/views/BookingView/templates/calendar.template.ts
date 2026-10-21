@@ -42,6 +42,13 @@ export type DayCellView = {
     label: string | null;
     stateClass: string;
     selectable: boolean;
+    /**
+     * Gesperrt, aber nicht vorbei: `aria-disabled` statt `disabled`, weil manche Browser an
+     * deaktivierten Knöpfen keinen Tooltip zeigen – und der Tooltip ist hier der Punkt (E24).
+     */
+    blocked: boolean;
+    /** Datum und Grund für gesperrte Tage. */
+    tooltip: string | null;
     /** Nur am Anreisetag sitzt das „ד zum Zurücksetzen. */
     withClearButton: boolean;
 };
@@ -50,6 +57,8 @@ export type CalendarHeaderView = {
     monthName: string;
     year: string;
     prevDisabled: boolean;
+    /** Am Monat mit dem letzten wählbaren Tag (E30). */
+    nextDisabled: boolean;
 };
 
 /** Die ganze Seite: Datum & Gäste, darunter die Zimmerliste, dann der Abschluss. */
@@ -127,7 +136,8 @@ export function getCalendarHeaderHtml(view: CalendarHeaderView): string {
                 type="button"
                 data-action="next"
                 aria-label="Nächster Monat"
-                class="text-purple-haze transition-opacity hover:opacity-70 cursor-pointer"
+                ${view.nextDisabled ? 'disabled' : ''}
+                class="text-purple-haze transition-opacity ${view.nextDisabled ? 'opacity-25 cursor-not-allowed' : 'hover:opacity-70 cursor-pointer'}"
             >
                 ${ICON_CHEVRON_RIGHT}
             </button>
@@ -148,16 +158,21 @@ function getDayCellHtml(cell: DayCellView): string {
         ? /*html*/ `<span data-action="clear" role="button" aria-label="Auswahl zurücksetzen" class="booking__clear absolute top-1 right-1 leading-none text-14 768:text-16 cursor-pointer">&times;</span>`
         : '';
 
+    // Durchgestrichen werden nur Wochentag und Datum – nicht die leere Label-Zeile, deren
+    // geschütztes Leerzeichen sonst als Strich darunter stünde.
+    const strike = cell.blocked ? ' line-through decoration-purple-haze/70' : '';
+
     return /*html*/ `
         <button
             type="button"
             data-date="${escapeHtml(cell.iso)}"
-            ${cell.selectable ? '' : 'disabled'}
+            ${cell.selectable ? '' : cell.blocked ? 'aria-disabled="true"' : 'disabled'}
+            ${cell.tooltip === null ? '' : `title="${escapeHtml(cell.tooltip)}"`}
             class="relative flex flex-col items-center justify-center gap-0.5 456:gap-1 rounded-lg border border-purple-haze/20 py-2 456:py-3 768:py-4 transition-colors ${cell.stateClass}"
         >
             ${clearButton}
-            <span class="text-[0.625rem] 456:text-14 768:text-16 tracking-wide">${escapeHtml(cell.weekday)}</span>
-            <span class="font-antic-didone text-18 456:text-24 768:text-28 leading-none">${escapeHtml(cell.day)}</span>
+            <span class="text-[0.625rem] 456:text-14 768:text-16 tracking-wide${strike}">${escapeHtml(cell.weekday)}</span>
+            <span class="font-antic-didone text-18 456:text-24 768:text-28 leading-none${strike}">${escapeHtml(cell.day)}</span>
             <span class="text-14 leading-none">${cell.label === null ? '&nbsp;' : escapeHtml(cell.label)}</span>
         </button>
     `;

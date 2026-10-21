@@ -1,13 +1,21 @@
 import AbstractView from '../AbstractView';
 import { bookingState } from '../../shared/state/bookingState';
 import { BookingFailedError, createBooking, type BookingRejection, type CreatedBooking } from '../../shared/services/booking.service';
-import { buildRoomCards, fetchHotel, fetchRoomTypes, fetchServices, searchAvailability } from '../../shared/services/catalog.service';
+import {
+    buildNightAvailability,
+    buildRoomCards,
+    fetchAvailabilityCalendar,
+    fetchHotel,
+    fetchRoomTypes,
+    fetchServices,
+    searchAvailability,
+} from '../../shared/services/catalog.service';
 import { openModal } from '../../shared/ui/modal';
 import { scrollToSection } from '../../shared/ui/scroll';
 import { formatAdults, formatChildren, formatDate, formatGuests, formatNights, formatPrice, formatStayDate } from '../../shared/format';
 import type { BookingDraft, BookingRequest, CustomerDetails, Guests, ServiceRow } from '../../shared/types/booking.types';
 import logo from '../../assets/img/logo-small.svg';
-import type { HotelRow, RoomCard, RoomCardAvailability } from '../../shared/types/catalog.types';
+import type { HotelRow, NightAvailability, RoomCard, RoomCardAvailability } from '../../shared/types/catalog.types';
 import {
     clampQuantity,
     getLimitMessage,
@@ -23,8 +31,20 @@ import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService }
 import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, type ExtraService } from './services';
 import { COUNTRIES, DEFAULT_COUNTRY, formatAddressLines, getCountryLabel, getInvalidFields, isCountryCode, emptyToNull, type CountryCode, type InvalidField } from './address';
 import { buildOrderLines, DEFAULT_CURRENCY, getOrderTotalCents, type OrderLine } from './summary';
-import { formatUnavailableReason, getRejectionMessage } from './messages';
-import { buildDays, countNights, parseISODate, stripTime, toISODate, type DayCell } from './domain/calendar';
+import { formatBlockedNight, formatUnavailableReason, getRejectionMessage } from './messages';
+import {
+    addDays,
+    buildDays,
+    canGoNext,
+    canGoPrev,
+    countNights,
+    isSelectableAsCheckOut,
+    parseISODate,
+    stripTime,
+    toISODate,
+    type CalendarRules,
+    type DayCell,
+} from './domain/calendar';
 import { getCheckoutError } from './domain/validation';
 import { buildBookingDraft } from './domain/draft';
 import { ADULT_ICON, CHILD_ICON, ICON_AIR_CONDITIONING, ICON_BATH, ICON_BED, ICON_GYM, SERVICE_ICONS } from './templates/icons';
@@ -121,6 +141,14 @@ export class BookingView extends AbstractView {
     private hotel: HotelRow | null = null;
     /** Für den Gast formuliert; die technischen Details landen in der Konsole. */
     private hotelError: string | null = null;
+    // Erst mit dem Hotel steht der Buchungshorizont fest (E30) – der Kalender wartet darauf.
+    private hotelLoaded: Promise<void> = Promise.resolve();
+    // Verfügbarkeit je Nacht über den ganzen Horizont, je Belegung einmal geladen (V14,
+    // Schlüssel `${adults}-${children}`). `null`: (noch) keine Daten – dann sperrt nur das Datum.
+    private nights: NightAvailability | null = null;
+    private readonly calendarCache = new Map<string, NightAvailability>();
+    // Wie `roomsRequestId`: Eine Antwort für eine überholte Belegung wird verworfen.
+    private calendarRequestId = 0;
     private summaryEl: HTMLElement | null = null;
     private unsubscribeSummary: (() => void) | null = null;
     // Setzt `destroy()`. Laufende Anfragen kommen danach noch zurück und dürfen dann
@@ -170,7 +198,7 @@ export class BookingView extends AbstractView {
         });
         this.renderSummary();
         this.renderCustomerSummary();
-        void this.loadHotel();
+        this.hotelLoaded = this.loadHotel();
 
         this.calendarEl = document.getElementById('booking-calendar');
         if (!this.calendarEl) return;
@@ -178,6 +206,7 @@ export class BookingView extends AbstractView {
             this.handleCalendarClick(event);
         });
         this.renderCalendar();
+        void this.loadCalendar();
     }
 
     private getGuestsHtml(): string {
@@ -230,8 +259,9 @@ export class BookingView extends AbstractView {
         // Gleicht die Kinderbetten gleich mit ab (siehe `setGuests`).
         bookingState.setGuests({ ...bookingState.getGuests(), [field]: target.value === '' ? null : Number(target.value) });
         this.renderGuestsNotice();
-        // Der weiter-Knopf hängt jetzt mit an der Belegung.
+        // Der weiter-Knopf hängt jetzt mit an der Belegung – und die freien Nächte auch.
         this.renderCalendar();
+        void this.loadCalendar();
         void this.loadRooms();
     }
 
@@ -840,6 +870,63 @@ export class BookingView extends AbstractView {
         }
         this.hotel = hotel;
         this.renderSummary();
+        // Der Horizont begrenzt das Vorwärtsblättern.
+        this.renderCalendar();
+    }
+
+    /**
+     * Lädt die Verfügbarkeit je Nacht für den ganzen Horizont (V14) – einmal je Belegung,
+     * danach aus dem Speicher. Blättern ist damit nie ein Ladezustand.
+     */
+    private async loadCalendar(): Promise<void> {
+        const { adults, children } = bookingState.getGuests();
+        const requestId = ++this.calendarRequestId;
+        const isStale = (): boolean => requestId !== this.calendarRequestId || !this.isDisplayed();
+
+        // Ohne Belegung keine Verfügbarkeit: Eine geratene Belegung sperrte Tage, die für
+        // die echte frei sind (V16.7).
+        if (adults === null) {
+            this.nights = null;
+            this.renderCalendar();
+            return;
+        }
+
+        const key = `${adults.toString()}-${(children ?? 0).toString()}`;
+        const cached = this.calendarCache.get(key);
+        if (cached !== undefined) {
+            this.nights = cached;
+            this.renderCalendar();
+            return;
+        }
+
+        await this.hotelLoaded;
+        if (isStale()) return;
+        // Ohne Hotel kein Horizont – und ohne Horizont keine Grenze, bis zu der sich laden ließe.
+        const horizonDays = this.hotel?.booking_horizon_days;
+        if (horizonDays === undefined) return;
+
+        try {
+            const rows = await fetchAvailabilityCalendar({
+                from: toISODate(this.today),
+                to: toISODate(addDays(this.today, horizonDays)),
+                adults,
+                children: children ?? 0,
+            });
+            if (isStale()) return;
+            this.nights = buildNightAvailability(rows);
+            this.calendarCache.set(key, this.nights);
+        } catch (error: unknown) {
+            if (isStale()) return;
+            // Der Kalender bleibt bedienbar, nur ohne Sperren – verbindlich prüft ohnehin
+            // `create_booking` (E24: Komfort, keine Garantie).
+            console.error('Verfügbarkeit für den Kalender konnte nicht geladen werden:', error);
+            this.nights = null;
+        }
+        this.renderCalendar();
+    }
+
+    private getCalendarRules(): CalendarRules {
+        return { today: this.today, horizonDays: this.hotel?.booking_horizon_days ?? null, nights: this.nights };
     }
 
     /**
@@ -900,13 +987,14 @@ export class BookingView extends AbstractView {
         return calendarTemplate.getCalendarHeaderHtml({
             monthName: MONTHS[this.displayedMonth] ?? '',
             year: this.displayedYear.toString(),
-            prevDisabled: !this.canGoPrev(),
+            prevDisabled: !canGoPrev(this.displayedYear, this.displayedMonth, this.getCalendarRules()),
+            nextDisabled: !canGoNext(this.displayedYear, this.displayedMonth, this.getCalendarRules()),
         });
     }
 
     private getCalendarGridHtml(): string {
         const { checkIn, checkOut } = bookingState.getDates();
-        const cells = buildDays({ year: this.displayedYear, month: this.displayedMonth, checkIn, checkOut, today: this.today });
+        const cells = buildDays({ year: this.displayedYear, month: this.displayedMonth, checkIn, checkOut, rules: this.getCalendarRules() });
         return calendarTemplate.getCalendarGridHtml(cells.map((cell: DayCell): calendarTemplate.DayCellView => this.getDayCellView(cell)));
     }
 
@@ -922,6 +1010,8 @@ export class BookingView extends AbstractView {
             label,
             stateClass: this.getCellStateClass(cell),
             selectable: cell.selectable,
+            blocked: cell.blocked,
+            tooltip: cell.blocked && cell.blockReason !== null ? formatBlockedNight(formatDate(cell.date), cell.blockReason) : null,
             withClearButton: cell.isStart,
         };
     }
@@ -932,6 +1022,11 @@ export class BookingView extends AbstractView {
         }
         if (cell.inRange) {
             return 'bg-purple-haze/35 text-purple-haze-dark cursor-pointer';
+        }
+        // Durchgestrichen, aber lesbar: Der Gast soll sehen, DASS es den Tag gibt (E24).
+        if (cell.blocked) {
+            // Den Strich setzt das Template an Wochentag und Datum.
+            return cell.isToday ? 'bg-purple-haze/40 text-white cursor-not-allowed' : 'text-purple-haze-dark/45 cursor-not-allowed';
         }
         if (cell.isToday) {
             return 'bg-purple-haze text-white cursor-pointer';
@@ -984,7 +1079,8 @@ export class BookingView extends AbstractView {
 
         const dayEl = target.closest<HTMLElement>('[data-date]');
         const iso = dayEl?.dataset.date;
-        if (dayEl && !dayEl.hasAttribute('disabled') && iso) {
+        // Gesperrte Tage tragen `aria-disabled` statt `disabled`, damit ihr Tooltip erscheint.
+        if (dayEl && !dayEl.hasAttribute('disabled') && dayEl.getAttribute('aria-disabled') !== 'true' && iso) {
             this.selectDate(iso);
         }
     }
@@ -993,10 +1089,12 @@ export class BookingView extends AbstractView {
         const date = parseISODate(iso);
         const { checkIn, checkOut } = bookingState.getDates();
 
-        if (checkIn === null || checkOut !== null || date <= checkIn) {
-            bookingState.setDates(date, null);
-        } else {
+        // Abreise nur, wenn alle Nächte dazwischen frei sind (E29); sonst beginnt mit diesem
+        // Tag ein neuer Zeitraum – geklickt werden kann er nur, wenn er als Anreise taugt.
+        if (checkIn !== null && checkOut === null && isSelectableAsCheckOut(date, checkIn, this.getCalendarRules())) {
             bookingState.setDates(checkIn, date);
+        } else {
+            bookingState.setDates(date, null);
         }
         this.renderCalendar();
         this.renderGuestsNotice();
@@ -1011,19 +1109,14 @@ export class BookingView extends AbstractView {
     }
 
     private changeMonth(delta: number): void {
-        const target = new Date(this.displayedYear, this.displayedMonth + delta, 1);
-        const firstOfCurrentMonth = new Date(this.today.getFullYear(), this.today.getMonth(), 1);
-        if (target < firstOfCurrentMonth) return;
+        const rules = this.getCalendarRules();
+        const allowed = delta < 0 ? canGoPrev(this.displayedYear, this.displayedMonth, rules) : canGoNext(this.displayedYear, this.displayedMonth, rules);
+        if (!allowed) return;
 
+        const target = new Date(this.displayedYear, this.displayedMonth + delta, 1);
         this.displayedYear = target.getFullYear();
         this.displayedMonth = target.getMonth();
         this.renderCalendar();
-    }
-
-    private canGoPrev(): boolean {
-        const firstOfDisplayed = new Date(this.displayedYear, this.displayedMonth, 1);
-        const firstOfCurrentMonth = new Date(this.today.getFullYear(), this.today.getMonth(), 1);
-        return firstOfDisplayed > firstOfCurrentMonth;
     }
 
     /**
@@ -1067,7 +1160,10 @@ export class BookingView extends AbstractView {
             this.setSubmitting(false);
             this.showCheckoutError(this.getRejectionText(result.error));
             // Eine Ablehnung heißt fast immer: Die Verfügbarkeit hat sich geändert. Die
-            // neue Liste passt unmögliche Mengen an und sagt es über der Liste.
+            // neue Liste passt unmögliche Mengen an und sagt es über der Liste – und der
+            // Kalender darf nicht aus dem Speicher weiter alte Nächte anbieten.
+            this.calendarCache.clear();
+            void this.loadCalendar();
             void this.loadRooms();
             return;
         }
