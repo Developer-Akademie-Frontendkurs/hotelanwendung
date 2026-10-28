@@ -123,12 +123,14 @@ src/shared/
   Umgesetzt: `fetchAvailabilityCalendar` + `buildNightAvailability` (`catalog.service.ts`), einmal je Belegung über den ganzen Horizont geladen und gecacht (V14), ohne Belegung gar nicht (V16.7). In `domain/calendar.ts`: `getNightBlockReason`, `isSelectableAsCheckIn`, `isSelectableAsCheckOut` (prüft die ganze Kette bis zur Vornacht, nicht nur die Vornacht), `canGoPrev`/`canGoNext` mit `hotels.booking_horizon_days`. Gesperrte Tage sind durchgestrichen, tragen `aria-disabled` statt `disabled` (sonst zeigen manche Browser keinen Tooltip) und einen `title` mit Datum und Grund (`formatBlockedNight` in `messages.ts`). Nach einer Ablehnung wird der Cache geleert und der Kalender neu geladen (Teil von F5). Fertig-Kriterium im Browser geprüft: Eine gesperrte Nacht sperrt ihr Datum als Anreise und lässt es als Abreise zu; Blättern endet am Horizont.
 - [x] F4: **9b.2:** Eine Auswahlleiste unter der Zimmerliste bauen, etwa „2 Zimmer · 4 Nächte · 1.464 €“, mit Sprung zum Checkout. Umgesetzt: Leiste am Ende von Schritt 2 – unter den Zusatzleistungen, damit der Sprung sie nicht überspringt –, sichtbar ab einem Zimmer. Die Summe ist dieselbe wie die Gesamtsumme in „Ihre Buchung“ (`getOrderTotalCents`), der Text kommt aus `formatSelectionSummary` (`summary.ts`), das Markup aus `getSelectionBarHtml` (`rooms.template.ts`). Der Knopf „weiter zu Ihren Daten“ springt zu `#booking-details`. Im Browser geprüft, auch bei 375 px.
 - [x] F5: **9b.8:** Bei einer Ablehnung den Hinweis zusätzlich an der Zimmerkarte und am Kalenderdatum zeigen und danach Kalender und Zimmerliste neu laden. Umgesetzt: Bei Ablehnungen, die eine geänderte Verfügbarkeit bedeuten (`nicht_buchbar`, `ausgebucht`, `kein_preis`, `zu_klein`), steht zusätzlich ein Satz an der Zimmerkarte aus `room_type_id` und – mit Datum – ein roter Rahmen samt Tooltip am Kalendertag und ein Satz über „weiter“; der Kalender springt in den Monat der Nacht. Texte in `getRejectionHints` (`messages.ts`). Danach werden Kalender (Cache geleert) und Zimmerliste neu geladen. Die Hinweise verschwinden, sobald Zeitraum oder Belegung sich ändern. Im Browser mit einer per `room_blocks` nachträglich gesperrten Nacht geprüft – ohne angelegte Buchung.
-- [ ] F6: **Den Plan pflegen:**
+- [x] F6: **Den Plan pflegen:**
   - den Kopf von E1–E46 auf E1–E51 bringen,
   - in 9b festhalten, dass die Punkte 8–9 umgesetzt sind,
   - V12 anpassen, denn es gibt inzwischen Frontend-Tests,
   - Phase 7b auf E50 umschreiben,
   - V17 und den Commit-Schnitt anpassen, weil Phase 8 und 9 noch ausstehen.
+
+  Umgesetzt in `docs/datenbank/umsetzungsplan.md`: Kopf und 0b auf E1–E51; V9 mit dem tatsächlichen Zuschnitt (`catalog`/`booking`/`posts`), V12 mit den 210 Frontend-Tests, V17 und ein Nachtrag „tatsächlicher Schnitt“ unter dem Commit-Schnitt (Plan gegen Commits). Phase 7b, Commit 1 beschreibt jetzt `customer_addresses` samt Trigger (E50/E51), Commit 2 hat einen Nachtrag zu Punkt 7. Phase 8 und 9 sind inzwischen umgesetzt und tragen je einen Nachtrag; 9b hält die Punkte 2, 8 und 9 fest. Bestehende Nachträge bleiben stehen, Überholtes ist durchgestrichen statt gelöscht.
 
 ### G. Barrierefreiheit
 

@@ -3,7 +3,7 @@
 > **Zweck:** Diese Datei ist so geschrieben, dass die Umsetzung in einer **späteren Session**
 > aufgesetzt werden kann, ohne die Grilling-Unterhaltung wiederholen zu müssen.
 >
-> **Vorher lesen:** [README.md](./README.md) (Entscheidungen E1–E46 mit Begründung) und
+> **Vorher lesen:** [README.md](./README.md) (Entscheidungen E1–E51 mit Begründung) und
 > [schema.md](./schema.md) (normatives Schema).
 >
 > **Regel für die Umsetzung:** `schema.md` ist die Quelle der Wahrheit. Weicht der Plan davon ab,
@@ -17,7 +17,7 @@ Kopiervorlage für den ersten Prompt:
 
 > Lies `docs/datenbank/README.md`, `docs/datenbank/schema.md` und
 > `docs/datenbank/umsetzungsplan.md`. Wir setzen Phase **N** um. Halte dich an die Entscheidungen
-> E1–E46 und die Vorgehensentscheidungen V1–V17; wenn dir etwas widersprüchlich vorkommt, frag
+> E1–E51 und die Vorgehensentscheidungen V1–V17; wenn dir etwas widersprüchlich vorkommt, frag
 > nach, statt zu raten.
 
 **Branch- und Commit-Schnitt (V6):** Phasen 1–7 laufen auf **einem** Themenbranch
@@ -43,7 +43,7 @@ bauen aufeinander auf und sind einzeln nie lauffähig, sieben PRs wären Zeremon
 
 ## 0b. Vorgehensentscheidungen (Grilling-Runde 2026-09-02)
 
-Domänenentscheidungen stehen als E1–E46 in `README.md`. Was hier steht, ist **Vorgehen** — es ändert
+Domänenentscheidungen stehen als E1–E51 in `README.md`. Was hier steht, ist **Vorgehen** — es ändert
 das Schema nicht, aber es bestimmt, wie diese Umsetzung abläuft.
 
 | # | Entscheidung | Begründung in Kurzform |
@@ -131,15 +131,15 @@ widersprachen. Beide Widersprüche wären sonst als Code entstanden und erst bei
 | #   | Entscheidung | Begründung in Kurzform |
 | --- | ------------ | ---------------------- |
 | **V8** | `pnpm db:types` erzeugt `src/shared/types/database.types.ts`; Client als `createClient<Database>`. DB-nahe Typen werden **abgeleitet** (`Database['public']['Functions'][…]['Returns'][number]`, `Tables<'room_types'>`), reine View-Typen (`RoomCard`, `RoomAmenity`, `RoomCardAvailability`) bleiben handgeschrieben. `post.interface.ts` fällt weg. | Phase 8.3: handgeschriebene Tabellentypen driften. View-Typen sind keine Tabellen und driften nicht — sie pauschal mitzugenerieren gäbe es gar nicht. |
-| **V9** | Drei Dateien unter `src/shared/services/`: `availability.service.ts` (`availability_calendar`, `search_availability`), `booking.service.ts` (`create_booking`), `roomTypes.service.ts` (Stammdaten, Bild-URLs, Hoteldaten). **`supabase` wird außerhalb von `services/` nicht mehr importiert** — auch nicht für `getPublicUrl`. | Phase 8.4 verlangt es. Eine Regel mit einer Ausnahme für „nur schnell die Bild-URL" ist nach einer Woche keine Regel mehr. |
+| **V9** | Drei Dateien unter `src/shared/services/`: `availability.service.ts` (`availability_calendar`, `search_availability`), `booking.service.ts` (`create_booking`), `roomTypes.service.ts` (Stammdaten, Bild-URLs, Hoteldaten). **`supabase` wird außerhalb von `services/` nicht mehr importiert** — auch nicht für `getPublicUrl`. **Stand 2026-10-28:** Umgesetzt mit anderem Zuschnitt: `catalog.service.ts` (alle Lesezugriffe der Buchungsseite samt `buildRoomCards`), `booking.service.ts` (`create_booking`) und `posts.service.ts` (Kurs-Spike, E36). Die Regel selbst gilt unverändert. | Phase 8.4 verlangt es. Eine Regel mit einer Ausnahme für „nur schnell die Bild-URL" ist nach einer Woche keine Regel mehr. Kalender und Zimmerliste lesen dieselben Stammdaten, deshalb ein Katalog-Service statt zweier Dateien, die sich gegenseitig bräuchten. |
 | **V10** | `bookingState` wird der vollständige Buchungsentwurf (Zeitraum, Belegung, Mengen je Kategorie, Kontakt- und Rechnungsdaten). `this.guests` verlässt die View. **Kein** `sessionStorage`. | Sonst muss die Zusammenfassung ihre Werte aus zwei Quellen zusammenklauben. Gegen Persistenz spricht nicht der Aufwand, sondern die Fehlerklasse: ein wiederhergestellter Entwurf mit abgelaufener Verfügbarkeit. |
 | **V11** | Es bleibt **eine** Seite `/buchung`. `BookingStep` wird Fortschrittsanzeige und Sprungziel, kein Router-Konzept. | Der Kommentar in `bookingState` beschreibt eine Absicht, das Markup eine Tatsache — und die Tatsache ist fertig gebaut und entspricht dem Entwurf. |
-| **V12** | **Vorerst keine Tests** für die Frontend-Seite; werden später nachgezogen. Die 91 Tests aus `pnpm test:db` decken die RPCs weiter ab. | Ausdrücklich so entschieden (Q7). Konsequenz, damit sie nicht überrascht: Die E29-Regel und `buildRoomCards` sind ab jetzt nur über die Oberfläche geprüft. Deshalb V16, letzter Punkt: die Regeln werden trotzdem als eigenständige Funktionen herausgezogen. |
+| **V12** | ~~**Vorerst keine Tests** für die Frontend-Seite; werden später nachgezogen.~~ **Nachgezogen (Stand 2026-10-28):** `pnpm vitest run src` prüft 210 Fälle in 15 Dateien: die Fachlogik (`roomQuantity`, `services`, `breakfast`, `summary`, `address`, `messages`, `domain/calendar` samt E29-Regel, `domain/validation`, `domain/draft`), den Store (`bookingState`), die Services (`catalog.service` samt `buildRoomCards`, `booking.service` samt Ablehnungs-Parser), `format` und `escapeHtml`. `pnpm test:db` deckt die RPCs weiter ab, inzwischen auch Adressen (E50/E51) und Zusatzleistungen. Ungetestet bleibt die View selbst (`Booking.ts`, Templates): sie ist nur im Browser geprüft. | Ausdrücklich so entschieden (Q7). Dass die Tests ohne Umbau nachgezogen werden konnten, ist der Ertrag von V16, letzter Punkt: Die Regeln waren schon eigenständige Funktionen. |
 | **V13** | Die Rechnungsadresse kommt als **fünf Skalarparameter** in `create_booking`, nicht als `jsonb`. | Skalare erscheinen in den generierten Typen benannt und typisiert. Das `jsonb` aus E44 ist kein Gegenbeispiel: eine Liste variabler Länge lässt sich nicht als Skalare ausdrücken, eine feste Adresse schon. |
 | **V14** | Kalender: **einmal** der ganze Horizont je Belegungskombination, im Speicher gecacht (Schlüssel `${adults}-${children}`); Nachladen nur bei geänderter Belegung. Vorwärtsblättern endet bei `hotels.booking_horizon_days`. | 365 Zeilen sind für Postgres nichts, und das Blättern wird sofort. Monatsweises Nachladen macht jeden Monatswechsel zu einem Ladezustand — die Variante, die man später wieder ausbaut. Die Horizontgrenze kommt aus den Stammdaten, nicht als Konstante ins Frontend (E30). |
 | **V15** | `bookingService.createBooking()` liefert `{ ok: true, data } \| { ok: false, error: { code, date, roomTypeId, message } }`. Lesezugriffe **werfen** weiterhin. Der Service parst `error.details` als JSON und fällt bei unparsbarem Inhalt auf `error.message` zurück. | Eine ausgebuchte Nacht ist ein erwartetes Ergebnis, kein Ausnahmefall — und die Oberfläche braucht `datum` und Kategorie, um den Hinweis an der richtigen Stelle zu zeigen (E31). Bei Lesezugriffen gibt es keine fachliche Ablehnung, nur kaputte Infrastruktur. |
 | **V16** | Oberfläche: Mengenwähler je Zimmerkarte (0 bis `min(rooms_free, 8 − bereits gewählte)`), Hervorhebung ab Menge > 0, Auswahlleiste mit Summe; Bestellzeilen je Kategorie mit Menge > 0; Absende-Button immer aktiv mit Prüfung beim Klick; Gästezahl verpflichtend; Datenschutzhinweis bleibt Text; Extra-Angebot-Zeile wird nicht gerendert; Bestätigung über `src/shared/ui/modal.ts` (`<dialog>`, genau ein Ausgang). Wählbarkeits- und Zusammenführungsregeln werden als **eigenständige Funktionen** herausgezogen. | Details und Begründungen in Phase 9/9b. Das Herausziehen der Regeln passiert trotz V12 — es kostet nichts und ist die Voraussetzung dafür, dass die Tests später ohne Umbau nachgezogen werden können. |
-| **V17** | **Fünf Commits** auf `verbindung-ui-zu-datenbank`, jeder für sich lauffähig (anders als die Phasen 1–7). Danach ein Tagebuch-Eintrag. | Siehe „Commit-Schnitt" unten. Der Tagebuch-Eintrag, weil dieser Branch drei Entscheidungen enthält, die man aus Migrationen nicht rekonstruiert (V7). |
+| **V17** | ~~**Fünf Commits**~~ auf `verbindung-ui-zu-datenbank`, jeder für sich lauffähig (anders als die Phasen 1–7). Danach ein Tagebuch-Eintrag. **Stand 2026-10-28:** Es sind deutlich mehr Commits geworden, weil E47–E51 und das Review (`docs/reviews/2026-09-30_verbindung-ui-zu-datenbank.md`) dazwischenkamen. Geblieben ist „jeder Commit lauffähig“ und der Tagebuch-Eintrag. | Siehe „Commit-Schnitt" unten. Der Tagebuch-Eintrag, weil dieser Branch drei Entscheidungen enthält, die man aus Migrationen nicht rekonstruiert (V7). |
 
 ### Commit-Schnitt
 
@@ -153,6 +153,21 @@ widersprachen. Beide Widersprüche wären sonst als Code entstanden und erst bei
 
 Commit 2 fasst beide Änderungen an `create_booking` zusammen, weil beide dieselbe Funktion ersetzen —
 zwei `drop`/`create`-Runden hintereinander helfen niemandem.
+
+> **Nachtrag 2026-10-28 — tatsächlicher Schnitt.** Die Tabelle oben ist der Plan vom 2026-09-09.
+> Umgesetzt wurde in dieser Reihenfolge (Commits auf `verbindung-ui-zu-datenbank`):
+>
+> | Plan | Tatsächlich | Commit(s) |
+> | ---- | ----------- | --------- |
+> | 1 | `customer_addresses` statt `billing_addresses` (E50), siehe Phase 7b | `04be98d` |
+> | 2 | in **drei** Schritten: Positionen + Gesamtbelegung (E44, E48), Leistungen je Vorgang (E49), Adressen (E51). Die Begründung „nur eine `drop`/`create`-Runde“ hielt nicht, weil E48–E51 erst nach Commit 2 entschieden wurden. | `f959c92`, `5cdbbc9`, `04be98d` |
+> | 3 | Service-Schicht und Store in Etappen über das Review (D4–D7), generierte Typen zuletzt (F1, F2) | `d04fce0` … `17a26ff` |
+> | 4 | Kalender aus `availability_calendar`, E29-Regel, Horizont (F3) | `8276f2b` |
+> | 5 | Mengenwähler vorgezogen (`2e05149`), Checkout und Buchen (`2900cdf`, `bb243ce`), Auswahlleiste (F4) und Ablehnungshinweise (F5) zuletzt | `2e05149` … `006ce87` |
+>
+> Phase 8 kam damit **nach** 9b statt davor. Das Risiko, das die geplante Reihenfolge vermeiden
+> sollte – Oberfläche gegen untypisierte Zugriffe –, hat sich gezeigt: Erst der typisierte Client
+> fand `p_services` (readonly) sowie `p_phone`/`p_billing_company` (`null` statt weglassen).
 
 > **Nachtrag 2026-09-16 — Mengenwähler vorgezogen (Grilling-Runde 9).** Der Mengenwähler aus
 > Phase 9b, Punkt 1 ist **vor** den Commits 1–4 umgesetzt worden, als eigener Commit auf demselben
@@ -350,30 +365,42 @@ einer Stelle ändern.
 
 ---
 
-## Phase 7b — Schema-Nachträge für die Buchungsseite (E42, E43, E44, E45)
+## Phase 7b — Schema-Nachträge für die Buchungsseite (E43, E44, E48–E51) — umgesetzt
 
-**Ziel:** Alles, was die Oberfläche braucht und im Schema noch fehlt — in zwei Migrationen, vorwärts.
+**Ziel:** Alles, was die Oberfläche braucht und im Schema noch fehlt — als Migrationen, vorwärts.
 Die Migrationen der Phasen 1–7 werden **nicht** angefasst; sie sind geteilt und damit unveränderlich.
 
-### Commit 1 — `billing_addresses`
+> **Umgeschrieben am 2026-10-28.** Ursprünglich stand hier eine Tabelle `billing_addresses` nach E42
+> mit einer Funktion `billing_address_in_use()` in der UPDATE-Policy. E50 hat die Tabelle durch
+> `customer_addresses` ersetzt (Sitz- **und** Rechnungsadresse), E51 die Policy-Sperre durch einen
+> Trigger (auch der Service-Role-Key kann eine benutzte Adresse nicht mehr ändern). Die alte Fassung
+> steht in der Git-Historie dieser Datei.
 
-1. Tabelle `billing_addresses` nach E42: `customer_id` (`on delete restrict`), `street`,
-   `house_number`, `postal_code`, `city`, `country_code` (`check char_length = 2`), `archived_at`,
-   Zeitstempel + `set_updated_at`-Trigger wie überall.
-2. `billing_address_in_use(uuid)` — `SECURITY DEFINER`, `set search_path = ''`, `stable`. Liefert
-   `true`, sobald eine Buchung auf die Adresse zeigt. `SECURITY DEFINER` ist hier **nicht** wegen
-   Privilegien nötig, sondern damit die Policy nicht durch die RLS von `bookings` hindurchfragen muss
-   und dabei je nach Aufrufer ein anderes Ergebnis bekommt.
-3. RLS nach E43:
-    - `select using (customer_id = (select public.current_customer_id()) or public.is_staff())`
-    - `update using (… wie select …) with check (… wie select …)` **plus**
-      `not public.billing_address_in_use(id)` in **beiden** Klauseln — sonst kann eine unbenutzte
-      Adresse per Update auf eine benutzte gedreht werden.
-    - **kein** `insert`, **kein** `delete`. Angelegt wird nur in `create_booking`.
-4. `revoke`/`grant` für `billing_address_in_use` nach dem Muster der anderen internen Funktionen.
+### Commit 1 — `customer_addresses` (E50, E51)
+
+Umgesetzt in `20260926101000_customer_addresses.sql`:
+
+1. Tabelle `customer_addresses` nach E50: `customer_id` (`on delete restrict`), `kind in ('residence',
+   'billing')`, `company` (nur bei `billing`), `street`, `house_number`, `postal_code`, `city`,
+   `country_code` (`is_supported_country()`: AT/DE/CH/IT/SI), `archived_at`, die generierte Spalte
+   `match_key` (`address_match_key()`), Zeitstempel + `set_updated_at`-Trigger wie überall.
+2. Zwei Unique-Indizes: höchstens **eine aktive Sitzadresse** je Kunde (partiell, `archived_at is
+   null`) und jede Adresse je Kunde und Art nur **einmal** (`customer_id, kind, match_key`) — die
+   Grundlage der Wiederverwendung in `create_booking`.
+3. Trigger `guard_customer_address_update` statt `billing_address_in_use()` (E51.3): Sobald eine
+   Buchung auf die Adresse zeigt, ist ihr Inhalt unveränderlich, **Archivieren** bleibt erlaubt. Der
+   Trigger gilt für jede Rolle, eine Policy hätte der Service-Role-Key umgangen.
+4. RLS nach E43: `select` und `update` für den Kunden selbst und Mitarbeitende, **kein** `insert`,
+   **kein** `delete`. Angelegt wird nur in `create_booking`.
+5. `bookings.residence_address_id` (Pflicht als `CHECK … NOT VALID`, weil Altbuchungen keine Adresse
+   haben) und `bookings.billing_address_id` (nullable), beide als zusammengesetzte Fremdschlüssel
+   `(adresse, customer_id)` (E51.1–2).
 
 **Fertig, wenn:** `rls_audit()` weiterhin **null Zeilen** liefert. Die Prüffunktion aus Phase 7 gilt
-ausdrücklich auch für Tabellen, die es damals noch nicht gab — das ist jetzt der erste Ernstfall.
+ausdrücklich auch für Tabellen, die es damals noch nicht gab — das war der erste Ernstfall.
+Zusätzlich `supabase/tests/customer-addresses.spec.ts` (Review E4): `ungueltige_adresse`, „alles
+oder nichts“ bei der Rechnungsadresse, Wiederverwendung über `match_key`, der Trigger und die
+zusammengesetzten Fremdschlüssel.
 
 ### Commit 2 — `create_booking` neu
 
@@ -418,6 +445,12 @@ Transaktion".
 > Gesamtzahl (E48, revidiert E45 — Punkt 5 oben gilt damit nicht mehr). Punkt 7 und damit Commit 1
 > (`billing_addresses`) stehen noch aus; `create_booking` wird dafür noch einmal ersetzt. Die
 > Nebenläufigkeitstests sind nach dem Umbau gelaufen und grün.
+>
+> **Nachtrag 2026-09-26 (E51) — Punkt 7 umgesetzt.** `20260926102000_create_booking_addresses.sql`
+> ersetzt `create_booking` ein weiteres Mal: elf Skalarparameter für Sitz- und optionale
+> Rechnungsadresse (V13), `ungueltige_adresse` als neue Ablehnung, Wiederverwendung über `match_key`
+> statt „keine Wiederverwendung“ (E51.5) und „neueste gewinnt“ für Name und Telefon (E51.6). Phase 7b
+> ist damit abgeschlossen.
 
 ---
 
@@ -450,6 +483,12 @@ in dieser Phase nicht** — wer am Ende einen Unterschied im Browser sieht, hat 
 wie vorher verhält — und ein absichtlich in einer Migration umbenanntes Feld nach `pnpm db:types`
 einen **Typfehler** erzeugt. Genau das ist der Gegenwert von E7.
 
+> **Nachtrag 2026-10-28 — umgesetzt**, allerdings erst nach Phase 9b (siehe Commit-Schnitt) und
+> deshalb nicht „Verhalten unverändert“, sondern als Umbau einer fertigen Seite: Store und Services
+> über die Review-Punkte D4–D7, generierte Typen und `posts.service.ts` über F1/F2 (`17a26ff`). Der
+> Zuschnitt der Services weicht von Punkt 3 ab (V9, Stand). Das Fertig-Kriterium ist geprüft: Eine
+> simulierte Spaltenumbenennung wird zum Typfehler, und die `grep`-Zeile aus Punkt 4 findet nichts.
+
 ---
 
 ## Phase 9 — Kalender an `availability_calendar` (E24, E28, E29, E30, V14)
@@ -472,6 +511,13 @@ einen **Typfehler** erzeugt. Genau das ist der Gegenwert von E7.
 **Fertig, wenn:** eine ausgebuchte Nacht ihr Datum als **Anreisetag** sperrt und als **Abreisetag**
 wählbar lässt. Dieser eine Fall ist die Auszahlung von E8 — stimmt er nicht, verkauft die Seite keine
 Anschlussnächte. Zweitens: Der Kalender lässt sich nicht über den Horizont hinaus blättern.
+
+> **Nachtrag 2026-10-28 — umgesetzt** in `8276f2b` (Review F3): `fetchAvailabilityCalendar` und
+> `buildNightAvailability` in `catalog.service.ts`, die Tagesregeln in `domain/calendar.ts` mit Tests
+> (`calendar.spec.ts`). Abweichung von Punkt 2: `isSelectableAsCheckOut` prüft die **ganze Kette** vom
+> Anreisetag bis zur Vornacht, nicht nur die Vornacht — sonst ließe sich ein Zeitraum über eine
+> gesperrte Nacht hinweg wählen. Gesperrte Tage tragen `aria-disabled` statt `disabled`, damit der
+> Tooltip in allen Browsern erscheint. Beide Fertig-Kriterien im Browser geprüft.
 
 ---
 
@@ -521,9 +567,9 @@ Anschlussnächte. Zweitens: Der Kalender lässt sich nicht über den Horizont hi
 zeigt, und ein zweiter Versuch auf das **letzte** freie Zimmer eine Ablehnung mit dem richtigen Datum
 **und** der richtigen Karte erzeugt.
 
-**Bewusst offen nach dieser Phase:** keine Tests auf der Frontend-Seite (V12), keine Bestätigungsmail
-(E46), keine Belegung je Position (E45), keine Einwilligung mit Zeitstempel. Alle vier sind benannt,
-keine ist versehentlich.
+**Bewusst offen nach dieser Phase:** ~~keine Tests auf der Frontend-Seite (V12)~~ (inzwischen
+nachgezogen, siehe V12), keine Bestätigungsmail (E46), keine Belegung je Position (E45), keine
+Einwilligung mit Zeitstempel. Alle sind benannt, keine ist versehentlich.
 
 > **Nachtrag 2026-09-16 (E47):** Die **Zusatzleistungen** standen hier ebenfalls als offen. Sie sind
 > mit dem Frühstück umgesetzt worden — vorgezogen, weil die Checkbox an der Zimmerkarte hängt und
@@ -574,6 +620,27 @@ keine ist versehentlich.
 >   Problem im Formular liegt.
 >
 > Gebucht wird weiterhin nicht (Punkte 8–9).
+>
+> **Nachtrag 2026-10-28 — Punkte 2, 8 und 9 umgesetzt, Phase 9b ist abgeschlossen.**
+>
+> - **Punkt 9** (`bb243ce`): `create_booking` über `booking.service.ts`, bei Erfolg
+>   `bookingState.reset()` und das Popup nach E46 über `openModal()` mit Buchungsnummer, Zeitraum und
+>   Gesamtpreis; genau ein Ausgang (V16). Der Kommentar aus Punkt 10 steht an
+>   `checkout.template.ts`.
+> - **Fehlerform nach V15** (Review A2): Nur `P0001` mit `DETAIL`-JSON ist eine Ablehnung, alles
+>   andere wirft `BookingFailedError`. Kann die Buchung trotzdem angelegt sein (`outcomeUnknown`),
+>   bleibt der Knopf gesperrt, und der Hinweis sagt, dass nicht erneut gebucht werden soll.
+> - **Punkt 8** (`006ce87`, Review F5): Bei Ablehnungen, die eine geänderte Verfügbarkeit bedeuten
+>   (`nicht_buchbar`, `ausgebucht`, `kein_preis`, `zu_klein`), steht der Hinweis zusätzlich an der
+>   Zimmerkarte (`room_type_id`) und am Kalendertag (`datum`, roter Rahmen mit Tooltip); danach
+>   werden Kalender (Cache geleert) und Zimmerliste neu geladen.
+> - **Punkt 2** (`3ec5315`, Review F4): Auswahlleiste am Ende von Schritt 2 („2 Zimmer · 4 Nächte ·
+>   1.464 €“) mit Sprung zu „Ihre Daten“; die Summe ist dieselbe wie in „Ihre Buchung“.
+>
+> Zum Fertig-Kriterium: Die Ablehnung an Datum und Karte ist im Browser geprüft, allerdings mit einer
+> per `room_blocks` nachträglich gesperrten Nacht statt mit einer zweiten Buchung, damit keine Buchung
+> liegen bleibt (`booking_events` ist nur anhängbar, E12). Die Buchung über zwei Kategorien samt
+> Gruppe und Summe prüft `supabase/tests/create-booking.spec.ts` auf Datenbankebene.
 
 ---
 
