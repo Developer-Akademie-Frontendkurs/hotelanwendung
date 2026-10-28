@@ -27,6 +27,31 @@ export type InvalidField = `customer.${'firstName' | 'lastName' | 'email'}` | `$
 
 const ADDRESS_FIELDS = ['street', 'houseNumber', 'postalCode', 'city'] as const;
 
+/**
+ * Die Zeile unter dem markierten Feld (per `aria-describedby` verknüpft). Die
+ * Rechnungsadresse sagt dazu, welche Adresse gemeint ist – vorgelesen fehlt sonst der
+ * Abschnitt, in dem das Feld steht.
+ */
+const FIELD_ERROR_TEXTS: Record<InvalidField, string> = {
+    'customer.firstName': 'Bitte geben Sie Ihren Vornamen ein.',
+    'customer.lastName': 'Bitte geben Sie Ihren Nachnamen ein.',
+    'customer.email': 'Bitte geben Sie eine gültige E-Mail-Adresse ein, z. B. maria.huber@beispiel.at.',
+    'residence.street': 'Bitte geben Sie Ihre Straße ein.',
+    'residence.houseNumber': 'Bitte geben Sie Ihre Hausnummer ein.',
+    'residence.postalCode': 'Bitte geben Sie Ihre PLZ ein.',
+    'residence.city': 'Bitte geben Sie Ihren Ort ein.',
+    'residence.countryCode': 'Bitte wählen Sie Ihr Land.',
+    'billing.street': 'Bitte geben Sie die Straße der Rechnungsadresse ein.',
+    'billing.houseNumber': 'Bitte geben Sie die Hausnummer der Rechnungsadresse ein.',
+    'billing.postalCode': 'Bitte geben Sie die PLZ der Rechnungsadresse ein.',
+    'billing.city': 'Bitte geben Sie den Ort der Rechnungsadresse ein.',
+    'billing.countryCode': 'Bitte wählen Sie das Land der Rechnungsadresse.',
+};
+
+export function getFieldErrorText(field: InvalidField): string {
+    return FIELD_ERROR_TEXTS[field];
+}
+
 export function isCountryCode(value: string): value is CountryCode {
     return COUNTRIES.some((country: (typeof COUNTRIES)[number]): boolean => country.code === value);
 }

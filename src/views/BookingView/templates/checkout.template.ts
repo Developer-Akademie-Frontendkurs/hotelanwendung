@@ -55,7 +55,7 @@ type AddressSample = {
 };
 
 // Eingabefelder und Auswahl im Adressformular – `aria-invalid` markiert, was beim Klick
-// auf „zahlungspflichtig buchen" fehlte.
+// auf „zahlungspflichtig buchen" fehlte, die Zeile aus `getFieldErrorHtml` sagt, was fehlt.
 const FIELD_CLASSES =
     'w-full min-w-0 rounded-[0.3125rem] border-[0.5px] border-purple-haze bg-purple-haze-light/45 p-2 font-antic-didone text-18 456:text-20 leading-tight text-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 aria-[invalid=true]:border-red-600 aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-red-600';
 
@@ -154,9 +154,10 @@ function getInputFieldHtml(id: string, label: string, sample: string, autocomple
                 type="${type}"
                 autocomplete="${autocomplete}"
                 placeholder="${escapeHtml(sample)}"
-                ${required ? 'aria-required="true"' : ''}
+                ${required ? `aria-required="true" aria-describedby="booking-${id}-error"` : ''}
                 class="${FIELD_CLASSES} placeholder:text-gray-500"
             />
+            ${required ? getFieldErrorHtml(id) : ''}
         </div>
     `;
 }
@@ -170,11 +171,21 @@ function getCountryFieldHtml(id: string, autocomplete: string, options: readonly
     return /*html*/ `
         <div class="flex flex-col w-full 576:w-64.75">
             <label for="booking-${id}" class="font-playfair-display font-medium text-16 leading-tight text-purple-haze">Land</label>
-            <select id="booking-${id}" name="${id}" autocomplete="${autocomplete}" aria-required="true" class="${FIELD_CLASSES} cursor-pointer">
+            <select id="booking-${id}" name="${id}" autocomplete="${autocomplete}" aria-required="true" aria-describedby="booking-${id}-error" class="${FIELD_CLASSES} cursor-pointer">
                 ${optionsHtml}
             </select>
+            ${getFieldErrorHtml(id)}
         </div>
     `;
+}
+
+/**
+ * Fehlerzeile unter einem Pflichtfeld, per `aria-describedby` mit ihm verknüpft (G1) –
+ * sonst hört ein Screenreader nur „ungültig“, aber nicht, was fehlt. Leer, bis
+ * `Booking.ts` den Text setzt; `empty:hidden` hält sie bis dahin aus dem Layout.
+ */
+function getFieldErrorHtml(id: string): string {
+    return /*html*/ `<p id="booking-${id}-error" class="empty:hidden mt-1 font-antic-didone text-14 leading-tight text-red-600"></p>`;
 }
 
 /**
@@ -195,7 +206,7 @@ export function getBookingSummaryHtml(checkoutLabel: string): string {
                 <hr class="border-t-2 border-purple-haze/45">
                 <div class="flex items-baseline justify-between gap-4 font-playfair-display text-24 text-purple-haze-dark">
                     <span>Gesamtsumme</span>
-                    <span data-summary-total aria-live="polite">–</span>
+                    <span data-summary-total>–</span>
                 </div>
                 <div class="flex flex-col gap-2">
                     <button type="button" data-action="checkout" class="w-full bg-purple-haze px-5 py-2.5 font-lato font-bold text-20 768:text-24 text-white opacity-85 hover:opacity-100 cursor-pointer">

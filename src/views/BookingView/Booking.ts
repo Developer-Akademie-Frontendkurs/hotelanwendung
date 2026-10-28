@@ -12,7 +12,7 @@ import {
 } from '../../shared/services/catalog.service';
 import { openModal } from '../../shared/ui/modal';
 import { scrollToSection } from '../../shared/ui/scroll';
-import { formatAdults, formatChildren, formatDate, formatGuests, formatNights, formatPrice, formatStayDate } from '../../shared/format';
+import { formatAdults, formatChildren, formatDate, formatGuests, formatLongDate, formatNights, formatPrice, formatStayDate } from '../../shared/format';
 import type { BookingDraft, BookingRequest, CustomerDetails, Guests, ServiceRow } from '../../shared/types/booking.types';
 import logo from '../../assets/img/logo-small.svg';
 import type { HotelRow, NightAvailability, RoomCard, RoomCardAvailability } from '../../shared/types/catalog.types';
@@ -29,7 +29,18 @@ import {
 } from './roomQuantity';
 import { buildBreakfastService, getBreakfastAmountCents, type BreakfastService } from './breakfast';
 import { BREAKFAST, buildExtraServices, CHILD_BED, getServiceAmountCents, getServiceMax, type ExtraService } from './services';
-import { COUNTRIES, DEFAULT_COUNTRY, formatAddressLines, getCountryLabel, getInvalidFields, isCountryCode, emptyToNull, type CountryCode, type InvalidField } from './address';
+import {
+    COUNTRIES,
+    DEFAULT_COUNTRY,
+    formatAddressLines,
+    getCountryLabel,
+    getFieldErrorText,
+    getInvalidFields,
+    isCountryCode,
+    emptyToNull,
+    type CountryCode,
+    type InvalidField,
+} from './address';
 import { buildOrderLines, DEFAULT_CURRENCY, formatSelectionSummary, getOrderTotalCents, type OrderLine } from './summary';
 import { formatBlockedNight, formatUnavailableReason, getRejectionHints, getRejectionMessage } from './messages';
 import {
@@ -1039,6 +1050,8 @@ export class BookingView extends AbstractView {
             weekday: WEEKDAYS[(cell.date.getDay() + 6) % 7] ?? '',
             day: cell.date.getDate().toString().padStart(2, '0'),
             label,
+            ariaLabel: this.getDayAriaLabel(cell, label),
+            pressed: cell.isStart || cell.isEnd,
             stateClass: this.getCellStateClass(cell),
             selectable: cell.selectable,
             blocked: cell.blocked,
@@ -1046,6 +1059,15 @@ export class BookingView extends AbstractView {
             flagged: this.isRejectedNight(cell.date),
             withClearButton: cell.isStart,
         };
+    }
+
+    /** „Mittwoch, 3. Juni 2026, Anreise, heute“ – der Grund gesperrter Tage kommt über `title` als Beschreibung dazu. */
+    private getDayAriaLabel(cell: DayCell, label: string | null): string {
+        const parts = [formatLongDate(cell.date)];
+        if (label !== null) parts.push(label);
+        else if (cell.inRange) parts.push('im gewählten Zeitraum');
+        if (cell.isToday) parts.push('heute');
+        return parts.join(', ');
     }
 
     /** Die abgelehnte Nacht nennt ihre Ablehnung, alle anderen gesperrten Tage ihren Grund. */
@@ -1299,9 +1321,9 @@ export class BookingView extends AbstractView {
         if (!form) return;
 
         form.addEventListener('input', (event: Event): void => {
-            // Wer ein markiertes Feld korrigiert, soll die Markierung nicht bis zum
-            // nächsten Klick behalten.
-            if (event.target instanceof Element) event.target.removeAttribute('aria-invalid');
+            // Wer ein markiertes Feld korrigiert, soll Markierung und Fehlerzeile nicht bis
+            // zum nächsten Klick behalten.
+            if (event.target instanceof HTMLElement) setFieldError(event.target, null);
             this.saveCustomerDetails();
         });
         form.addEventListener('change', (event: Event): void => {
@@ -1382,11 +1404,7 @@ export class BookingView extends AbstractView {
         for (const [field, name] of Object.entries(FIELD_NAMES) as [InvalidField, string][]) {
             const element = form.elements.namedItem(name);
             if (!(element instanceof HTMLElement)) continue;
-            if (invalid.includes(field)) {
-                element.setAttribute('aria-invalid', 'true');
-            } else {
-                element.removeAttribute('aria-invalid');
-            }
+            setFieldError(element, invalid.includes(field) ? getFieldErrorText(field) : null);
         }
 
         // In das erste ungültige Feld springen (Phase 9b, Punkt 7) – in Formularreihenfolge,
@@ -1460,4 +1478,18 @@ function buildChildOptions(): readonly GuestOption[] {
         const value = index + 1;
         return { value, label: formatChildren(value) };
     });
+}
+
+/**
+ * Markiert ein Formularfeld als ungültig und schreibt den Grund in seine Fehlerzeile
+ * (`aria-describedby`, G1) – `null` hebt beides auf. Per `textContent`, nicht als HTML.
+ */
+function setFieldError(field: HTMLElement, message: string | null): void {
+    const errorEl = document.getElementById(`${field.id}-error`);
+    if (errorEl) errorEl.textContent = message ?? '';
+    if (message === null) {
+        field.removeAttribute('aria-invalid');
+    } else {
+        field.setAttribute('aria-invalid', 'true');
+    }
 }

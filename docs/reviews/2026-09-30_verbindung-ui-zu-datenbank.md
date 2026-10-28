@@ -134,10 +134,12 @@ src/shared/
 
 ### G. Barrierefreiheit
 
-- [ ] G1: Fehlermeldungen pro Feld mit `aria-describedby` verknüpfen, statt nur `aria-invalid` zu setzen.
-- [ ] G2: Das „ד zum Zurücksetzen ist ein `span role="button"` innerhalb eines `<button>` (`Booking.ts:1421`). Daraus einen eigenen Knopf außerhalb der Tageszelle machen.
-- [ ] G3: Den Tagen im Kalender ein `aria-label` mit dem vollen Datum und `aria-pressed` geben.
-- [ ] G4: Die Zahl der `aria-live`-Regionen verringern, zum Beispiel nicht jede `data-service-amount`-Zeile.
+- [x] G1: Fehlermeldungen pro Feld mit `aria-describedby` verknüpfen, statt nur `aria-invalid` zu setzen. Umgesetzt: Jedes Pflichtfeld hat eine Fehlerzeile `#booking-<feld>-error` (`getFieldErrorHtml` in `checkout.template.ts`), die Texte stehen als `Record<InvalidField, string>` in `address.ts` (`getFieldErrorText`, getestet). `setFieldError` in `Booking.ts` setzt `aria-invalid` und Text gemeinsam und hebt beides beim Tippen wieder auf.
+- [x] G2: Das „ד zum Zurücksetzen ist ein `span role="button"` innerhalb eines `<button>` (`Booking.ts:1421`). Daraus einen eigenen Knopf außerhalb der Tageszelle machen. Umgesetzt: Jede Tageszelle ist ein `<div class="relative">` mit dem Tag und – am Anreisetag – einem eigenen `<button data-action="clear">` daneben, mit sichtbarem Fokus.
+- [x] G3: Den Tagen im Kalender ein `aria-label` mit dem vollen Datum und `aria-pressed` geben. Umgesetzt: `aria-label` wie „Mittwoch, 3. Juni 2026, Anreise, heute“ (`formatLongDate` in `format.ts`, getestet; „im gewählten Zeitraum“ für die Tage dazwischen), `aria-pressed` an Anreise- und Abreisetag. Der Sperrgrund bleibt im `title` und wird damit als Beschreibung vorgelesen.
+- [x] G4: Die Zahl der `aria-live`-Regionen verringern, zum Beispiel nicht jede `data-service-amount`-Zeile. Umgesetzt: kein `aria-live` mehr an den Preiszeilen der Leistungen und an der Gesamtsumme; doppeltes `aria-live` neben `role="status"` bzw. am `<output>` (ist von sich aus eine Statusregion) entfernt. Es bleiben die Hinweise an Gästen, Zimmerkarten und Betten sowie die Mengenanzeige.
+
+  Lint, 214 Tests und Build sind grün. **Im Browser noch nicht geprüft:** In der Sandbox (Ubuntu 26.04, arm64) gibt es weder Chrome noch ein Playwright-Chromium. Das Prüfskript für G1–G4 liegt bereit.
 
 ---
 

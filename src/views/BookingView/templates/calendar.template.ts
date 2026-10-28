@@ -40,6 +40,10 @@ export type DayCellView = {
     day: string;
     /** „Anreise“/„Abreise“ – `null` hält die Zeile mit einem geschützten Leerzeichen frei. */
     label: string | null;
+    /** Volles Datum samt Zustand („Mittwoch, 3. Juni 2026, Anreise“) – „MI 03“ allein sagt einem Screenreader wenig. */
+    ariaLabel: string;
+    /** Anreise- und Abreisetag: `aria-pressed`, damit der Zustand nicht nur an der Farbe hängt. */
+    pressed: boolean;
     stateClass: string;
     selectable: boolean;
     /**
@@ -51,7 +55,7 @@ export type DayCellView = {
     tooltip: string | null;
     /** Die Nacht, an der `create_booking` gerade abgelehnt hat (Phase 9b, Punkt 8). */
     flagged: boolean;
-    /** Nur am Anreisetag sitzt das „ד zum Zurücksetzen. */
+    /** Nur am Anreisetag sitzt das „ד zum Zurücksetzen – als eigener Knopf neben dem Tag. */
     withClearButton: boolean;
 };
 
@@ -156,8 +160,10 @@ export function getCalendarGridHtml(cells: readonly DayCellView[]): string {
 }
 
 function getDayCellHtml(cell: DayCellView): string {
+    // Ein eigener Knopf neben dem Tag, nicht darin: Ein Knopf im Knopf ist ungültiges HTML,
+    // und Screenreader lesen ihn nur als Teil des Tages vor.
     const clearButton = cell.withClearButton
-        ? /*html*/ `<span data-action="clear" role="button" aria-label="Auswahl zurücksetzen" class="booking__clear absolute top-1 right-1 leading-none text-14 768:text-16 cursor-pointer">&times;</span>`
+        ? /*html*/ `<button type="button" data-action="clear" aria-label="Auswahl zurücksetzen" class="booking__clear absolute top-0.5 right-0.5 px-1 leading-none text-14 768:text-16 text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded">&times;</button>`
         : '';
 
     // Durchgestrichen werden nur Wochentag und Datum – nicht die leere Label-Zeile, deren
@@ -165,18 +171,22 @@ function getDayCellHtml(cell: DayCellView): string {
     const strike = cell.blocked ? ' line-through decoration-purple-haze/70' : '';
 
     return /*html*/ `
-        <button
-            type="button"
-            data-date="${escapeHtml(cell.iso)}"
-            ${cell.selectable ? '' : cell.blocked ? 'aria-disabled="true"' : 'disabled'}
-            ${cell.tooltip === null ? '' : `title="${escapeHtml(cell.tooltip)}"`}
-            class="relative flex flex-col items-center justify-center gap-0.5 456:gap-1 rounded-lg border border-purple-haze/20 py-2 456:py-3 768:py-4 transition-colors ${cell.stateClass} ${cell.flagged ? 'ring-2 ring-red-600' : ''}"
-        >
+        <div class="relative">
+            <button
+                type="button"
+                data-date="${escapeHtml(cell.iso)}"
+                aria-label="${escapeHtml(cell.ariaLabel)}"
+                aria-pressed="${cell.pressed ? 'true' : 'false'}"
+                ${cell.selectable ? '' : cell.blocked ? 'aria-disabled="true"' : 'disabled'}
+                ${cell.tooltip === null ? '' : `title="${escapeHtml(cell.tooltip)}"`}
+                class="w-full flex flex-col items-center justify-center gap-0.5 456:gap-1 rounded-lg border border-purple-haze/20 py-2 456:py-3 768:py-4 transition-colors ${cell.stateClass} ${cell.flagged ? 'ring-2 ring-red-600' : ''}"
+            >
+                <span class="text-[0.625rem] 456:text-14 768:text-16 tracking-wide${strike}">${escapeHtml(cell.weekday)}</span>
+                <span class="font-antic-didone text-18 456:text-24 768:text-28 leading-none${strike}">${escapeHtml(cell.day)}</span>
+                <span class="text-14 leading-none">${cell.label === null ? '&nbsp;' : escapeHtml(cell.label)}</span>
+            </button>
             ${clearButton}
-            <span class="text-[0.625rem] 456:text-14 768:text-16 tracking-wide${strike}">${escapeHtml(cell.weekday)}</span>
-            <span class="font-antic-didone text-18 456:text-24 768:text-28 leading-none${strike}">${escapeHtml(cell.day)}</span>
-            <span class="text-14 leading-none">${cell.label === null ? '&nbsp;' : escapeHtml(cell.label)}</span>
-        </button>
+        </div>
     `;
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BillingAddress, CustomerDetails } from '../../shared/types/booking.types';
-import { emptyToNull, formatAddressLines, getCountryLabel, getInvalidFields, isCountryCode } from './address';
+import { emptyToNull, formatAddressLines, getCountryLabel, getFieldErrorText, getInvalidFields, isCountryCode } from './address';
 
 const BILLING: BillingAddress = { company: 'Beispiel GmbH', street: 'Ringstraße', houseNumber: '5', postalCode: '1010', city: 'Wien', countryCode: 'AT' };
 
@@ -123,5 +123,26 @@ describe('emptyToNull', () => {
     it('macht leeren Text zu null und trimmt den Rest', () => {
         expect(emptyToNull('   ')).toBeNull();
         expect(emptyToNull(' +43 660 1 ')).toBe('+43 660 1');
+    });
+});
+
+describe('getFieldErrorText', () => {
+    it('hat für jedes Feld, das getInvalidFields melden kann, einen eigenen Satz', () => {
+        const everything = getInvalidFields(
+            details({
+                customer: { firstName: '', lastName: '', email: '', phone: null },
+                residence: { street: '', houseNumber: '', postalCode: '', city: '', countryCode: 'XX' },
+                billing: { company: null, street: '', houseNumber: '', postalCode: '', city: '', countryCode: 'XX' },
+            }),
+        );
+        const texts = everything.map(getFieldErrorText);
+
+        expect(everything).toHaveLength(13);
+        expect(new Set(texts).size).toBe(texts.length);
+    });
+
+    it('nennt bei der Rechnungsadresse den Abschnitt', () => {
+        expect(getFieldErrorText('billing.city')).toContain('Rechnungsadresse');
+        expect(getFieldErrorText('residence.city')).not.toContain('Rechnungsadresse');
     });
 });

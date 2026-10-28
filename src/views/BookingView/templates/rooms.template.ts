@@ -110,7 +110,7 @@ export function getRoomsListHtml(view: RoomsListView): string {
         <div class="flex flex-col gap-8 768:gap-11">
             ${view.cardsHtml.join('')}
         </div>
-        <p data-capacity-notice role="status" aria-live="polite" class="${view.missingBedsNotice === '' ? 'hidden' : ''} mt-8 768:mt-11 ${NOTICE_CLASSES}">${escapeHtml(view.missingBedsNotice)}</p>
+        <p data-capacity-notice role="status" class="${view.missingBedsNotice === '' ? 'hidden' : ''} mt-8 768:mt-11 ${NOTICE_CLASSES}">${escapeHtml(view.missingBedsNotice)}</p>
         ${view.servicesHtml}
         <div data-selection-bar>${view.selectionBarHtml}</div>
     `;
@@ -282,7 +282,7 @@ export function getServiceRowHtml(view: ServiceRowView): string {
             <div class="flex-1 min-w-0 flex flex-col gap-1">
                 <label for="${escapeHtml(view.inputId)}" class="font-playfair-display font-medium text-16 768:text-18 leading-tight text-purple-haze-dark cursor-pointer">${escapeHtml(view.name)}</label>
                 ${description}
-                <p data-service-amount="${escapeHtml(view.code)}" aria-live="polite" class="font-antic-didone text-14 leading-tight text-purple-haze">${escapeHtml(view.label)}</p>
+                <p data-service-amount="${escapeHtml(view.code)}" class="font-antic-didone text-14 leading-tight text-purple-haze">${escapeHtml(view.label)}</p>
             </div>
             ${view.controlHtml}
         </li>
@@ -302,12 +302,18 @@ export function getCheckboxHtml(view: CheckboxView): string {
     `;
 }
 
-/** `−` / Anzahl / `+` für Leistungen mit Menge – bisher nur das Kinderbett. */
+/**
+ * `−` / Anzahl / `+` für Leistungen mit Menge – bisher nur das Kinderbett.
+ *
+ * `<output>` ist von sich aus eine Statusregion: Nach `−`/`+` wird die neue Menge
+ * vorgelesen. Preiszeile und Gesamtsumme ändern sich mit, sagen aber nichts an – drei
+ * Ansagen pro Klick wären Lärm (G4).
+ */
 export function getServiceQuantityHtml(view: ServiceQuantityView): string {
     return /*html*/ `
         <div class="shrink-0 flex items-center gap-2">
             ${view.decreaseHtml}
-            <output id="${escapeHtml(view.inputId)}" data-service-quantity="${escapeHtml(view.code)}" aria-live="polite" class="w-8 text-center font-antic-didone text-18 456:text-24 leading-tight text-purple-haze-dark">${view.quantity.toString()}</output>
+            <output id="${escapeHtml(view.inputId)}" data-service-quantity="${escapeHtml(view.code)}" class="w-8 text-center font-antic-didone text-18 456:text-24 leading-tight text-purple-haze-dark">${view.quantity.toString()}</output>
             ${view.increaseHtml}
         </div>
     `;

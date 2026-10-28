@@ -22,6 +22,14 @@ export function formatDate(date: Date): string {
     return `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear().toString()}`;
 }
 
+/**
+ * „Samstag, 13. Juni 2026" – für Screenreader, die „13.06.2026" Ziffer für Ziffer vorlesen.
+ * `de-DE` wie bei den Monatsnamen des Kalenders („Januar", nicht „Jänner").
+ */
+export function formatLongDate(date: Date): string {
+    return new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(date);
+}
+
 /** „13.06.2026 ab 14:00 Uhr" wie im Entwurf – ohne geladene Hotelzeile nur das Datum. */
 export function formatStayDate(date: Date | null, preposition: string, time: string | null): string {
     if (date === null) return 'noch offen';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatAdults, formatChildren, formatDate, formatGuests, formatNights, formatPrice, formatStayDate } from './format';
+import { formatAdults, formatChildren, formatDate, formatGuests, formatLongDate, formatNights, formatPrice, formatStayDate } from './format';
 
 describe('formatPrice', () => {
     it('zeigt volle Euro ohne Nachkommastellen, das Symbol hinter der Zahl', () => {
@@ -27,6 +27,16 @@ describe('formatPrice', () => {
 describe('formatDate', () => {
     it('füllt Tag und Monat auf zwei Stellen auf', () => {
         expect(formatDate(new Date(2026, 5, 3))).toBe('03.06.2026');
+    });
+});
+
+describe('formatLongDate', () => {
+    it('schreibt Wochentag und Monat aus, den Tag ohne führende Null', () => {
+        expect(formatLongDate(new Date(2026, 5, 3))).toBe('Mittwoch, 3. Juni 2026');
+    });
+
+    it('nennt den Januar „Januar", wie der Kalender', () => {
+        expect(formatLongDate(new Date(2027, 0, 1))).toBe('Freitag, 1. Januar 2027');
     });
 });
 

@@ -21,7 +21,8 @@
     transition: opacity 0.2s ease;
 }
 
-.booking__clear:hover {
+.booking__clear:hover,
+.booking__clear:focus-visible {
     opacity: 1;
 }
 
