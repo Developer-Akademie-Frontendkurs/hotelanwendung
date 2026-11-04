@@ -2,7 +2,7 @@
 
 # 008 – Branch `verbindung-ui-zu-datenbank`
 
-**Erster Commit:** 2026-09-09 · **Commits:** 39 · **Status:** offen
+**Erster Commit:** 2026-09-09 · **Commits:** 41 · **Status:** offen
 
 ## Ziel des Branches
 
@@ -65,7 +65,9 @@ Vertagt bleibt allein Phase 10 (Cloud-Deployment).
 | [036](008_2026-09-09_verbindung-ui-zu-datenbank/036_2026-10-21_update-project-diary.md)                            | 2026-10-21 | Projekttagebuch um die Einträge 028–035 ergänzt (reiner Doku-Commit)                    |
 | [037](008_2026-09-09_verbindung-ui-zu-datenbank/037_2026-10-28_bring-implementation-plan-up-to-date.md)            | 2026-10-28 | F6: Umsetzungsplan auf den tatsächlichen Stand gebracht                                 |
 | [038](008_2026-09-09_verbindung-ui-zu-datenbank/038_2026-10-28_accessibility-form-errors-calendar-live-regions.md) | 2026-10-28 | G1–G4: Fehlerzeilen, eigener „ד-Knopf, Tages-Labels, weniger `aria-live`                |
-| [039](008_2026-09-09_verbindung-ui-zu-datenbank/039_2026-11-04_refactor-booking-templates-remove-comments.md)      | 2026-11-04 | Kommentare entfernt, Posts-Views gelöscht (Build bricht ab)                             |
+| [039](008_2026-09-09_verbindung-ui-zu-datenbank/039_2026-11-04_refactor-booking-templates-remove-comments.md)      | 2026-11-04 | Kommentare entfernt, Posts-Views gelöscht (Build-Bruch, behoben in 041)                 |
+| [040](008_2026-09-09_verbindung-ui-zu-datenbank/040_2026-11-04_update-project-diary.md)                            | 2026-11-04 | Projekttagebuch um die Einträge 036–039 ergänzt (reiner Doku-Commit)                    |
+| [041](008_2026-09-09_verbindung-ui-zu-datenbank/041_2026-11-04_remove-unused-posts-routes.md)                      | 2026-11-04 | Posts-Routen und -Imports aus `main.ts` entfernt – Build wieder grün                    |
 
 Merge-Commits gibt es in diesem Branch nicht – er ist seit seinem Start nicht mit `main` synchronisiert worden.
 
@@ -209,7 +211,13 @@ Commit 036 trägt die Tagebuch-Einträge 028–035 nach (reiner Doku-Commit). Da
 
 Zwei Einsichten ragen heraus. Erstens: **Überholtes wird durchgestrichen, nicht gelöscht** (037). Der Plan zeigt jetzt Plan und Wirklichkeit nebeneinander – und hält fest, dass das Risiko, vor dem die ursprüngliche Reihenfolge schützen sollte, tatsächlich eingetreten ist. Zweitens: **Barrierefreiheit beginnt bei nativem HTML** (038). Ein echter `<button>` statt `span role="button"`, ein `<output>` statt `aria-live` – viele ARIA-Attribute bringt das richtige Element schon mit. Der Commit sagt außerdem offen, was er nicht prüfen konnte: den Screenreader im Browser.
 
-Mit 038 sind im Review-Dokument **alle Gruppen A bis G abgehakt**. Commit 039 hinterlässt allerdings eine Baustelle: Er löscht `Posts.ts` und `SinglePost.ts`, während `src/main.ts` beide weiter importiert – `tsc` und damit `pnpm build` schlagen auf diesem Stand fehl. Außerdem steht über `ROOM_AMENITIES` ein Prüfvermerk `// CHECK: Wird das noch verwendet?` (die Tabelle wird an zwei Stellen verwendet). Der Branch ist weiterhin **nicht in `main` gemergt**.
+Mit 038 sind im Review-Dokument **alle Gruppen A bis G abgehakt**. Commit 039 hinterlässt allerdings eine Baustelle: Er löscht `Posts.ts` und `SinglePost.ts`, während `src/main.ts` beide weiter importiert – `tsc` und damit `pnpm build` schlagen auf diesem Stand fehl. (Behoben in Commit 041, siehe unten.) Außerdem steht über `ROOM_AMENITIES` ein Prüfvermerk `// CHECK: Wird das noch verwendet?` (die Tabelle wird an zwei Stellen verwendet). Der Branch ist weiterhin **nicht in `main` gemergt**.
+
+### Nachtrag (Commits 040–041)
+
+Commit 040 trägt die Tagebuch-Einträge 036–039 nach (reiner Doku-Commit); weil der Link zu 038 länger ist als alle bisherigen, formatiert Prettier dabei die ganze Commit-Tabelle neu. Commit 041 (`d78f56b`) **behebt den Build-Bruch aus 039**: Er entfernt die Imports von `PostsView`, `SinglePostView` und `postsHeader` sowie die Routen `/posts` und `/posts/:id` aus `src/main.ts`. `tsc --noEmit` läuft damit wieder fehlerfrei.
+
+Die Lehre aus 039 und 041 zusammen: Der Compiler findet **kaputte** Importe zuverlässig, **verwaiste** nicht. Nach 041 sind `posts.service.ts` und der Export `postsHeader` ungenutzt, und `CLAUDE.md` nennt die Posts-Views noch als Beispiel. Der Prüfvermerk über `ROOM_AMENITIES` steht ebenfalls noch. Der Branch ist weiterhin **nicht in `main` gemergt**.
 
 ---
 

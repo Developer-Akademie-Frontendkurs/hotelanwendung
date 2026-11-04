@@ -194,6 +194,8 @@ Die Kurs-Views `src/views/PostsView/Posts.ts` und `src/views/PostsView/SinglePos
 -}
 ```
 
+> **Nachtrag:** Der hier beschriebene Build-Bruch ist in [Commit 041 (`d78f56b`)](041_2026-11-04_remove-unused-posts-routes.md) behoben – dort werden Imports und Routen aus `src/main.ts` entfernt, `tsc --noEmit` läuft wieder fehlerfrei.
+
 **Achtung – hier ist etwas unvollständig geblieben.** Die Route-Tabelle in `src/main.ts` importiert beide Klassen weiterhin:
 
 ```ts
@@ -236,10 +238,10 @@ Der Code der Buchungsseite ist deutlich kürzer – rund 670 Kommentarzeilen wen
 
 Offen nach diesem Commit:
 
-- `src/main.ts` importiert die gelöschten Posts-Views – Type-Check und Build schlagen fehl,
+- `src/main.ts` importiert die gelöschten Posts-Views – Type-Check und Build schlagen fehl (**behoben in Commit 041**, `d78f56b`),
 - der Prüfvermerk `CHECK` über `ROOM_AMENITIES` (die Tabelle wird verwendet),
 - Kommentare, die das **Warum** erklärten, sind jetzt nur noch in der Git-Historie, im Umsetzungsplan und in diesem Tagebuch zu finden.
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md) · [Nächster Commit →](040_2026-11-04_update-project-diary.md)
