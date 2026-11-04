@@ -12,7 +12,6 @@ import type { PageHeaderConfig, HeaderConfig, StepState } from './header.types';
 type BookingStepDefinition = {
     step: BookingStep;
     label: string;
-    /** `id` des Bereichs in der BookingView, zu dem der Step springt. */
     targetId: string;
 };
 
@@ -42,7 +41,6 @@ function getStepState(step: BookingStep, completedSteps: readonly BookingStep[])
     return step === getCurrentStep(completedSteps) ? 'current' : 'pending';
 }
 
-/** Die erledigten Schritte, abgeleitet aus dem Entwurf – der Store merkt sich keine Schritte. */
 function getCompletedBookingSteps(): BookingStep[] {
     return getCompletedSteps(buildBookingDraft(bookingState.getSnapshot()), bookingState.getRooms());
 }
@@ -96,7 +94,6 @@ export class MainHeader extends AbstractView {
     async afterRender(): Promise<void> {
         if (this.config.variant !== 'booking') return;
 
-        // Am `<ol>` statt an den Links: `renderSteps` ersetzt die Links, das `<ol>` bleibt.
         document.getElementById('booking-steps')?.addEventListener('click', (event: MouseEvent): void => {
             this.handleStepClick(event);
         });
@@ -106,7 +103,6 @@ export class MainHeader extends AbstractView {
         });
     }
 
-    /** Löst das Abo, bevor der Router das Layout neu aufbaut. Den Entwurf setzt die BookingView zurück. */
     destroy(): void {
         this.unsubscribe?.();
         this.unsubscribe = null;
@@ -173,11 +169,6 @@ export class MainHeader extends AbstractView {
         `;
     }
 
-    /**
-     * Sticky, damit der fällige Schritt beim Scrollen durch die lange Buchungsseite sichtbar
-     * bleibt. Die Steps liegen deshalb im Header statt darunter zu hängen – sonst schwebten
-     * sie ohne Hintergrund über dem Inhalt.
-     */
     private getBookingHeaderHtml(): string {
         return /*html*/ `
             <header class="sticky top-0 z-40 w-full bg-cover bg-center shadow-md" style="background-image: url('${mainHeaderBg}')">
@@ -195,11 +186,6 @@ export class MainHeader extends AbstractView {
         `;
     }
 
-    /**
-     * Scrollt selbst, statt den Browser dem `#hash` folgen zu lassen: Ein Sprung zum Anker
-     * löst `popstate` aus, und darauf baut der Router die Seite neu auf – samt
-     * zurückgesetzter Buchung.
-     */
     private handleStepClick(event: MouseEvent): void {
         if (!(event.target instanceof Element)) return;
         const link = event.target.closest('a[data-step-target]');
@@ -209,7 +195,6 @@ export class MainHeader extends AbstractView {
         scrollToSection(link.dataset.stepTarget ?? '');
     }
 
-    /** Ersetzt nur die Steps – dieselbe Funktion für Erst-Render und Neu-Render nach einer Zustandsänderung. */
     private renderSteps(): void {
         const stepsEl: HTMLElement | null = document.getElementById('booking-steps');
         if (!stepsEl || this.config.variant !== 'booking') return;
@@ -228,7 +213,6 @@ export class MainHeader extends AbstractView {
     }
 
     private getBookingStepHtml(definition: BookingStepDefinition, state: StepState, previousState: StepState | undefined): string {
-        // Die Verbinder-Linie zeigt den zurückgelegten Weg, hängt also am Vorgänger-Step.
         const lineColor: string = previousState === 'done' ? 'bg-purple-haze' : 'bg-purple-haze/45';
         const connector: string =
             previousState === undefined

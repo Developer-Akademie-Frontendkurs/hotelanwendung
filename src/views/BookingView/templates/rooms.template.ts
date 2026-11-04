@@ -1,35 +1,17 @@
-/**
- * Markup für Schritt 2 „Zimmerauswahl“: Zimmerkarten, Mengenwähler und Zusatzleistungen.
- *
- * Daten rein, HTML raus – welche Menge, welches Maximum, welcher Hinweistext, rechnet
- * `Booking.ts` aus. Text-Parameter werden hier escapt, Parameter mit `Html` im Namen sind
- * fertiges Markup.
- */
-
 import { escapeHtml } from '../../../shared/ui/html';
 
-/** Richtung eines Schritt-Knopfs im Mengenwähler. */
 export type Step = -1 | 1;
 
-/**
- * Ausstattungsmerkmal einer Zimmerkategorie.
- *
- * Bewusst kein Datenbankfeld: für die Icons im Design (Bett, Klimaanlage, Bad, Gym)
- * gibt es kein Schema. Die Zuordnung steht in `ROOM_AMENITIES` (`Booking.ts`).
- */
 export interface RoomAmenity {
     icon: string;
     label: string;
 }
 
 export type RoomsListView = {
-    /** Hinweis über der Liste, wenn eine neue Suche Mengen angepasst hat (V16.6). */
     quantityNotice: string | null;
     cardsHtml: readonly string[];
-    /** Leer, solange die Betten reichen – dann bleibt der Hinweis ausgeblendet. */
     missingBedsNotice: string;
     servicesHtml: string;
-    /** Inhalt der Auswahlleiste – leer, solange kein Zimmer gewählt ist. */
     selectionBarHtml: string;
 };
 
@@ -42,7 +24,6 @@ export type RoomCardView = {
     description: string | null;
     quantityHtml: string;
     availabilityHtml: string;
-    /** Nach einer Ablehnung genau dieser Kategorie (Phase 9b, Punkt 8). */
     rejectionHint: string | null;
 };
 
@@ -72,7 +53,6 @@ export type ServiceRowView = {
     inputId: string;
     name: string;
     description: string | null;
-    /** Preis bzw. Aufschlag unter dem Namen. */
     label: string;
     iconHtml: string;
     controlHtml: string;
@@ -81,7 +61,6 @@ export type ServiceRowView = {
 
 export type CheckboxView = {
     inputId: string;
-    /** Ohne Wert (`''`) entsteht ein leeres Attribut, z. B. `data-breakfast=""`. */
     dataAttributes: Readonly<Record<string, string>>;
     checked: boolean;
     disabled: boolean;
@@ -97,7 +76,6 @@ export type ServiceQuantityView = {
 
 const NOTICE_CLASSES = 'rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-4 py-3 font-antic-didone text-16 leading-tight text-purple-haze-dark';
 
-/** Statt der Liste: Laden, Fehler oder keine Kategorien. */
 export function getRoomsNoticeHtml(message: string): string {
     return /*html*/ `<p class="font-antic-didone text-18 768:text-20 text-purple-haze-dark/70">${escapeHtml(message)}</p>`;
 }
@@ -116,11 +94,6 @@ export function getRoomsListHtml(view: RoomsListView): string {
     `;
 }
 
-/**
- * Auswahlleiste am Ende von Schritt 2 (Phase 9b, Punkt 2): was gewählt ist, was es kostet,
- * und der Sprung zu den persönlichen Daten. Steht unter den Zusatzleistungen, damit der
- * Sprung sie nicht überspringt.
- */
 export function getSelectionBarHtml(summary: string): string {
     return /*html*/ `
         <div class="mt-10 768:mt-16 flex flex-col 576:flex-row 576:items-center 576:justify-between gap-4 rounded-[0.625rem] border border-purple-haze bg-purple-haze-light px-5 py-4 768:px-8">
@@ -195,12 +168,6 @@ export function getRoomHintHtml(hint: string): string {
     return /*html*/ `<p class="font-antic-didone text-16 text-purple-haze-dark/70">${escapeHtml(hint)}</p>`;
 }
 
-/**
- * Mengenwähler der Karte: `−` / Zahl / `+`.
- *
- * Die nativen Spinner des Zahlenfeldes sind ausgeblendet (`booking.css`) — dasselbe
- * Muster wie beim Gäste-`select` mit eigenem Chevron.
- */
 export function getRoomQuantityHtml(view: RoomQuantityView): string {
     const inputId = escapeHtml(view.inputId);
     const roomTypeId = escapeHtml(view.roomTypeId);
@@ -230,16 +197,10 @@ export function getRoomQuantityHtml(view: RoomQuantityView): string {
     `;
 }
 
-/** Zeile unter der Beschreibung: Restbestand und Nächte, oder warum die Kategorie nicht buchbar ist. */
 export function getAvailabilityHtml(text: string, bookable: boolean): string {
     return /*html*/ `<p class="font-antic-didone text-16 ${bookable ? 'text-purple-haze-dark/70' : 'text-purple-haze'}">${escapeHtml(text)}</p>`;
 }
 
-/**
- * Runder `−`/`+`-Knopf der Mengenwähler – für Zimmer und Kinderbett derselbe.
- *
- * Welche Menge er ändert, sagen allein die `data-*`-Attribute.
- */
 export function getStepButtonHtml(step: Step, dataAttributes: Readonly<Record<string, string>>, ariaLabel: string, disabled: boolean): string {
     return /*html*/ `
         <button
@@ -252,10 +213,6 @@ export function getStepButtonHtml(step: Step, dataAttributes: Readonly<Record<st
     `;
 }
 
-/**
- * Sektion „Zusatzleistungen“ unter der Zimmerliste (E47–E49). Die Gestaltung folgt der
- * Zimmerkarte – heller Lila-Grund, Ring bei Auswahl.
- */
 export function getServicesSectionHtml(view: ServicesSectionView): string {
     return /*html*/ `
         <section aria-labelledby="booking-services-title" class="mt-10 768:mt-16">
@@ -271,7 +228,6 @@ export function getServicesSectionHtml(view: ServicesSectionView): string {
     `;
 }
 
-/** Eine Zeile der Sektion – Icon, Text, Preis und das Bedienelement rechts. */
 export function getServiceRowHtml(view: ServiceRowView): string {
     const description =
         view.description === null ? '' : /*html*/ `<p class="font-antic-didone text-14 768:text-16 leading-tight text-purple-haze-dark/80">${escapeHtml(view.description)}</p>`;
@@ -302,13 +258,6 @@ export function getCheckboxHtml(view: CheckboxView): string {
     `;
 }
 
-/**
- * `−` / Anzahl / `+` für Leistungen mit Menge – bisher nur das Kinderbett.
- *
- * `<output>` ist von sich aus eine Statusregion: Nach `−`/`+` wird die neue Menge
- * vorgelesen. Preiszeile und Gesamtsumme ändern sich mit, sagen aber nichts an – drei
- * Ansagen pro Klick wären Lärm (G4).
- */
 export function getServiceQuantityHtml(view: ServiceQuantityView): string {
     return /*html*/ `
         <div class="shrink-0 flex items-center gap-2">
@@ -319,7 +268,6 @@ export function getServiceQuantityHtml(view: ServiceQuantityView): string {
     `;
 }
 
-/** Die Namen stehen im Quelltext, die Werte werden escapt. */
 function getDataAttributesHtml(attributes: Readonly<Record<string, string>>): string {
     return Object.entries(attributes)
         .map(([name, value]: [string, string]): string => `${name}="${escapeHtml(value)}"`)

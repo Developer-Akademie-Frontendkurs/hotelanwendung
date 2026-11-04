@@ -1,13 +1,3 @@
-/**
- * Markup für Schritt 3 „persönliche Daten“: Formular, Zusammenfassung „Ihre Buchung“ und
- * das Bestätigungs-Popup.
- *
- * Daten rein, HTML raus – Preise, Texte und welche Zeilen es gibt, bestimmt `Booking.ts`.
- * Text-Parameter werden hier escapt, Parameter mit `Html` im Namen sind fertiges Markup.
- * Eingaben des Gastes kommen hier nie an: Die setzt `renderCustomerSummary()` per
- * `textContent`.
- */
-
 import { escapeHtml } from '../../../shared/ui/html';
 import { STEP_TARGET_CLASSES, type SelectOption } from './calendar.template';
 import { ICON_REMOVE } from './icons';
@@ -15,14 +5,12 @@ import { ICON_REMOVE } from './icons';
 export type SummaryRoomView = {
     name: string;
     imageUrl: string | null;
-    /** Ausstattung als eine Zeile, z. B. „King-size Bett · Gym Zugang“ – leer, wenn keine hinterlegt ist. */
     amenities: string;
 };
 
 export type StayView = {
     checkIn: string;
     checkOut: string;
-    /** Belegung und Nächte, z. B. „2 Erwachsene · 3 Nächte“. */
     stay: string;
 };
 
@@ -30,7 +18,6 @@ export type OrderRowView = {
     kind: string;
     id: string;
     name: string;
-    /** Leer, wenn es nichts zu ergänzen gibt. */
     detail: string;
     price: string;
 };
@@ -54,23 +41,15 @@ type AddressSample = {
     city: string;
 };
 
-// Eingabefelder und Auswahl im Adressformular – `aria-invalid` markiert, was beim Klick
-// auf „zahlungspflichtig buchen" fehlte, die Zeile aus `getFieldErrorHtml` sagt, was fehlt.
 const FIELD_CLASSES =
     'w-full min-w-0 rounded-[0.3125rem] border-[0.5px] border-purple-haze bg-purple-haze-light/45 p-2 font-antic-didone text-18 456:text-20 leading-tight text-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 aria-[invalid=true]:border-red-600 aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-red-600';
 
-// Beispielwerte für die Platzhalter: kurz genug für die schmalen Felder (PLZ, Hausnummer)
-// und erkennbar erfunden (`beispiel.at`, „Beispiel GmbH").
 const RESIDENCE_SAMPLE: AddressSample = { street: 'Hauptplatz', houseNumber: '12a', postalCode: '9500', city: 'Villach' };
 const BILLING_SAMPLE: AddressSample = { street: 'Ringstraße', houseNumber: '5', postalCode: '1010', city: 'Wien' };
 
 const MUTED_TEXT_CLASSES = 'font-antic-didone text-16 leading-tight text-purple-haze-dark/70';
 const DIVIDER_HTML = /*html*/ `<hr class="border-t-[0.5px] border-purple-haze/45">`;
 
-/**
- * Abschluss-Sektion aus dem Design ("BuchungAbschließen"): Kontaktdaten und Adressen
- * links, Zusammenfassung rechts.
- */
 export function getCheckoutHtml(customerFormHtml: string, summaryHtml: string): string {
     return /*html*/ `
         <section id="booking-details" class="${STEP_TARGET_CLASSES} bg-purple-haze-light px-3 py-10 768:py-16">
@@ -82,11 +61,6 @@ export function getCheckoutHtml(customerFormHtml: string, summaryHtml: string): 
     `;
 }
 
-/**
- * Kontaktdaten, Wohnadresse und – per Checkbox – eine abweichende Rechnungsadresse
- * (E50, E51). Der Rechnungsblock bleibt im DOM und wird nur ausgeblendet: Wer die
- * Checkbox versehentlich abwählt, verliert seine Eingabe nicht.
- */
 export function getCustomerFormHtml(countryOptions: readonly SelectOption[]): string {
     return /*html*/ `
         <div class="w-full 992:max-w-124.25 flex flex-col gap-5">
@@ -123,10 +97,6 @@ export function getCustomerFormHtml(countryOptions: readonly SelectOption[]): st
     `;
 }
 
-/**
- * Straße bis Land – für Wohn- und Rechnungsadresse dieselben Felder, nur mit Präfix.
- * Die Beispiele unterscheiden sich, damit die beiden Blöcke nicht wie eine Kopie wirken.
- */
 function getAddressFieldsHtml(prefix: string, autocompleteSection: string, sample: AddressSample, countryOptions: readonly SelectOption[]): string {
     return /*html*/ `
         ${getInputFieldHtml(`${prefix}street`, 'Straße', sample.street, `${autocompleteSection}address-line1`, 'text', 'w-full')}
@@ -139,11 +109,6 @@ function getAddressFieldsHtml(prefix: string, autocompleteSection: string, sampl
     `;
 }
 
-/**
- * Das Beispiel steht als `placeholder` im Feld, nicht als `value` – die Eingabe bleibt
- * leer, und der Gast muss nichts löschen. Grau statt in der Schriftfarbe der Eingabe,
- * damit ein leeres Feld nicht wie ein ausgefülltes aussieht.
- */
 function getInputFieldHtml(id: string, label: string, sample: string, autocomplete: string, type: string, widthClass: string, required = true): string {
     return /*html*/ `
         <div class="flex flex-col ${widthClass}">
@@ -162,7 +127,6 @@ function getInputFieldHtml(id: string, label: string, sample: string, autocomple
     `;
 }
 
-/** Land als Auswahl statt Freitext (E42): „Österreich"/„AT"/„Oesterreich" wären drei Länder. */
 function getCountryFieldHtml(id: string, autocomplete: string, options: readonly SelectOption[]): string {
     const optionsHtml = options
         .map((option: SelectOption): string => /*html*/ `<option value="${escapeHtml(option.value)}" ${option.selected ? 'selected' : ''}>${escapeHtml(option.label)}</option>`)
@@ -179,20 +143,10 @@ function getCountryFieldHtml(id: string, autocomplete: string, options: readonly
     `;
 }
 
-/**
- * Fehlerzeile unter einem Pflichtfeld, per `aria-describedby` mit ihm verknüpft (G1) –
- * sonst hört ein Screenreader nur „ungültig“, aber nicht, was fehlt. Leer, bis
- * `Booking.ts` den Text setzt; `empty:hidden` hält sie bis dahin aus dem Layout.
- */
 function getFieldErrorHtml(id: string): string {
     return /*html*/ `<p id="booking-${id}-error" class="empty:hidden mt-1 font-antic-didone text-14 leading-tight text-red-600"></p>`;
 }
 
-/**
- * Das Gerüst von „Ihre Buchung". Was sich mit der Auswahl ändert, kommt in
- * `#booking-summary-order` und `[data-summary-total]`; Name und Adressen in
- * `#booking-summary-customer`.
- */
 export function getBookingSummaryHtml(checkoutLabel: string): string {
     return /*html*/ `
         <div id="booking-summary" class="w-full 992:max-w-135.25 flex flex-col gap-5 rounded-[0.8125rem] border-[0.5px] border-purple-haze bg-surface p-5">
@@ -222,7 +176,6 @@ export function getBookingSummaryHtml(checkoutLabel: string): string {
     `;
 }
 
-/** Der veränderliche Teil von „Ihre Buchung“: Hotel, Zimmer, Aufenthalt, Bestellzeilen. */
 export function getSummaryOrderHtml(view: SummaryOrderView): string {
     const rows = view.rowsHtml.length === 0 ? '' : /*html*/ `<div class="flex flex-col gap-4">${view.rowsHtml.join('')}</div>`;
 
@@ -236,7 +189,6 @@ export function getSummaryOrderHtml(view: SummaryOrderView): string {
     `;
 }
 
-/** Hoteladresse – eine Zeile je Eintrag. */
 export function getHotelAddressHtml(lines: readonly string[]): string {
     return /*html*/ `
         <div class="flex flex-col gap-4">
@@ -246,7 +198,6 @@ export function getHotelAddressHtml(lines: readonly string[]): string {
     `;
 }
 
-/** An der Stelle der Adresse, wenn das Hotel nicht geladen werden konnte. */
 export function getHotelErrorHtml(message: string): string {
     return /*html*/ `
         <div class="flex flex-col gap-4">
@@ -260,7 +211,6 @@ export function getSummaryNoRoomsHtml(): string {
     return /*html*/ `<p class="${MUTED_TEXT_CLASSES}">Noch kein Zimmer gewählt.</p>`;
 }
 
-/** Bild, Name und Ausstattung je gewählter Kategorie – der Block aus dem Entwurf, einmal je Kategorie. */
 export function getSummaryRoomsHtml(rooms: readonly SummaryRoomView[]): string {
     return /*html*/ `
         <ul class="flex flex-col gap-4">
@@ -270,7 +220,6 @@ export function getSummaryRoomsHtml(rooms: readonly SummaryRoomView[]): string {
 }
 
 function getSummaryRoomHtml(room: SummaryRoomView): string {
-    // Das Bild ist Schmuck: Der Name steht direkt daneben.
     const image =
         room.imageUrl === null
             ? /*html*/ `<div class="shrink-0 w-24 h-18 rounded-[0.6875rem] bg-purple-haze-dark"></div>`
@@ -287,7 +236,6 @@ function getSummaryRoomHtml(room: SummaryRoomView): string {
     `;
 }
 
-/** Check-in/Check-out-Kacheln, darunter Belegung und Nächte. */
 export function getStayHtml(view: StayView): string {
     return /*html*/ `
         <div class="flex flex-col gap-3">
@@ -311,7 +259,6 @@ function getCheckTileHtml(label: string, value: string): string {
     `;
 }
 
-/** Eine Bestellzeile. Das Kreuz aus dem Entwurf entfernt sie: Zimmer auf 0, Leistung abgewählt. */
 export function getOrderRowHtml(view: OrderRowView): string {
     const detail = view.detail === '' ? '' : /*html*/ `<span class="block font-antic-didone">${escapeHtml(view.detail)}</span>`;
 
@@ -335,11 +282,6 @@ export function getOrderRowHtml(view: OrderRowView): string {
     `;
 }
 
-/**
- * Inhalt des Bestätigungs-Popups (E46). Der Entwurf sagt hier zusätzlich „Bitte bestätigen
- * Sie diese via erhaltener Email.“ – eine Buchung ist aber sofort `confirmed` (E11), und
- * eine Mail verschickt noch niemand. Der Satz kommt zurück, sobald es die Mail gibt.
- */
 export function getConfirmationHtml(logoSrc: string, rows: readonly ConfirmationRowView[]): string {
     return /*html*/ `
         <div class="flex flex-col items-center gap-6 text-center text-purple-haze-dark">
@@ -356,7 +298,6 @@ export function getConfirmationHtml(logoSrc: string, rows: readonly Confirmation
     `;
 }
 
-/** Eine Zeile je Wert – escapt, weil Buchungsnummer und Währung aus der Datenbank kommen. */
 function getConfirmationRowHtml(row: ConfirmationRowView): string {
     return /*html*/ `
         <div class="flex items-start justify-between gap-4">

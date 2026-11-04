@@ -1,54 +1,25 @@
-/**
- * Frühstück je Buchungsvorgang (E47).
- *
- * Die Rechnung hier ist eine **Bequemlichkeit, keine zweite Wahrheit** – dasselbe
- * Verhältnis wie bei der Ausgrauung des Mengenwählers (Phase 9b, Punkt 3). Verbindlich
- * rechnet `create_booking`; was hier steht, ist nur die Zahl, die der Gast vor dem
- * Absenden sehen soll. Weichen beide ab, gewinnt die Datenbank – und dann ist diese
- * Datei falsch, nicht die Buchung.
- */
-
 import type { ServiceRow } from '../../shared/types/booking.types';
 
-/** Die Felder der `services`-Zeile, die das Frühstück braucht – ein Ausschnitt, kein eigener Typ. */
 type BreakfastServiceRow = Pick<ServiceRow, 'id' | 'name' | 'description' | 'amount_cents' | 'child_amount_cents' | 'currency'>;
 
-/** Die Preiszeile aus `services` für `code = 'BREAKFAST'`. */
 export interface BreakfastService {
     serviceId: string;
     name: string;
     description: string | null;
     unitAmountCents: number;
-    /** `services.child_amount_cents` – `null` dort heißt: Kinder zahlen wie Erwachsene. */
     childUnitAmountCents: number;
     currency: string;
 }
 
-/** Belegung des **ganzen** Vorgangs (E48) – „2 Erwachsene" sind zwei, egal bei wie vielen Zimmern. */
 export type Occupancy = {
     adults: number;
     children: number;
 };
 
-/**
- * Was das Frühstück für alle Gäste kostet.
- *
- * Die Zahl der Frühstücke ist die Zahl der **Nächte**: gefrühstückt wird am Morgen nach
- * jeder gebuchten Nacht, das letzte am Abreisetag. `create_booking` verteilt denselben
- * Betrag auf die Zimmerzeilen – die Summe bleibt dieselbe.
- */
 export function getBreakfastAmountCents(service: BreakfastService, occupancy: Occupancy, nights: number): number {
     return nights * (occupancy.adults * service.unitAmountCents + occupancy.children * service.childUnitAmountCents);
 }
 
-/**
- * Macht aus der Datenbankzeile das, womit die Oberfläche rechnet.
- *
- * Der fehlende Kinderpreis wird hier **einmal** aufgelöst – genauso wie in
- * `create_booking` (`coalesce(child_amount_cents, amount_cents)`). Ein fehlender Preis
- * heißt „wie Erwachsene", nicht „gratis": gratis wäre eine `0` in der Spalte, und die
- * ist dort ausdrücklich erlaubt.
- */
 export function buildBreakfastService(row: BreakfastServiceRow | null): BreakfastService | null {
     if (row === null) return null;
 

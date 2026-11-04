@@ -1,18 +1,6 @@
-/**
- * Markup für Schritt 1 „Datum & Gäste“ und das Gerüst der Seite.
- *
- * Wie alle Templates der Buchungsseite: Daten rein, HTML raus. Was angezeigt wird,
- * entscheidet `Booking.ts`; hier wird nur noch eingesetzt. Text-Parameter werden escapt,
- * Parameter mit `Html` im Namen sind fertiges Markup und bleiben, wie sie sind.
- */
-
 import { escapeHtml } from '../../../shared/ui/html';
 import { ICON_CHEVRON_LEFT, ICON_CHEVRON_RIGHT, ICON_SELECT_CHEVRON } from './icons';
 
-/**
- * Sprungziele der Steps im Sticky-Header: Abstand nach oben, damit der Header den
- * Anfang des Bereichs nicht verdeckt (mobil ist er zweizeilig und höher).
- */
 export const STEP_TARGET_CLASSES = 'scroll-mt-40 768:scroll-mt-28';
 
 export type SelectOption = {
@@ -28,34 +16,21 @@ export type GuestFieldView = {
     placeholderSelected: boolean;
     options: readonly SelectOption[];
     iconHtml: string;
-    /** Nur die Erwachsenenzahl ist Pflicht – nur dort hängt eine Hinweiszeile. */
     withNotice: boolean;
 };
 
 export type DayCellView = {
-    /** `YYYY-MM-DD` für `data-date`. */
     iso: string;
     weekday: string;
-    /** Zweistellig, z. B. „03“. */
     day: string;
-    /** „Anreise“/„Abreise“ – `null` hält die Zeile mit einem geschützten Leerzeichen frei. */
     label: string | null;
-    /** Volles Datum samt Zustand („Mittwoch, 3. Juni 2026, Anreise“) – „MI 03“ allein sagt einem Screenreader wenig. */
     ariaLabel: string;
-    /** Anreise- und Abreisetag: `aria-pressed`, damit der Zustand nicht nur an der Farbe hängt. */
     pressed: boolean;
     stateClass: string;
     selectable: boolean;
-    /**
-     * Gesperrt, aber nicht vorbei: `aria-disabled` statt `disabled`, weil manche Browser an
-     * deaktivierten Knöpfen keinen Tooltip zeigen – und der Tooltip ist hier der Punkt (E24).
-     */
     blocked: boolean;
-    /** Datum und Grund für gesperrte Tage – oder der Hinweis an der abgelehnten Nacht. */
     tooltip: string | null;
-    /** Die Nacht, an der `create_booking` gerade abgelehnt hat (Phase 9b, Punkt 8). */
     flagged: boolean;
-    /** Nur am Anreisetag sitzt das „ד zum Zurücksetzen – als eigener Knopf neben dem Tag. */
     withClearButton: boolean;
 };
 
@@ -63,11 +38,9 @@ export type CalendarHeaderView = {
     monthName: string;
     year: string;
     prevDisabled: boolean;
-    /** Am Monat mit dem letzten wählbaren Tag (E30). */
     nextDisabled: boolean;
 };
 
-/** Die ganze Seite: Datum & Gäste, darunter die Zimmerliste, dann der Abschluss. */
 export function getBookingPageHtml(guestsHtml: string, checkoutHtml: string): string {
     return /*html*/ `
         <section class="px-3 py-10 768:py-16">
@@ -160,14 +133,10 @@ export function getCalendarGridHtml(cells: readonly DayCellView[]): string {
 }
 
 function getDayCellHtml(cell: DayCellView): string {
-    // Ein eigener Knopf neben dem Tag, nicht darin: Ein Knopf im Knopf ist ungültiges HTML,
-    // und Screenreader lesen ihn nur als Teil des Tages vor.
     const clearButton = cell.withClearButton
         ? /*html*/ `<button type="button" data-action="clear" aria-label="Auswahl zurücksetzen" class="booking__clear absolute top-0.5 right-0.5 px-1 leading-none text-14 768:text-16 text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded">&times;</button>`
         : '';
 
-    // Durchgestrichen werden nur Wochentag und Datum – nicht die leere Label-Zeile, deren
-    // geschütztes Leerzeichen sonst als Strich darunter stünde.
     const strike = cell.blocked ? ' line-through decoration-purple-haze/70' : '';
 
     return /*html*/ `
@@ -190,7 +159,6 @@ function getDayCellHtml(cell: DayCellView): string {
     `;
 }
 
-/** `rejectionHint`: nach einer Ablehnung die betroffene Nacht, über dem Knopf. */
 export function getCalendarFooterHtml(canContinue: boolean, rejectionHint: string | null): string {
     return /*html*/ `
         ${rejectionHint === null ? '' : /*html*/ `<p class="mt-6 768:mt-8 font-antic-didone text-16 leading-tight text-red-600 text-center">${escapeHtml(rejectionHint)}</p>`}

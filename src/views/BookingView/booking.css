@@ -1,4 +1,3 @@
-/* Kalender-Zellen: gleichmäßige Höhe unabhängig vom Zell-Zustand */
 #booking-calendar button[data-date] {
     min-height: 3.75rem;
 }
@@ -15,7 +14,6 @@
     }
 }
 
-/* Das "×" zum Zurücksetzen der Anreise soll sich vom Zell-Hintergrund abheben */
 .booking__clear {
     opacity: 0.75;
     transition: opacity 0.2s ease;
@@ -26,11 +24,6 @@
     opacity: 1;
 }
 
-/*
-    Mengenwähler: die nativen Spinner des Zahlenfeldes weichen den eigenen
-    `−`/`+`-Knöpfen. `appearance: none` (Tailwind `appearance-none`) genügt in WebKit
-    nicht — dort hängen die Pfeile an Pseudo-Elementen.
-*/
 .booking__quantity::-webkit-outer-spin-button,
 .booking__quantity::-webkit-inner-spin-button {
     appearance: none;

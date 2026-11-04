@@ -1,31 +1,18 @@
-/**
- * Bestellzeilen und Gesamtsumme der Zusammenfassung „Ihre Buchung" (Phase 9b, Punkte 4–5).
- *
- * Wie `breakfast.ts` und `services.ts` eine **Bequemlichkeit, keine zweite Wahrheit**:
- * Verbindlich rechnet `create_booking`. Was hier steht, ist die Zahl, die der Gast vor
- * dem Absenden sieht – und genau deshalb steckt jede sichtbare Zeile auch in der Summe (V16).
- */
-
 import type { RoomQuantities, ServiceQuantities } from '../../shared/types/booking.types';
 import { getBreakfastAmountCents, type BreakfastService, type Occupancy } from './breakfast';
 import type { RoomCard } from '../../shared/types/catalog.types';
 import { BREAKFAST, getServiceAmountCents, type ExtraService } from './services';
 import { formatNights, formatPrice } from '../../shared/format';
 
-/** Rückfall, solange keine Zeile eine Währung mitbringt – das Hotel rechnet in Euro. */
 export const DEFAULT_CURRENCY = 'EUR';
 
 export type OrderLineKind = 'room' | 'breakfast' | 'service';
 
-/** Eine Zeile der Zusammenfassung. */
 export interface OrderLine {
     kind: OrderLineKind;
-    /** `room_type_id`, `services.code` bzw. `BREAKFAST` – damit das Entfernen-Kreuz weiß, was es entfernt. */
     id: string;
     name: string;
-    /** Zimmer je Kategorie, Menge einer Leistung, beim Frühstück die Zahl der Gäste. */
     quantity: number;
-    /** `null`, solange kein Zeitraum gewählt ist: ohne Nächte gibt es keinen Preis. */
     amountCents: number | null;
     currency: string;
 }
@@ -41,10 +28,6 @@ export type OrderInput = {
     serviceQuantities: ServiceQuantities;
 };
 
-/**
- * Baut die Zeilen in der Reihenfolge der Seite: Zimmer wie die Karten, dann Frühstück,
- * dann die Leistungen nach `sort_order`.
- */
 export function buildOrderLines(input: OrderInput): OrderLine[] {
     const lines: OrderLine[] = [];
 
@@ -52,8 +35,6 @@ export function buildOrderLines(input: OrderInput): OrderLine[] {
         const quantity = input.quantities[room.roomTypeId] ?? 0;
         if (quantity === 0) continue;
 
-        // `total_amount_cents` aus `search_availability` ist der Preis EINES Zimmers für
-        // den ganzen Zeitraum.
         const perRoom = room.availability?.amountCents ?? null;
         lines.push({
             kind: 'room',
@@ -96,12 +77,6 @@ export function buildOrderLines(input: OrderInput): OrderLine[] {
     return lines;
 }
 
-/**
- * Summe aller Zeilen – oder `null`, wenn eine davon keinen Preis hat.
- *
- * Eine Summe, in der eine sichtbare Zeile fehlt, wäre ein Rechenfehler vor den Augen
- * des Gastes. Ohne Zeilen gibt es ebenfalls keine Summe: „0 €" sähe aus wie ein Angebot.
- */
 export function getOrderTotalCents(lines: readonly OrderLine[]): number | null {
     if (lines.length === 0) return null;
 
@@ -113,13 +88,6 @@ export function getOrderTotalCents(lines: readonly OrderLine[]): number | null {
     return total;
 }
 
-/**
- * Die Auswahlleiste unter Schritt 2 (Phase 9b, Punkt 2): „2 Zimmer · 4 Nächte · 1.464€".
- *
- * Die Summe ist dieselbe wie die Gesamtsumme in „Ihre Buchung" (`getOrderTotalCents`) –
- * zwei verschiedene Summen auf einer Seite wären ein Rechenfehler vor den Augen des Gastes.
- * Fehlt eine Angabe (kein Zeitraum, ein Preis unbekannt), fällt nur dieser Teil weg.
- */
 export function formatSelectionSummary(rooms: number, nights: number | null, totalCents: number | null, currency: string): string {
     const parts = [`${rooms.toString()} Zimmer`];
     if (nights !== null) parts.push(formatNights(nights));

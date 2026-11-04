@@ -18,10 +18,5 @@ export default class {
 
     async afterRender(): Promise<void> {}
 
-    /**
-     * Räumt auf, bevor der Router die nächste Seite rendert: Abos lösen, Zustand
-     * zurücksetzen, der nur zu dieser Seite gehört. Der Router ruft das genau einmal je
-     * Instanz auf; danach wird sie nicht mehr angezeigt.
-     */
     destroy(): void {}
 }

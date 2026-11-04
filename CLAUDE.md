@@ -82,3 +82,9 @@ Weil alle Views ihr HTML als String bauen und per `innerHTML` einsetzen, ist XSS
 - Bezeichner im Code sind durchgehend **englisch** und sprechend: Variablen, Funktionen, Typen, Konstanten, aber auch Formularfeld-`name`/`id`, `data-*`-Attribute, CSS-Klassen und Testdaten (z. B. `getInputFieldHtml`, `name="postal-code"`, nicht `getBillingFieldHtml` für alle Felder oder `name="plz"`). Der Name sagt, was die Funktion tut bzw. der Wert enthält – passt kein ehrlicher Name, ist meist der Zuschnitt falsch. Deutsch bleiben: Kommentare, Texte in der Oberfläche, die URL `/buchung` sowie Werte, die die Datenbank vorgibt (Ablehnungs-Codes wie `ausgebucht`, JSON-Schlüssel `datum`/`grund` aus `reject_booking`) – deren Umbenennung bräuchte eine Migration. Diese Datenbank-Codes stehen als Union-Typ mit Prüffunktion in `src/shared/types/booking.codes.ts` (`isRejectionCode`, `isUnavailableReason` an der Grenze), ihre Texte als `Record` in `src/views/BookingView/messages.ts` – kein `switch` auf rohe Strings.
 - Werte von außen in HTML-Templates nur über `escapeHtml()` – kein Linter prüft das, es ist Review-Pflicht (Details unter „Sicherheit (XSS)").
 - Synchrone Methoden ohne `await` im Body, die aber die `ViewInstance`-Schnittstelle (`Promise<...>`) erfüllen müssen, bekommen `// eslint-disable-next-line @typescript-eslint/require-await` – das ist ein bewusstes, wiederkehrendes Muster in den Views, kein Einzelfall zum Beheben.
+
+## Kommentare und Dokumentation
+
+- halte dich in Kommentaren stets so kurz wie möglich
+- Schreibe keine Kommentare oder Dokumentationen für Variablen (Einzelne Ausnahmen sind erlaubt)
+- Schreibe Kommentare und Dokumentionen stets in Englisch

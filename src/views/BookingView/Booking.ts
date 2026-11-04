@@ -65,7 +65,6 @@ import * as roomsTemplate from './templates/rooms.template';
 import * as checkoutTemplate from './templates/checkout.template';
 import './booking.css';
 
-/** Die Anfrage an `create_booking` plus die Nächte, die das Bestätigungs-Popup anzeigt. */
 type Booking = BookingRequest & {
     nights: number;
 };
@@ -85,13 +84,7 @@ const MONTHS: readonly string[] = ['Januar', 'Februar', 'März', 'April', 'Mai',
 const MAX_ADULTS = 6;
 const MAX_CHILDREN = 4;
 
-/**
- * Ausstattung je Zimmerkategorie.
- *
- * Für diese vier Merkmale gibt es kein Datenbankfeld – die Werte stammen aus dem
- * Figma-Design. Kategorien ohne Eintrag (z. B. `einzelzimmer-alpin`) bekommen keine
- * Ausstattungsliste, statt erfundene Merkmale anzuzeigen.
- */
+// CHECK: Wird das noch verwendet?
 const ROOM_AMENITIES: Readonly<Record<string, readonly roomsTemplate.RoomAmenity[]>> = {
     'double-suite': [
         { icon: ICON_BED, label: 'King-size Bett' },
@@ -110,10 +103,8 @@ const ROOM_AMENITIES: Readonly<Record<string, readonly roomsTemplate.RoomAmenity
 const CHECKOUT_LABEL = 'zahlungspflichtig buchen';
 const CHECKOUT_BUSY_LABEL = 'Buchung wird gesendet …';
 const HOTEL_LOAD_ERROR = 'Hoteladresse und Check-in-Zeiten konnten gerade nicht geladen werden. Ihre Buchung ist davon nicht betroffen.';
-/** Die Buchung kann angelegt sein – deshalb ausdrücklich kein „bitte erneut versuchen". */
 const BOOKING_OUTCOME_UNKNOWN = 'Wir konnten nicht feststellen, ob Ihre Buchung angelegt wurde. Bitte buchen Sie nicht erneut, sondern kontaktieren Sie uns.';
 
-/** Welches Formularfeld zu welchem Eintrag aus `getInvalidFields()` gehört. */
 const FIELD_NAMES: Record<InvalidField, string> = {
     'customer.firstName': 'first-name',
     'customer.lastName': 'last-name',
@@ -135,43 +126,27 @@ export class BookingView extends AbstractView {
     private displayedYear: number;
     private displayedMonth: number;
     private calendarEl: HTMLElement | null = null;
+    private readonly calendarCache = new Map<string, NightAvailability>();
+    private calendarRequestId = 0;
+
     private roomsEl: HTMLElement | null = null;
     private customerFormEl: HTMLFormElement | null = null;
-    // `null` heißt: für dieses Hotel ist kein Frühstück hinterlegt. Dann wird auch keins
-    // angeboten – `create_booking` würde eine Buchung mit Frühstück ablehnen (E25), und
-    // eine Checkbox, die in eine Ablehnung führt, ist eine Falle.
+    private summaryEl: HTMLElement | null = null;
+
     private breakfastService: BreakfastService | null = null;
     private roomsState: RoomsState = 'loading';
     private roomsError: string | null = null;
-    // Hinweis über der Liste, wenn eine neue Suche gewählte Mengen angepasst hat (V16.6).
     private quantityNotice: string | null = null;
-    // Zählt die Suchanfragen mit. Trifft eine ältere Antwort nach einer neueren ein,
-    // wird sie verworfen, statt das Ergebnis der neueren zu überschreiben.
     private roomsRequestId = 0;
-    // Adresse und Check-in-/Check-out-Zeiten für „Ihre Buchung". `null`, solange nicht
-    // geladen – dann fehlen nur diese Angaben, die Buchung selbst hängt nicht daran.
-    private hotel: HotelRow | null = null;
-    /** Für den Gast formuliert; die technischen Details landen in der Konsole. */
-    private hotelError: string | null = null;
-    // Erst mit dem Hotel steht der Buchungshorizont fest (E30) – der Kalender wartet darauf.
-    private hotelLoaded: Promise<void> = Promise.resolve();
-    // Verfügbarkeit je Nacht über den ganzen Horizont, je Belegung einmal geladen (V14,
-    // Schlüssel `${adults}-${children}`). `null`: (noch) keine Daten – dann sperrt nur das Datum.
     private nights: NightAvailability | null = null;
-    private readonly calendarCache = new Map<string, NightAvailability>();
-    // Wie `roomsRequestId`: Eine Antwort für eine überholte Belegung wird verworfen.
-    private calendarRequestId = 0;
-    // Die letzte Ablehnung aus `create_booking`, am Ort des Problems angezeigt (Phase 9b,
-    // Punkt 8): an der Zimmerkarte und am Kalendertag. Weg, sobald Zeitraum oder Belegung
-    // sich ändern – dann gilt die Aussage nicht mehr.
     private rejection: { roomTypeId: string | null; night: Date | null; roomHint: string; calendarHint: string | null } | null = null;
-    private summaryEl: HTMLElement | null = null;
+
+    private hotel: HotelRow | null = null;
+    private hotelError: string | null = null;
+    private hotelLoaded: Promise<void> = Promise.resolve();
+
     private unsubscribeSummary: (() => void) | null = null;
-    // Setzt `destroy()`. Laufende Anfragen kommen danach noch zurück und dürfen dann
-    // nichts mehr anfassen.
     private destroyed = false;
-    // Solange `create_booking` läuft, zählt kein weiterer Klick: ein Doppelklick wären
-    // sonst zwei verbindliche Buchungen.
     private submitting = false;
 
     constructor() {
@@ -245,18 +220,11 @@ export class BookingView extends AbstractView {
                 (option: GuestOption): calendarTemplate.SelectOption => ({ value: option.value.toString(), label: option.label, selected: option.value === selected }),
             ),
             iconHtml: icon,
-            // Nur die Erwachsenenzahl ist Pflicht (Kinder: leer = keine Kinder), also hängt
-            // auch nur an diesem Feld eine Hinweiszeile.
+
             withNotice: field === 'adults',
         });
     }
 
-    /**
-     * Sagt am Feld, was fehlt — aber erst, wenn der Zeitraum steht.
-     *
-     * Vorher wäre der Hinweis eine Begrüßung mit einem Fehler: wer die Seite öffnet, hat
-     * noch nichts falsch gemacht.
-     */
     private renderGuestsNotice(): void {
         const noticeEl = document.querySelector<HTMLElement>('[data-guests-notice]');
         if (!noticeEl) return;
@@ -274,10 +242,8 @@ export class BookingView extends AbstractView {
         if (field !== 'adults' && field !== 'children') return;
 
         this.rejection = null;
-        // Gleicht die Kinderbetten gleich mit ab (siehe `setGuests`).
         bookingState.setGuests({ ...bookingState.getGuests(), [field]: target.value === '' ? null : Number(target.value) });
         this.renderGuestsNotice();
-        // Der weiter-Knopf hängt jetzt mit an der Belegung – und die freien Nächte auch.
         this.renderCalendar();
         void this.loadCalendar();
         void this.loadRooms();
@@ -286,18 +252,14 @@ export class BookingView extends AbstractView {
     private renderRooms(): void {
         if (!this.roomsEl) return;
         this.roomsEl.innerHTML = this.getRoomsBodyHtml();
-        // Neue Preise oder eine neue Belegung ändern die Zusammenfassung, ohne dass sich
-        // in `bookingState` etwas rührt.
         this.renderSummary();
     }
 
-    /** Nur die Leiste neu – Mengen ändern sich ohne `renderRooms()` (siehe `updateQuantityUi`). */
     private renderSelectionBar(): void {
         const barEl = this.roomsEl?.querySelector<HTMLElement>('[data-selection-bar]');
         if (barEl) barEl.innerHTML = this.getSelectionBarHtml();
     }
 
-    /** Erst mit einem Zimmer gibt es etwas zusammenzufassen. */
     private getSelectionBarHtml(): string {
         const totalRooms = getTotalRooms(bookingState.getRoomQuantities());
         if (totalRooms === 0) return '';
@@ -342,18 +304,14 @@ export class BookingView extends AbstractView {
         });
     }
 
-    /** Mengenwähler der Karte – oder an seiner Stelle, warum es (noch) keinen gibt. */
     private getRoomQuantityHtml(room: RoomCard): string {
         const availability = room.availability;
 
-        // Ohne Zeitraum und Belegung kennt niemand `rooms_free`. Ein Feld ohne geprüfte
-        // Obergrenze würde eine Menge versprechen, die es nicht geben muss.
         if (availability === null) {
             const hint = this.getMissingSelectionHint();
             return hint === '' ? '' : roomsTemplate.getRoomHintHtml(hint);
         }
 
-        // Nicht buchbare Kategorien zeigen ihren Grund (Zeile darunter), keinen Wähler.
         if (!availability.isBookable) return '';
 
         const quantity = bookingState.getRoomQuantity(room.roomTypeId);
@@ -369,12 +327,6 @@ export class BookingView extends AbstractView {
         });
     }
 
-    /**
-     * Sektion „Zusatzleistungen" unter der Zimmerliste (E47–E49).
-     *
-     * Das Frühstück steht als erste Zeile darin: Seit die Belegung eine Gesamtzahl ist,
-     * gilt es wie alle anderen Leistungen für den ganzen Vorgang (E48).
-     */
     private getServicesSectionHtml(): string {
         if (this.breakfastService === null && bookingState.getExtraServices().length === 0) return '';
 
@@ -443,18 +395,10 @@ export class BookingView extends AbstractView {
         return { rooms: getTotalRooms(bookingState.getRoomQuantities()), children: bookingState.getGuests().children ?? 0 };
     }
 
-    /** Alle Kategorien haben denselben Zeitraum und damit dieselbe Zahl an Nächten. */
     private getNights(): number | undefined {
         return bookingState.getRooms().find((room: RoomCard): boolean => room.availability !== null)?.availability?.nights;
     }
 
-    /**
-     * Der Text unter dem Frühstück.
-     *
-     * Ohne Häkchen der Einzelpreis, mit Häkchen der Betrag, der tatsächlich dazukommt.
-     * Ein Aufschlag, den der Gast erst auf der Bestätigung als Zahl sieht, ist kein
-     * Angebot, sondern eine Überraschung.
-     */
     private getBreakfastLabel(): string {
         const service = this.breakfastService;
         if (service === null) return '';
@@ -472,7 +416,6 @@ export class BookingView extends AbstractView {
         return `+ ${formatPrice(amount, service.currency)} · ${priceText}`;
     }
 
-    /** Dasselbe für eine Leistung je Vorgang: Einheit vor der Wahl, Aufschlag danach. */
     private getServiceLabel(service: ExtraService): string {
         const unitPrice = service.unitAmountCents === 0 ? 'kostenlos' : formatPrice(service.unitAmountCents, service.currency);
         const quantity = bookingState.getServiceQuantity(service.code);
@@ -492,12 +435,6 @@ export class BookingView extends AbstractView {
         return service.chargeBasis === 'per_night' ? `+ ${amount} für ${formatNights(nights)} · ${unitPriceText}` : `+ ${amount}`;
     }
 
-    /**
-     * Hinweis unter der Liste, solange die gewählten Zimmer nicht für alle Gäste reichen (E48).
-     *
-     * Kein Fehler, sondern der nächste Schritt: Wer zwei Zimmer braucht, wählt erst eines
-     * und dann das zweite – dazwischen soll dort stehen, was noch fehlt.
-     */
     private getMissingBedsNotice(): string {
         const { adults, children } = bookingState.getGuests();
         const quantities = bookingState.getRoomQuantities();
@@ -506,7 +443,6 @@ export class BookingView extends AbstractView {
         return formatMissingBedsNotice(getMissingBeds(quantities, bookingState.getRooms(), adults + (children ?? 0)));
     }
 
-    /** Der Wähler hat zwei Vorbedingungen: einen Zeitraum und eine Belegung (V16.7 — kein stiller Suchdefault). */
     private getMissingSelectionHint(): string {
         const { checkIn, checkOut } = bookingState.getDates();
         const needsDates = checkIn === null || checkOut === null;
@@ -518,13 +454,6 @@ export class BookingView extends AbstractView {
         return '';
     }
 
-    /**
-     * Ein Schritt-Knopf.
-     *
-     * `+` wird nur von `rooms_free` gesperrt, nicht von der Gesamtgrenze: die ist unsere
-     * Regel, und ein ausgegrauter Knopf erklärt sie nicht. Der Klick löst stattdessen den
-     * Hinweis aus (Q10).
-     */
     private getQuantityStepHtml(room: RoomCard, step: roomsTemplate.Step, disabled: boolean): string {
         const ariaLabel = `${step > 0 ? 'Ein Zimmer mehr' : 'Ein Zimmer weniger'} – ${room.name}`;
         return roomsTemplate.getStepButtonHtml(step, { 'data-room-step': step.toString(), 'data-room-type': room.roomTypeId }, ariaLabel, disabled);
@@ -592,7 +521,6 @@ export class BookingView extends AbstractView {
         const clamped = clampQuantity(desired, availability.roomsFree, otherRooms, roomLimit);
         bookingState.selectRoomQuantity(roomTypeId, clamped.value);
 
-        // Der Gast soll sofort erfahren, warum es nicht weitergeht — nicht erst beim Absenden.
         const message = desired > clamped.value ? getLimitMessage(clamped.limitedBy, availability.roomsFree, roomLimit) : null;
         this.updateQuantityUi(message === null ? null : { roomTypeId, message });
     }
@@ -606,11 +534,6 @@ export class BookingView extends AbstractView {
         this.updateQuantityUi(null);
     }
 
-    /**
-     * Schreibt Mengen, Maxima, Knopf-Zustände und Hinweise direkt an die vorhandenen
-     * Knoten — ohne `renderRooms()`, weil ein Neuaufbau der Liste den Fokus aus dem Feld
-     * nimmt, in dem gerade getippt wird.
-     */
     private updateQuantityUi(notice: { roomTypeId: string; message: string } | null): void {
         const roomsEl = this.roomsEl;
         if (!roomsEl) return;
@@ -653,11 +576,6 @@ export class BookingView extends AbstractView {
         this.updateServicesUi(roomsEl, totalRooms);
     }
 
-    /**
-     * Zieht die Sektion „Zusatzleistungen" aus dem Zustand nach, nicht nur vom Klick: Sind
-     * alle Zimmer wieder 0, räumt `bookingState` die Auswahl weg, und dann muss sie auch
-     * im DOM verschwinden.
-     */
     private updateServicesUi(roomsEl: HTMLElement, totalRooms: number): void {
         roomsEl.querySelector<HTMLElement>('[data-services-hint]')?.classList.toggle('hidden', totalRooms > 0);
 
@@ -698,11 +616,6 @@ export class BookingView extends AbstractView {
         });
     }
 
-    /**
-     * Formular und Zusammenfassung. Die Zusammenfassung folgt `bookingState`, der
-     * Gästeauswahl, den Preisen aus `search_availability` und der Eingabe links (Phase 9b,
-     * Punkte 4–5).
-     */
     private getCheckoutHtml(): string {
         const countryOptions = COUNTRIES.map(
             (country: (typeof COUNTRIES)[number]): calendarTemplate.SelectOption => ({ value: country.code, label: country.label, selected: country.code === DEFAULT_COUNTRY }),
@@ -710,12 +623,6 @@ export class BookingView extends AbstractView {
         return checkoutTemplate.getCheckoutHtml(checkoutTemplate.getCustomerFormHtml(countryOptions), checkoutTemplate.getBookingSummaryHtml(CHECKOUT_LABEL));
     }
 
-    /**
-     * Baut den veränderlichen Teil von „Ihre Buchung" neu auf.
-     *
-     * Ein kompletter Neuaufbau ist hier unbedenklich – anders als in der Zimmerliste gibt
-     * es in der Zusammenfassung kein Feld, in dem gerade getippt wird.
-     */
     private renderSummary(): void {
         const summaryEl = this.summaryEl;
         const orderEl = document.getElementById('booking-summary-order');
@@ -751,7 +658,6 @@ export class BookingView extends AbstractView {
         });
     }
 
-    /** Hoteladresse aus `hotels` statt aus dem Entwurf – dort stand eine erfundene. */
     private getHotelAddressHtml(): string {
         if (this.hotelError !== null) return checkoutTemplate.getHotelErrorHtml(this.hotelError);
 
@@ -763,7 +669,6 @@ export class BookingView extends AbstractView {
         return checkoutTemplate.getHotelAddressHtml(lines);
     }
 
-    /** Bild, Name und Ausstattung je gewählter Kategorie – der Block aus dem Entwurf, einmal je Kategorie. */
     private getSummaryRoomsHtml(): string {
         const selected = bookingState.getRooms().filter((room: RoomCard): boolean => bookingState.getRoomQuantity(room.roomTypeId) > 0);
         if (selected.length === 0) return checkoutTemplate.getSummaryNoRoomsHtml();
@@ -779,7 +684,6 @@ export class BookingView extends AbstractView {
         );
     }
 
-    /** Check-in/Check-out mit den Uhrzeiten aus `hotels`, darunter Belegung und Nächte. */
     private getStayHtml(): string {
         const { checkIn, checkOut } = bookingState.getDates();
         const nights = countNights(checkIn, checkOut);
@@ -794,7 +698,6 @@ export class BookingView extends AbstractView {
         });
     }
 
-    /** Eine Bestellzeile. Das Kreuz aus dem Entwurf entfernt sie: Zimmer auf 0, Leistung abgewählt. */
     private getOrderRowHtml(line: OrderLine): string {
         return checkoutTemplate.getOrderRowHtml({
             kind: line.kind,
@@ -832,7 +735,6 @@ export class BookingView extends AbstractView {
     }
 
     private handleSummaryClick(event: MouseEvent): void {
-        // Der Klick kann das SVG-Icon im Knopf treffen – das ist ein `Element`, kein `HTMLElement`.
         if (!(event.target instanceof Element)) return;
         const button = event.target.closest<HTMLElement>('[data-summary-remove]');
         const id = button?.dataset.summaryId;
@@ -840,8 +742,6 @@ export class BookingView extends AbstractView {
 
         switch (button.dataset.summaryRemove) {
             case 'room':
-                // Direkt statt über `setRoomQuantity()`: Entfernen muss auch gehen, wenn die
-                // Kategorie gerade keine Verfügbarkeit hat (Zeitraum zurückgesetzt).
                 bookingState.selectRoomQuantity(id, 0);
                 this.updateQuantityUi(null);
                 break;
@@ -856,15 +756,9 @@ export class BookingView extends AbstractView {
                 return;
         }
 
-        // Der geklickte Knopf ist mit seiner Zeile verschwunden – der Fokus soll nicht ins
-        // Leere fallen.
         document.getElementById('booking-summary-title')?.focus();
     }
 
-    /**
-     * Meldet sich ab und verwirft den Entwurf: Wer die Buchungsseite verlässt, fängt beim
-     * nächsten Besuch von vorn an (V10, kein `sessionStorage`).
-     */
     destroy(): void {
         this.destroyed = true;
         this.unsubscribeSummary?.();
@@ -872,24 +766,14 @@ export class BookingView extends AbstractView {
         bookingState.reset();
     }
 
-    /**
-     * Der Router baut bei jeder Navigation eine neue View; eine alte Instanz lebt weiter,
-     * bis ihre Anfragen zurück sind – dann darf sie nichts mehr rendern oder speichern.
-     */
     private isDisplayed(): boolean {
         return !this.destroyed;
     }
 
-    /**
-     * Antwort verwerfen, wenn eine neuere Suche läuft – oder die View nicht mehr angezeigt
-     * wird: `roomsRequestId` gilt nur je Instanz, und eine verspätete Antwort der alten
-     * würde sonst mit veralteten Zimmern und Gästen in den globalen `bookingState` schreiben.
-     */
     private isStale(requestId: number): boolean {
         return requestId !== this.roomsRequestId || !this.isDisplayed();
     }
 
-    /** Die eine Zeile aus `hotels` (E14). */
     private async loadHotel(): Promise<void> {
         let hotel: HotelRow | null = null;
         let failure: unknown = null;
@@ -904,7 +788,6 @@ export class BookingView extends AbstractView {
             console.error('Hoteldaten konnten nicht geladen werden:', failure);
             this.hotelError = HOTEL_LOAD_ERROR;
         } else if (hotel === null) {
-            // Kein Fehler der Abfrage, aber auch kein Hotel – ein Fehler in den Stammdaten (E14).
             console.error('In der Tabelle `hotels` ist kein Hotel hinterlegt.');
             this.hotelError = HOTEL_LOAD_ERROR;
         } else {
@@ -912,21 +795,14 @@ export class BookingView extends AbstractView {
         }
         this.hotel = hotel;
         this.renderSummary();
-        // Der Horizont begrenzt das Vorwärtsblättern.
         this.renderCalendar();
     }
 
-    /**
-     * Lädt die Verfügbarkeit je Nacht für den ganzen Horizont (V14) – einmal je Belegung,
-     * danach aus dem Speicher. Blättern ist damit nie ein Ladezustand.
-     */
     private async loadCalendar(): Promise<void> {
         const { adults, children } = bookingState.getGuests();
         const requestId = ++this.calendarRequestId;
         const isStale = (): boolean => requestId !== this.calendarRequestId || !this.isDisplayed();
 
-        // Ohne Belegung keine Verfügbarkeit: Eine geratene Belegung sperrte Tage, die für
-        // die echte frei sind (V16.7).
         if (adults === null) {
             this.nights = null;
             this.renderCalendar();
@@ -943,7 +819,6 @@ export class BookingView extends AbstractView {
 
         await this.hotelLoaded;
         if (isStale()) return;
-        // Ohne Hotel kein Horizont – und ohne Horizont keine Grenze, bis zu der sich laden ließe.
         const horizonDays = this.hotel?.booking_horizon_days;
         if (horizonDays === undefined) return;
 
@@ -959,8 +834,6 @@ export class BookingView extends AbstractView {
             this.calendarCache.set(key, this.nights);
         } catch (error: unknown) {
             if (isStale()) return;
-            // Der Kalender bleibt bedienbar, nur ohne Sperren – verbindlich prüft ohnehin
-            // `create_booking` (E24: Komfort, keine Garantie).
             console.error('Verfügbarkeit für den Kalender konnte nicht geladen werden:', error);
             this.nights = null;
         }
@@ -971,10 +844,6 @@ export class BookingView extends AbstractView {
         return { today: this.today, horizonDays: this.hotel?.booking_horizon_days ?? null, nights: this.nights };
     }
 
-    /**
-     * Lädt die Zimmerkategorien – ohne gewählten Zeitraum nur die Stammdaten, mit
-     * Zeitraum zusätzlich Preis und Verfügbarkeit aus `search_availability`.
-     */
     private async loadRooms(): Promise<void> {
         const { checkIn, checkOut } = bookingState.getDates();
         const { adults, children } = bookingState.getGuests();
@@ -987,26 +856,19 @@ export class BookingView extends AbstractView {
             const [roomTypes, serviceRows, availability] = await Promise.all([
                 fetchRoomTypes(),
                 fetchServices(),
-                // Ohne gewählte Erwachsenenzahl wird nicht gesucht: eine geratene Belegung
-                // liefert Preise und Restbestände, die niemand bestellt hat (V16.7).
                 checkIn === null || checkOut === null || adults === null
                     ? null
                     : searchAvailability({
                           checkIn: toISODate(checkIn),
                           checkOut: toISODate(checkOut),
                           adults,
-                          // Leeres Kinderfeld heißt „keine Kinder" — das ist keine Vermutung,
-                          // sondern die Abwesenheit von Kindern.
                           children: children ?? 0,
                       }),
             ]);
 
-            // Eine überholte Antwort darf das Ergebnis der aktuellen Suche nicht ersetzen.
             if (this.isStale(requestId)) return;
 
             this.breakfastService = buildBreakfastService(serviceRows.find((row: ServiceRow): boolean => row.code === BREAKFAST) ?? null);
-            // Ein neues Suchergebnis kann gewählte Mengen unmöglich gemacht haben (V16.6) –
-            // der Store gleicht Mengen und Leistungen ab und meldet sich einmal.
             this.quantityNotice = bookingState.applySearchResult(buildRoomCards(roomTypes, availability), buildExtraServices(serviceRows));
 
             this.roomsState = 'ready';
@@ -1061,7 +923,6 @@ export class BookingView extends AbstractView {
         };
     }
 
-    /** „Mittwoch, 3. Juni 2026, Anreise, heute“ – der Grund gesperrter Tage kommt über `title` als Beschreibung dazu. */
     private getDayAriaLabel(cell: DayCell, label: string | null): string {
         const parts = [formatLongDate(cell.date)];
         if (label !== null) parts.push(label);
@@ -1070,7 +931,6 @@ export class BookingView extends AbstractView {
         return parts.join(', ');
     }
 
-    /** Die abgelehnte Nacht nennt ihre Ablehnung, alle anderen gesperrten Tage ihren Grund. */
     private getDayTooltip(cell: DayCell): string | null {
         const calendarHint = this.rejection?.calendarHint ?? null;
         if (calendarHint !== null && this.isRejectedNight(cell.date)) return calendarHint;
@@ -1089,9 +949,7 @@ export class BookingView extends AbstractView {
         if (cell.inRange) {
             return 'bg-purple-haze/35 text-purple-haze-dark cursor-pointer';
         }
-        // Durchgestrichen, aber lesbar: Der Gast soll sehen, DASS es den Tag gibt (E24).
         if (cell.blocked) {
-            // Den Strich setzt das Template an Wochentag und Datum.
             return cell.isToday ? 'bg-purple-haze/40 text-white cursor-not-allowed' : 'text-purple-haze-dark/45 cursor-not-allowed';
         }
         if (cell.isToday) {
@@ -1134,8 +992,6 @@ export class BookingView extends AbstractView {
                     this.clearSelection();
                     return;
                 case 'next-step':
-                    // Nur weiter zur Zimmerauswahl – gebucht wird ausschließlich über
-                    // `[data-action="checkout"]` in der Zusammenfassung.
                     scrollToSection('booking-rooms');
                     return;
                 default:
@@ -1145,7 +1001,6 @@ export class BookingView extends AbstractView {
 
         const dayEl = target.closest<HTMLElement>('[data-date]');
         const iso = dayEl?.dataset.date;
-        // Gesperrte Tage tragen `aria-disabled` statt `disabled`, damit ihr Tooltip erscheint.
         if (dayEl && !dayEl.hasAttribute('disabled') && dayEl.getAttribute('aria-disabled') !== 'true' && iso) {
             this.selectDate(iso);
         }
@@ -1156,8 +1011,6 @@ export class BookingView extends AbstractView {
         const date = parseISODate(iso);
         const { checkIn, checkOut } = bookingState.getDates();
 
-        // Abreise nur, wenn alle Nächte dazwischen frei sind (E29); sonst beginnt mit diesem
-        // Tag ein neuer Zeitraum – geklickt werden kann er nur, wenn er als Anreise taugt.
         if (checkIn !== null && checkOut === null && isSelectableAsCheckOut(date, checkIn, this.getCalendarRules())) {
             bookingState.setDates(checkIn, date);
         } else {
@@ -1187,11 +1040,6 @@ export class BookingView extends AbstractView {
         this.renderCalendar();
     }
 
-    /**
-     * Geprüft wird beim Klick, nicht während der Eingabe (V16): Der Knopf ist immer aktiv,
-     * und erst dann werden die fehlenden Felder markiert. Ist alles da, bucht
-     * `create_booking` (Phase 9b, Punkte 8–9).
-     */
     private async submit(): Promise<void> {
         if (this.submitting) return;
 
@@ -1199,8 +1047,6 @@ export class BookingView extends AbstractView {
         const { checkIn, checkOut, nights, adults } = draft;
         const invalid = getInvalidFields(draft);
         const checkoutError = getCheckoutError(draft, bookingState.getRooms());
-        // In das Formular springen nur, wenn dort auch das Problem liegt – nicht, wenn
-        // noch das Zimmer fehlt.
         this.markInvalidFields(invalid, checkoutError?.section === 'form');
         this.showCheckoutError(checkoutError?.message ?? null);
         if (checkoutError !== null || checkIn === null || checkOut === null || nights === null || adults === null) return;
@@ -1213,8 +1059,6 @@ export class BookingView extends AbstractView {
             result = await createBooking(booking);
         } catch (error: unknown) {
             console.error(error);
-            // Ist nicht sicher, dass nichts gebucht wurde (V15), bleibt der Knopf gesperrt –
-            // ein zweiter Versuch könnte doppelt buchen.
             if (!(error instanceof BookingFailedError) || error.outcomeUnknown) {
                 this.showCheckoutError(BOOKING_OUTCOME_UNKNOWN);
                 return;
@@ -1228,17 +1072,12 @@ export class BookingView extends AbstractView {
             this.setSubmitting(false);
             this.showCheckoutError(this.getRejectionText(result.error));
             this.rememberRejection(result.error);
-            // Eine Ablehnung heißt fast immer: Die Verfügbarkeit hat sich geändert. Die
-            // neue Liste passt unmögliche Mengen an und sagt es über der Liste – und der
-            // Kalender darf nicht aus dem Speicher weiter alte Nächte anbieten.
             this.calendarCache.clear();
             void this.loadCalendar();
             void this.loadRooms();
             return;
         }
 
-        // Der Knopf bleibt gesperrt – die Buchung ist getätigt, und das Popup führt nur
-        // noch zur Startseite.
         bookingState.reset();
         this.showConfirmation(booking, result.data);
     }
@@ -1259,15 +1098,6 @@ export class BookingView extends AbstractView {
         button.textContent = submitting ? CHECKOUT_BUSY_LABEL : CHECKOUT_LABEL;
     }
 
-    /**
-     * Ablehnung aus `create_booking` als Satz mit Kategorie und Nacht (E31). Die Texte
-     * stehen in `messages.ts`; hier kommt nur dazu, was die View kennt.
-     */
-    /**
-     * Merkt sich die Ablehnung für Zimmerkarte und Kalender – angezeigt wird sie mit dem
-     * Neuladen, das direkt danach folgt. Der Kalender springt in den Monat der Nacht,
-     * sonst stünde der Hinweis womöglich auf einem Blatt, das gerade nicht zu sehen ist.
-     */
     private rememberRejection(rejection: BookingRejection): void {
         const night = rejection.date === null ? null : parseISODate(rejection.date);
         const hints = getRejectionHints(rejection.code, night === null ? null : formatDate(night));
@@ -1285,11 +1115,6 @@ export class BookingView extends AbstractView {
         return getRejectionMessage(rejection.code, { roomName, night });
     }
 
-    /**
-     * Bestätigungs-Popup nach E46. Genau ein Ausgang (V16): Button, Escape und Klick auf
-     * den Hintergrund führen zur Startseite – ein Weg, der nur schließt, ließe den Gast
-     * auf einem Formular zurück, dessen Buchung bereits getätigt ist.
-     */
     private showConfirmation(booking: Booking, created: CreatedBooking): void {
         const references = created.bookings.map((room: { bookingReference: string }): string => room.bookingReference);
         const currency = created.bookings[0]?.currency ?? DEFAULT_CURRENCY;
@@ -1303,8 +1128,6 @@ export class BookingView extends AbstractView {
                 { label: 'Gesamtpreis', values: [formatPrice(created.grandTotalCents, currency)] },
             ]),
             onClose: (): void => {
-                // Der Router hört auf `popstate` und rendert dann den neuen Pfad – derselbe
-                // Weg wie beim Zurück-Knopf des Browsers, ohne den Router hierher zu reichen.
                 history.pushState(null, '', '/');
                 window.dispatchEvent(new PopStateEvent('popstate'));
             },
@@ -1321,8 +1144,6 @@ export class BookingView extends AbstractView {
         if (!form) return;
 
         form.addEventListener('input', (event: Event): void => {
-            // Wer ein markiertes Feld korrigiert, soll Markierung und Fehlerzeile nicht bis
-            // zum nächsten Klick behalten.
             if (event.target instanceof HTMLElement) setFieldError(event.target, null);
             this.saveCustomerDetails();
         });
@@ -1335,7 +1156,6 @@ export class BookingView extends AbstractView {
             this.saveCustomerDetails();
         });
         form.addEventListener('submit', (event: Event): void => {
-            // Enter in einem Feld soll nicht die Seite neu laden.
             event.preventDefault();
         });
 
@@ -1343,21 +1163,13 @@ export class BookingView extends AbstractView {
             void this.submit();
         });
 
-        // Der Store kennt sonst bis zum ersten Tippen nicht einmal das vorgeschlagene Land.
         this.saveCustomerDetails();
     }
 
-    /** Übernimmt das Formular in den Store – Zusammenfassung und Header folgen über `subscribe`. */
     private saveCustomerDetails(): void {
         bookingState.setCustomerDetails(this.readCustomerDetails());
     }
 
-    /**
-     * Liest das Formular in die Form der `create_booking`-Parameter (V13, E51).
-     *
-     * Ist die Checkbox aus, ist `billing` `null` – auch wenn im ausgeblendeten Block noch
-     * etwas steht.
-     */
     private readCustomerDetails(): CustomerDetails {
         const data = this.customerFormEl ? new FormData(this.customerFormEl) : new FormData();
         const text = (name: string): string => {
@@ -1407,25 +1219,15 @@ export class BookingView extends AbstractView {
             setFieldError(element, invalid.includes(field) ? getFieldErrorText(field) : null);
         }
 
-        // In das erste ungültige Feld springen (Phase 9b, Punkt 7) – in Formularreihenfolge,
-        // nicht in der von `FIELD_NAMES`.
         if (focusFirst) form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
     }
 
-    /**
-     * Name und Adressen in der Zusammenfassung: immer die Wohnadresse, die
-     * Rechnungsadresse nur, wenn es eine gibt.
-     *
-     * Per `textContent` statt als HTML-String – das sind Eingaben des Gastes.
-     */
     private renderCustomerSummary(): void {
         const summaryEl = document.getElementById('booking-summary-customer');
         if (!summaryEl) return;
 
         const { customer, residence, billing } = bookingState.getCustomerDetails();
         const name = `${customer.firstName} ${customer.lastName}`.trim();
-        // Das Land steht schon da, bevor etwas eingegeben ist – das allein ist noch keine
-        // Adresse.
         const address = (lines: string[]): string | null => (lines.length > 1 ? lines.join('\n') : null);
         const rows: [string, string | null][] = [
             ['Name', name === '' ? null : name],
@@ -1456,7 +1258,6 @@ export class BookingView extends AbstractView {
     }
 }
 
-/** Zeile unter der Beschreibung – ohne gewählten Zeitraum bleibt sie weg. */
 function getAvailabilityHtml(availability: RoomCardAvailability | null): string {
     if (availability === null) return '';
     if (!availability.isBookable) return roomsTemplate.getAvailabilityHtml(formatUnavailableReason(availability.unavailableReason), false);
@@ -1472,7 +1273,6 @@ function buildAdultOptions(): readonly GuestOption[] {
     });
 }
 
-/** Ohne eigene 0-Option: der leere Platzhalter „Keine Kinder" ist dieser Fall (Q17). */
 function buildChildOptions(): readonly GuestOption[] {
     return Array.from({ length: MAX_CHILDREN }, (_unused: unknown, index: number): GuestOption => {
         const value = index + 1;
@@ -1480,10 +1280,6 @@ function buildChildOptions(): readonly GuestOption[] {
     });
 }
 
-/**
- * Markiert ein Formularfeld als ungültig und schreibt den Grund in seine Fehlerzeile
- * (`aria-describedby`, G1) – `null` hebt beides auf. Per `textContent`, nicht als HTML.
- */
 function setFieldError(field: HTMLElement, message: string | null): void {
     const errorEl = document.getElementById(`${field.id}-error`);
     if (errorEl) errorEl.textContent = message ?? '';
