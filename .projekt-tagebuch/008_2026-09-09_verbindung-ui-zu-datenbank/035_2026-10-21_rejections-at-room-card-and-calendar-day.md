@@ -200,4 +200,4 @@ Eine abgelehnte Buchung führt den Gast jetzt an die Stelle, an der er etwas än
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md) · [Nächster Commit →](036_2026-10-21_update-project-diary.md)

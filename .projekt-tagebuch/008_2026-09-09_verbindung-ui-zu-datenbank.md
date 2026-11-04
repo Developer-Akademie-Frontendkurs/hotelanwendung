@@ -2,7 +2,7 @@
 
 # 008 – Branch `verbindung-ui-zu-datenbank`
 
-**Erster Commit:** 2026-09-09 · **Commits:** 35 · **Status:** offen
+**Erster Commit:** 2026-09-09 · **Commits:** 39 · **Status:** offen
 
 ## Ziel des Branches
 
@@ -25,43 +25,47 @@ Vertagt bleibt allein Phase 10 (Cloud-Deployment).
 
 ## Commits
 
-| Nr.                                                                                                             | Datum      | Beschreibung                                                                            |
-| --------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------- |
-| [001](008_2026-09-09_verbindung-ui-zu-datenbank/001_2026-09-09_umsetzungsplan-erstellt.md)                      | 2026-09-09 | Grilling-Runde 8: `E42`–`E46`, `V8`–`V17`, Phasen 7b/8/9/9b (reiner Doku-Commit)        |
-| [002](008_2026-09-09_verbindung-ui-zu-datenbank/002_2026-09-09_projekttagebuch-aktualisiert.md)                 | 2026-09-09 | Projekttagebuch für die Branches 006–008 nachziehen (reiner Doku-Commit)                |
-| [003](008_2026-09-09_verbindung-ui-zu-datenbank/003_2026-09-16_update-comments-for-database-integration.md)     | 2026-09-16 | TODO-Block als Arbeitsliste für die Anbindung in `Booking.ts`                           |
-| [004](008_2026-09-09_verbindung-ui-zu-datenbank/004_2026-09-16_mengenwaehler-je-zimmerkategorie.md)             | 2026-09-16 | Mengenwähler je Kategorie, Mengen in `bookingState`, Regeln in `roomQuantity.ts`        |
-| [005](008_2026-09-09_verbindung-ui-zu-datenbank/005_2026-09-16_belegung-verpflichtend-kein-suchdefault.md)      | 2026-09-16 | Keine geratene Belegung mehr: ohne Erwachsenenzahl keine Suche                          |
-| [006](008_2026-09-09_verbindung-ui-zu-datenbank/006_2026-09-16_zimmer-anzahl-und-fruehstueck-integriert.md)     | 2026-09-16 | `E47`: Frühstück als eigener Posten – `services`, `booking_extras`, `grand_total_cents` |
-| [007](008_2026-09-09_verbindung-ui-zu-datenbank/007_2026-09-23_belegung-als-gesamtzahl-mehrere-kategorien.md)   | 2026-09-23 | `E48` revidiert `E45`: Belegung als Gesamtzahl, `p_positions`, `group_capacity()`       |
-| [008](008_2026-09-09_verbindung-ui-zu-datenbank/008_2026-09-23_sektion-zusatzleistungen-je-vorgang.md)          | 2026-09-23 | `E49`: Sektion Zusatzleistungen, `charge_basis`, `p_services`                           |
-| [009](008_2026-09-09_verbindung-ui-zu-datenbank/009_2026-09-26_customer-address-management.md)                  | 2026-09-26 | `E50`/`E51`: `customer_addresses`, Sitz- und optionale Rechnungsadresse, Formular       |
-| [010](008_2026-09-09_verbindung-ui-zu-datenbank/010_2026-09-26_enhance-address-form-validation.md)              | 2026-09-26 | Graue Platzhalter, neue Beispielwerte, Fokus ins erste fehlerhafte Feld                 |
-| [011](008_2026-09-09_verbindung-ui-zu-datenbank/011_2026-09-26_booking-summary-dynamic-pricing.md)              | 2026-09-26 | „Ihre Buchung" ohne Attrappe: `summary.ts`, Hoteldaten, Entfernen-Kreuz                 |
-| [012](008_2026-09-09_verbindung-ui-zu-datenbank/012_2026-09-26_booking-creation-modal-confirmation.md)          | 2026-09-26 | `create_booking` aus der Oberfläche, `booking.service.ts`, `<dialog>`-Bestätigung       |
-| [013](008_2026-09-09_verbindung-ui-zu-datenbank/013_2026-09-26_project-diary.md)                                | 2026-09-26 | Projekttagebuch für die Commits 002–012 nachziehen (reiner Doku-Commit)                 |
-| [014](008_2026-09-09_verbindung-ui-zu-datenbank/014_2026-09-26_booking-steps-management.md)                     | 2026-09-26 | Buchungsschritte im Sticky-Header: Status aus der View, Sprungmarken zu den Bereichen   |
-| [015](008_2026-09-09_verbindung-ui-zu-datenbank/015_2026-09-26_update-project-diary.md)                         | 2026-09-26 | Projekttagebuch um die Einträge 013–014 ergänzt (reiner Doku-Commit)                    |
-| [016](008_2026-09-09_verbindung-ui-zu-datenbank/016_2026-09-30_review-document.md)                              | 2026-09-30 | Review-Dokument mit den Gruppen A–F als Fahrplan für die Aufräumarbeiten                |
-| [017](008_2026-09-09_verbindung-ui-zu-datenbank/017_2026-09-30_booking-error-handling-ui-flow.md)               | 2026-09-30 | A1/A2: „weiter" bucht nicht mehr, `BookingFailedError` mit `outcomeUnknown`             |
-| [018](008_2026-09-09_verbindung-ui-zu-datenbank/018_2026-10-07_escape-html-xss-protection.md)                   | 2026-10-07 | A3: `escapeHtml()` für alle Werte von außen, Content-Security-Policy                    |
-| [019](008_2026-09-09_verbindung-ui-zu-datenbank/019_2026-10-07_booking-logic-cleanup-service-reconciliation.md) | 2026-10-07 | A4/A5, B1/B2: späte Antworten verwerfen, Kinderbetten abgleichen, Lint grün             |
-| [020](008_2026-09-09_verbindung-ui-zu-datenbank/020_2026-10-07_standardize-variable-names.md)                   | 2026-10-07 | B3: Bezeichner durchgehend englisch, Regel in `CLAUDE.md`                               |
-| [021](008_2026-09-09_verbindung-ui-zu-datenbank/021_2026-10-07_constants-breakfast-default-currency.md)         | 2026-10-07 | B4: Konstanten `BREAKFAST` und `DEFAULT_CURRENCY` statt Magic Strings                   |
-| [022](008_2026-09-09_verbindung-ui-zu-datenbank/022_2026-10-07_booking-codes-and-types.md)                      | 2026-10-07 | B5–B8, C1–C3: `RejectionCode`-Union, Texttabellen, gemeinsame Buchungstypen             |
-| [023](008_2026-09-09_verbindung-ui-zu-datenbank/023_2026-10-07_room-quantity-handling-availability-messages.md) | 2026-10-07 | C4/C5: Zimmer-frei-Texte sauber benannt, gemeinsamer Schritt-Knopf                      |
-| [024](008_2026-09-09_verbindung-ui-zu-datenbank/024_2026-10-07_project-diary-update.md)                         | 2026-10-07 | Projekttagebuch um die Einträge 015–023 ergänzt (reiner Doku-Commit)                    |
-| [025](008_2026-09-09_verbindung-ui-zu-datenbank/025_2026-10-14_formatting-functions-calendar-logic.md)          | 2026-10-14 | D1/D2: `shared/format.ts` und `domain/calendar.ts` mit Tests                            |
-| [026](008_2026-09-09_verbindung-ui-zu-datenbank/026_2026-10-14_checkout-error-handling-completed-steps.md)      | 2026-10-14 | D3: `domain/validation.ts` – Code statt Textvergleich                                   |
-| [027](008_2026-09-09_verbindung-ui-zu-datenbank/027_2026-10-14_catalog-service-booking-state-destroy-hook.md)   | 2026-10-14 | D4–D7: `catalog.service.ts`, Store als Entwurf, `destroy()`                             |
-| [028](008_2026-09-09_verbindung-ui-zu-datenbank/028_2026-10-14_update-project-diary.md)                         | 2026-10-14 | Projekttagebuch um die Einträge 024–027 ergänzt (reiner Doku-Commit)                    |
-| [029](008_2026-09-09_verbindung-ui-zu-datenbank/029_2026-10-21_move-markup-into-templates.md)                   | 2026-10-21 | D8: Markup aus `Booking.ts` in vier Template-Dateien                                    |
-| [030](008_2026-09-09_verbindung-ui-zu-datenbank/030_2026-10-21_tests-addresses-service-store-rules.md)          | 2026-10-21 | E1–E5: Tests für Adressen, Service, Store und Datenbank                                 |
-| [031](008_2026-09-09_verbindung-ui-zu-datenbank/031_2026-10-21_posts-spike-migration.md)                        | 2026-10-21 | `E36`: Kurs-Spike `posts` als eigene, letzte Migration                                  |
-| [032](008_2026-09-09_verbindung-ui-zu-datenbank/032_2026-10-21_generated-database-types-posts-service.md)       | 2026-10-21 | F1/F2: generierte Typen, `createClient<Database>`, `posts.service.ts`                   |
-| [033](008_2026-09-09_verbindung-ui-zu-datenbank/033_2026-10-21_calendar-availability-horizon-night-rules.md)    | 2026-10-21 | F3: Kalender mit `availability_calendar`, Horizont, Nachtregeln                         |
-| [034](008_2026-09-09_verbindung-ui-zu-datenbank/034_2026-10-21_selection-bar-below-room-list.md)                | 2026-10-21 | F4: Auswahlleiste unter Schritt 2 mit Sprung zu den Daten                               |
-| [035](008_2026-09-09_verbindung-ui-zu-datenbank/035_2026-10-21_rejections-at-room-card-and-calendar-day.md)     | 2026-10-21 | F5: Ablehnungen an Zimmerkarte und Kalendertag                                          |
+| Nr.                                                                                                                | Datum      | Beschreibung                                                                            |
+| ------------------------------------------------------------------------------------------------------------------ | ---------- | --------------------------------------------------------------------------------------- |
+| [001](008_2026-09-09_verbindung-ui-zu-datenbank/001_2026-09-09_umsetzungsplan-erstellt.md)                         | 2026-09-09 | Grilling-Runde 8: `E42`–`E46`, `V8`–`V17`, Phasen 7b/8/9/9b (reiner Doku-Commit)        |
+| [002](008_2026-09-09_verbindung-ui-zu-datenbank/002_2026-09-09_projekttagebuch-aktualisiert.md)                    | 2026-09-09 | Projekttagebuch für die Branches 006–008 nachziehen (reiner Doku-Commit)                |
+| [003](008_2026-09-09_verbindung-ui-zu-datenbank/003_2026-09-16_update-comments-for-database-integration.md)        | 2026-09-16 | TODO-Block als Arbeitsliste für die Anbindung in `Booking.ts`                           |
+| [004](008_2026-09-09_verbindung-ui-zu-datenbank/004_2026-09-16_mengenwaehler-je-zimmerkategorie.md)                | 2026-09-16 | Mengenwähler je Kategorie, Mengen in `bookingState`, Regeln in `roomQuantity.ts`        |
+| [005](008_2026-09-09_verbindung-ui-zu-datenbank/005_2026-09-16_belegung-verpflichtend-kein-suchdefault.md)         | 2026-09-16 | Keine geratene Belegung mehr: ohne Erwachsenenzahl keine Suche                          |
+| [006](008_2026-09-09_verbindung-ui-zu-datenbank/006_2026-09-16_zimmer-anzahl-und-fruehstueck-integriert.md)        | 2026-09-16 | `E47`: Frühstück als eigener Posten – `services`, `booking_extras`, `grand_total_cents` |
+| [007](008_2026-09-09_verbindung-ui-zu-datenbank/007_2026-09-23_belegung-als-gesamtzahl-mehrere-kategorien.md)      | 2026-09-23 | `E48` revidiert `E45`: Belegung als Gesamtzahl, `p_positions`, `group_capacity()`       |
+| [008](008_2026-09-09_verbindung-ui-zu-datenbank/008_2026-09-23_sektion-zusatzleistungen-je-vorgang.md)             | 2026-09-23 | `E49`: Sektion Zusatzleistungen, `charge_basis`, `p_services`                           |
+| [009](008_2026-09-09_verbindung-ui-zu-datenbank/009_2026-09-26_customer-address-management.md)                     | 2026-09-26 | `E50`/`E51`: `customer_addresses`, Sitz- und optionale Rechnungsadresse, Formular       |
+| [010](008_2026-09-09_verbindung-ui-zu-datenbank/010_2026-09-26_enhance-address-form-validation.md)                 | 2026-09-26 | Graue Platzhalter, neue Beispielwerte, Fokus ins erste fehlerhafte Feld                 |
+| [011](008_2026-09-09_verbindung-ui-zu-datenbank/011_2026-09-26_booking-summary-dynamic-pricing.md)                 | 2026-09-26 | „Ihre Buchung" ohne Attrappe: `summary.ts`, Hoteldaten, Entfernen-Kreuz                 |
+| [012](008_2026-09-09_verbindung-ui-zu-datenbank/012_2026-09-26_booking-creation-modal-confirmation.md)             | 2026-09-26 | `create_booking` aus der Oberfläche, `booking.service.ts`, `<dialog>`-Bestätigung       |
+| [013](008_2026-09-09_verbindung-ui-zu-datenbank/013_2026-09-26_project-diary.md)                                   | 2026-09-26 | Projekttagebuch für die Commits 002–012 nachziehen (reiner Doku-Commit)                 |
+| [014](008_2026-09-09_verbindung-ui-zu-datenbank/014_2026-09-26_booking-steps-management.md)                        | 2026-09-26 | Buchungsschritte im Sticky-Header: Status aus der View, Sprungmarken zu den Bereichen   |
+| [015](008_2026-09-09_verbindung-ui-zu-datenbank/015_2026-09-26_update-project-diary.md)                            | 2026-09-26 | Projekttagebuch um die Einträge 013–014 ergänzt (reiner Doku-Commit)                    |
+| [016](008_2026-09-09_verbindung-ui-zu-datenbank/016_2026-09-30_review-document.md)                                 | 2026-09-30 | Review-Dokument mit den Gruppen A–F als Fahrplan für die Aufräumarbeiten                |
+| [017](008_2026-09-09_verbindung-ui-zu-datenbank/017_2026-09-30_booking-error-handling-ui-flow.md)                  | 2026-09-30 | A1/A2: „weiter" bucht nicht mehr, `BookingFailedError` mit `outcomeUnknown`             |
+| [018](008_2026-09-09_verbindung-ui-zu-datenbank/018_2026-10-07_escape-html-xss-protection.md)                      | 2026-10-07 | A3: `escapeHtml()` für alle Werte von außen, Content-Security-Policy                    |
+| [019](008_2026-09-09_verbindung-ui-zu-datenbank/019_2026-10-07_booking-logic-cleanup-service-reconciliation.md)    | 2026-10-07 | A4/A5, B1/B2: späte Antworten verwerfen, Kinderbetten abgleichen, Lint grün             |
+| [020](008_2026-09-09_verbindung-ui-zu-datenbank/020_2026-10-07_standardize-variable-names.md)                      | 2026-10-07 | B3: Bezeichner durchgehend englisch, Regel in `CLAUDE.md`                               |
+| [021](008_2026-09-09_verbindung-ui-zu-datenbank/021_2026-10-07_constants-breakfast-default-currency.md)            | 2026-10-07 | B4: Konstanten `BREAKFAST` und `DEFAULT_CURRENCY` statt Magic Strings                   |
+| [022](008_2026-09-09_verbindung-ui-zu-datenbank/022_2026-10-07_booking-codes-and-types.md)                         | 2026-10-07 | B5–B8, C1–C3: `RejectionCode`-Union, Texttabellen, gemeinsame Buchungstypen             |
+| [023](008_2026-09-09_verbindung-ui-zu-datenbank/023_2026-10-07_room-quantity-handling-availability-messages.md)    | 2026-10-07 | C4/C5: Zimmer-frei-Texte sauber benannt, gemeinsamer Schritt-Knopf                      |
+| [024](008_2026-09-09_verbindung-ui-zu-datenbank/024_2026-10-07_project-diary-update.md)                            | 2026-10-07 | Projekttagebuch um die Einträge 015–023 ergänzt (reiner Doku-Commit)                    |
+| [025](008_2026-09-09_verbindung-ui-zu-datenbank/025_2026-10-14_formatting-functions-calendar-logic.md)             | 2026-10-14 | D1/D2: `shared/format.ts` und `domain/calendar.ts` mit Tests                            |
+| [026](008_2026-09-09_verbindung-ui-zu-datenbank/026_2026-10-14_checkout-error-handling-completed-steps.md)         | 2026-10-14 | D3: `domain/validation.ts` – Code statt Textvergleich                                   |
+| [027](008_2026-09-09_verbindung-ui-zu-datenbank/027_2026-10-14_catalog-service-booking-state-destroy-hook.md)      | 2026-10-14 | D4–D7: `catalog.service.ts`, Store als Entwurf, `destroy()`                             |
+| [028](008_2026-09-09_verbindung-ui-zu-datenbank/028_2026-10-14_update-project-diary.md)                            | 2026-10-14 | Projekttagebuch um die Einträge 024–027 ergänzt (reiner Doku-Commit)                    |
+| [029](008_2026-09-09_verbindung-ui-zu-datenbank/029_2026-10-21_move-markup-into-templates.md)                      | 2026-10-21 | D8: Markup aus `Booking.ts` in vier Template-Dateien                                    |
+| [030](008_2026-09-09_verbindung-ui-zu-datenbank/030_2026-10-21_tests-addresses-service-store-rules.md)             | 2026-10-21 | E1–E5: Tests für Adressen, Service, Store und Datenbank                                 |
+| [031](008_2026-09-09_verbindung-ui-zu-datenbank/031_2026-10-21_posts-spike-migration.md)                           | 2026-10-21 | `E36`: Kurs-Spike `posts` als eigene, letzte Migration                                  |
+| [032](008_2026-09-09_verbindung-ui-zu-datenbank/032_2026-10-21_generated-database-types-posts-service.md)          | 2026-10-21 | F1/F2: generierte Typen, `createClient<Database>`, `posts.service.ts`                   |
+| [033](008_2026-09-09_verbindung-ui-zu-datenbank/033_2026-10-21_calendar-availability-horizon-night-rules.md)       | 2026-10-21 | F3: Kalender mit `availability_calendar`, Horizont, Nachtregeln                         |
+| [034](008_2026-09-09_verbindung-ui-zu-datenbank/034_2026-10-21_selection-bar-below-room-list.md)                   | 2026-10-21 | F4: Auswahlleiste unter Schritt 2 mit Sprung zu den Daten                               |
+| [035](008_2026-09-09_verbindung-ui-zu-datenbank/035_2026-10-21_rejections-at-room-card-and-calendar-day.md)        | 2026-10-21 | F5: Ablehnungen an Zimmerkarte und Kalendertag                                          |
+| [036](008_2026-09-09_verbindung-ui-zu-datenbank/036_2026-10-21_update-project-diary.md)                            | 2026-10-21 | Projekttagebuch um die Einträge 028–035 ergänzt (reiner Doku-Commit)                    |
+| [037](008_2026-09-09_verbindung-ui-zu-datenbank/037_2026-10-28_bring-implementation-plan-up-to-date.md)            | 2026-10-28 | F6: Umsetzungsplan auf den tatsächlichen Stand gebracht                                 |
+| [038](008_2026-09-09_verbindung-ui-zu-datenbank/038_2026-10-28_accessibility-form-errors-calendar-live-regions.md) | 2026-10-28 | G1–G4: Fehlerzeilen, eigener „ד-Knopf, Tages-Labels, weniger `aria-live`                |
+| [039](008_2026-09-09_verbindung-ui-zu-datenbank/039_2026-11-04_refactor-booking-templates-remove-comments.md)      | 2026-11-04 | Kommentare entfernt, Posts-Views gelöscht (Build bricht ab)                             |
 
 Merge-Commits gibt es in diesem Branch nicht – er ist seit seinem Start nicht mit `main` synchronisiert worden.
 
@@ -192,6 +196,20 @@ Commit 028 trägt die Tagebuch-Einträge 024–027 nach (reiner Doku-Commit) und
 Zwei Einsichten ragen heraus. Erstens: **Der typisierte Client hat echte Fehler gefunden** – `null` für Parameter, die einen Default haben und deshalb weggelassen werden müssen. Zugleich bleiben Rückgaben von Datenbankfunktionen bewusst handgeschrieben, weil der Generator sie nie als nullbar beschreibt. Generierte Typen sind nur so gut wie die Information, die der Generator hat. Zweitens: Nach Gruppe D passen neue Funktionen ohne Sonderwege in die Struktur. Die Auswahlleiste (034) verteilt sich auf Text (`summary.ts`), Markup (Template), Koordination (View) und Test, und der Kalender (033) trennt Laden (Service), Regeln (`domain/calendar.ts`) und Zeichnen (Template).
 
 Damit ist das Prüfkriterium aus Phase 8.4 vollständig erfüllt – außerhalb von `services/` importiert nichts mehr `supabase` –, und die Phasen 8, 9 und 9b sind umgesetzt. Im Review-Dokument sind die Gruppen **A bis E vollständig** und aus **F** die Punkte F1–F5 abgehakt. Offen sind noch **F6** (den Umsetzungsplan auf den aktuellen Stand bringen) und Gruppe **G** (Barrierefreiheit, u. a. `aria-describedby` an den Formularfeldern und ein eigener Knopf für das „ד im Kalender). Der Branch ist weiterhin **nicht in `main` gemergt**.
+
+### Nachtrag (Commits 036–039)
+
+Commit 036 trägt die Tagebuch-Einträge 028–035 nach (reiner Doku-Commit). Danach werden die letzten offenen Review-Punkte erledigt, und ein Aufräum-Commit schließt an.
+
+| Commits | Review-Punkte | Kern                                                                                                    |
+| ------- | ------------- | ------------------------------------------------------------------------------------------------------- |
+| 037     | F6            | Umsetzungsplan gepflegt: E1–E51, V9/V12/V17 mit „Stand", tatsächlicher Commit-Schnitt, Phase 7b neu     |
+| 038     | G1–G4         | Fehlerzeilen per `aria-describedby`, „ד als eigener Knopf, `aria-label`/`aria-pressed`, weniger Ansagen |
+| 039     | –             | neue Kommentar-Regel in `CLAUDE.md`, rund 670 Kommentarzeilen entfernt, Posts-Views gelöscht            |
+
+Zwei Einsichten ragen heraus. Erstens: **Überholtes wird durchgestrichen, nicht gelöscht** (037). Der Plan zeigt jetzt Plan und Wirklichkeit nebeneinander – und hält fest, dass das Risiko, vor dem die ursprüngliche Reihenfolge schützen sollte, tatsächlich eingetreten ist. Zweitens: **Barrierefreiheit beginnt bei nativem HTML** (038). Ein echter `<button>` statt `span role="button"`, ein `<output>` statt `aria-live` – viele ARIA-Attribute bringt das richtige Element schon mit. Der Commit sagt außerdem offen, was er nicht prüfen konnte: den Screenreader im Browser.
+
+Mit 038 sind im Review-Dokument **alle Gruppen A bis G abgehakt**. Commit 039 hinterlässt allerdings eine Baustelle: Er löscht `Posts.ts` und `SinglePost.ts`, während `src/main.ts` beide weiter importiert – `tsc` und damit `pnpm build` schlagen auf diesem Stand fehl. Außerdem steht über `ROOM_AMENITIES` ein Prüfvermerk `// CHECK: Wird das noch verwendet?` (die Tabelle wird an zwei Stellen verwendet). Der Branch ist weiterhin **nicht in `main` gemergt**.
 
 ---
 
