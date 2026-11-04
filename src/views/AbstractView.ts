@@ -17,4 +17,6 @@ export default class {
     }
 
     async afterRender(): Promise<void> {}
+
+    destroy(): void {}
 }

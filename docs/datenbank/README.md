@@ -396,6 +396,9 @@ Dasselbe Muster wie bei `rate_plan_id` (E5) und der `customers`-Trennung (E4).
 **Draußen:** Ausstattungsmerkmale, Zusatzleistungen, Zahlungen, Stornobedingungen, Gutscheine,
 Mehrsprachigkeit, OTA-Anbindung.
 
+> **Nachtrag 2026-09-16:** Die **Zusatzleistungen** sind seit E47 drin (`services` / `booking_extras`).
+> Der Zaun hat gehalten, was er versprochen hat: Die Erweiterung war rein additiv.
+
 **Begründung der Aufnahmen:**
 
 - **Belegungsgrenzen** sind keine Zusatzfunktion. Ohne sie ist die Verfügbarkeitsabfrage _fachlich
@@ -903,6 +906,369 @@ E27. Mehrere Kategorien verlangten einen `jsonb`-Parameter mit Positionen; die S
 vorbereitet (Gruppe + Schleife), aber eine Schnittstelle, die die Oberfläche heute nicht bedienen
 kann, wäre Ballast (E15).
 
+> **Nachtrag 2026-09-09:** Der letzte Absatz ist durch **E44** überholt. Die Oberfläche kann die
+> Schnittstelle inzwischen bedienen — damit fällt die Begründung, sie nicht zu bauen.
+
+---
+
+## 4h. Entschieden (Runde 8) — Anbindung der Buchungsseite
+
+Diese Runde entstand beim Anschluss der bestehenden Buchungsseite an das Schema (Branch
+`verbindung-ui-zu-datenbank`, 2026-09-09). Sie enthält nur **Domänenentscheidungen**; das Vorgehen
+und die Frontend-Architektur stehen als V8–V16 im [Umsetzungsplan](./umsetzungsplan.md), dort auch
+die vollständige Frage-Antwort-Aufzeichnung.
+
+Drei der fünf Entscheidungen sind Korrekturen an Annahmen aus den Phasen 1–7. Das ist kein Makel des
+Schemas, sondern der erwartbare Ertrag der ersten echten Oberfläche darauf: Erst wer die Maske baut,
+merkt, welche Felder nirgends hinpassen.
+
+### E42 — Die Rechnungsadresse ist eine **eigene Tabelle**, nicht eine Spaltengruppe am Kunden
+
+> **Revidiert durch E50 (2026-09-26):** Sitzadresse und Rechnungsadressen liegen gemeinsam in
+> `customer_addresses`, getrennt durch `kind`. `billing_addresses` wurde nie migriert.
+
+**Entscheidung:** `billing_addresses` mit `customer_id` als 1:n-Beziehung. Spalten: `street`,
+`house_number`, `postal_code`, `city`, `country_code` (ISO-3166-1 alpha-2, `check char_length = 2`),
+dazu `archived_at` (E22) und die üblichen Zeitstempel. **Kein** `is_default`, **kein** `label`,
+**kein** `company`/`recipient_name`.
+
+**Begründung:** Eine Adresse am Kunden wäre dessen **Sitzadresse** — wo er wohnt. Die
+Rechnungsadresse ist etwas anderes: wohin die Rechnung geht. Die beiden fallen häufig zusammen und
+sind trotzdem nicht dasselbe Feld; wer sie in eine Spaltengruppe legt, kann sie nie wieder trennen,
+ohne Daten zu interpretieren. Ein Kunde kann mehrere haben (privat, Firma, Zweitwohnsitz), also ist
+es eine Tabelle.
+
+**Warum Straße und Hausnummer getrennt** und nicht als `address_line1` wie bei `hotels`: Das
+Formular hat zwei Felder. Zusammenkleben und später wieder auseinanderparsen verliert Information —
+und zwar genau bei den Adressen, bei denen es darauf ankommt („Musterstraße 3a/2/17").
+
+**Preis, benannt:** `country_code` statt Freitext heißt, dass die Oberfläche eine Auswahl anbieten
+muss (AT/DE/CH/IT/SI) statt eines Eingabefelds. Das ist Absicht — Freitext-Länder sind in jeder
+späteren Auswertung wertlos, und „Österreich"/„Oesterreich"/„AT" nebeneinander ist kein Datenbestand,
+sondern eine Aufräumaufgabe auf Vorrat.
+
+**Was bewusst fehlt:** `is_default` und `label` sind nur bedienbar, wenn ein Gast seine Adressen
+sehen kann. Er kann es in v1 nicht (siehe E43), also wären es Spalten, die niemand füllt.
+`company`/`recipient_name` kommen mit der ersten Firmenbuchung — additiv.
+
+### E43 — Die Buchung **verweist** auf die Adresse; benutzte Adressen sind unveränderlich
+
+> **Angepasst durch E51 (2026-09-26):** Die Buchung verweist auf Sitz- **und** optionale
+> Rechnungsadresse; `billing_address_id` ist nullable. Die Unveränderlichkeit sitzt in einem Trigger
+> statt in der UPDATE-Policy.
+
+**Entscheidung:** `bookings.billing_address_id uuid not null references billing_addresses`. Die
+Adressfelder werden **nicht** zusätzlich in `bookings` eingefroren. Stattdessen darf eine
+Adresszeile, an der eine Buchung hängt, nicht mehr geändert werden — auch nicht von `is_staff()`.
+Durchgesetzt über eine UPDATE-Policy mit `SECURITY DEFINER`-Hilfsfunktion
+`billing_address_in_use(uuid)`. Lesen dürfen der Kunde selbst und Mitarbeitende
+(`customer_id = current_customer_id() or is_staff()`), schreiben tut in v1 ausschließlich
+`create_booking`.
+
+**Begründung:** „Eine Buchung ist ein Vertrag" (Leitsatz 3) gilt für die Rechnungsadresse genauso wie
+für den Preis. Zieht der Gast 2027 um, darf sich die Rechnungsadresse der Buchung von 2026 nicht
+rückwirkend ändern. Es gibt zwei Wege dorthin — die Fakten kopieren (wie `booking_nights` es mit dem
+Preis tut) oder die Zeile unveränderlich machen. Beim Preis war Kopieren richtig, weil er pro Nacht
+verschieden ist und aus einer Berechnung stammt. Bei der Adresse ist es Kopieren von sechs Spalten
+ohne Gegenwert — und schafft die zweite Wahrheit, die das Schema an anderer Stelle (Tages-Inventar,
+E10) ausdrücklich meidet.
+
+**Warum auch Mitarbeitende nicht ändern dürfen:** Eine Rechnungskorrektur ist ein realer Vorgang,
+aber sie ist ein *Vorgang* — eine neue Zeile plus ein Eintrag in `booking_events`, nachvollziehbar.
+Ein stilles `UPDATE` auf einer Adresse, an der eine bezahlte Buchung hängt, ist keine Korrektur,
+sondern eine Änderung der Vergangenheit ohne Spur.
+
+**Preis, benannt, zweifach:** Erstens ist „unveränderlich" hier eine **Policy**, kein Constraint —
+der Service-Role-Key umgeht RLS vollständig. Es heißt „kein Weg über die Anwendung", nicht „physisch
+unmöglich". Zweitens sieht in v1 **niemand** einen Unterschied: Ohne Login ist
+`current_customer_id()` leer und `is_staff()` gibt `false` (E13/E35). Wir entscheiden hier die Regel,
+die am Tag der Kundenkonten greift — kein heute sichtbares Verhalten. Praktisch entsteht in v1 pro
+Buchung genau eine Adresszeile, weil der Gast seine vorhandenen nicht lesen und also nicht
+wiederverwenden kann.
+
+### E44 — `create_booking` bucht **mehrere Kategorien** in einem Vorgang
+
+**Entscheidung:** Die Parameter `p_room_type_id` und `p_rooms` werden durch
+`p_positions jsonb` ersetzt: `[{"room_type_id": "…", "rooms": 2}, …]`. Die Funktion prüft **jede**
+Position Nacht für Nacht gegen `availability_nights`, legt bei mehr als einer resultierenden Buchung
+die `booking_groups`-Zeile an (E27) und schreibt alles in **einer** Transaktion. Die alte Signatur
+wird ersetzt, nicht als Überladung danebengestellt. Obergrenze: 8 Zimmer je Vorgang.
+
+**Begründung:** Das ist die Revision des Nachsatzes von E41. Die Begründung dort war nicht „geht
+nicht", sondern „die Oberfläche kann es nicht bedienen, also wäre es Ballast (E15)". Die Oberfläche
+kann es jetzt: Sie fragt Mengen pro Zimmerart ab. Damit fällt die Begründung, und der vorbereitete
+Weg (Gruppe + Schleife) wird gegangen. Der Familienfall „ein Doppelzimmer und ein Einzelzimmer" ist
+genau der, für den man Mengen nach Zimmerart angibt — in zwei getrennten Buchungen hieße er: zweimal
+das Adressformular ausfüllen, zwei Buchungsnummern für eine Reise.
+
+**Warum der hotelweite Advisory-Lock hier seinen Ertrag abwirft:** Er deckt alle Positionen
+gemeinsam ab. Wäre er pro Kategorie gewählt worden, bräuchte eine Zwei-Kategorien-Buchung jetzt zwei
+Locks in garantierter Reihenfolge — genau die Verklemmung, die E33 vorausgesehen hat. Die
+Entscheidung zahlt sich hier zum ersten Mal aus.
+
+**Ausdrücklich verworfen:** `create_booking` zweimal nacheinander aus dem Frontend aufzurufen. Das
+sieht aus wie dasselbe zum Nulltarif, bricht aber die Atomarität — schlägt der zweite Aufruf fehl,
+steht die erste Buchung bereits verbindlich in der Datenbank, und niemand hat sie bestellt.
+
+**Preis, benannt:** Der `jsonb`-Parameter kommt in den generierten Typen als `Json` an und verliert
+damit die Typsicherheit, die E7/Phase 8 gerade herstellen. Für eine Liste variabler Länge gibt es
+dazu keine Alternative (Arrays zusammengesetzter Typen sind über PostgREST schlechter, nicht besser).
+Der Ausgleich ist ein handgeschriebener Eingabetyp in der Service-Schicht **plus** Validierung in der
+Funktion selbst — die Datenbank bleibt die letzte Verteidigungslinie (Leitsatz 1). Zweiter Preis: Der
+strukturierte Fehler aus E31 braucht ein Feld mehr, nämlich **welche** Position gescheitert ist;
+sonst weiß die Oberfläche das Datum, aber nicht die Karte, an der sie es anzeigen soll.
+
+### E45 — Die Belegung gilt **pro Zimmer**, nicht pro Reise
+
+> **Revidiert am 2026-09-23 durch E48.** Die Belegung ist seitdem eine Gesamtzahl des Vorgangs.
+> Der Text bleibt stehen, weil E48 ohne ihn nicht verständlich ist.
+
+**Entscheidung:** `p_adults`/`p_children` beschreiben die Belegung **eines** Zimmers. „2 Erwachsene"
+mit 3 Zimmern sind sechs Personen. Die Oberfläche beschriftet das Feld entsprechend („Gäste pro
+Zimmer"). Eine Belegung **je Position** (Doppelzimmer 2 Erwachsene, Einzelzimmer 1 Erwachsener) gibt
+es in v1 nicht.
+
+**Begründung:** Die Datenbank hat sich hier längst festgelegt, nur hat es vor der Mengenauswahl
+niemand gemerkt: `availability_nights` prüft `max_occupancy` **pro Zimmer** (E15), und
+`create_booking` schreibt `p_adults` in **jede** der *n* Buchungszeilen. Die Oberfläche las sich
+umgekehrt — ein zentrales „Anzahl der Gäste" über der Seite wirkt wie eine Gesamtzahl. Diese
+Doppeldeutigkeit war folgenlos, solange es genau ein Zimmer gab; mit Mengen produziert sie falsche
+Suchergebnisse. Die Semantik der Datenbank umzudrehen hieße, `max_occupancy` gegen sich selbst zu
+verwenden — also gewinnt die Datenbank, und die Beschriftung wird ehrlich.
+
+**Preis, benannt:** Eine Familie mit zwei Erwachsenen und einem Kind, die ein Doppel- und ein
+Einzelzimmer nimmt, kann ihre Belegung in v1 nicht korrekt angeben — sie sucht mit der Belegung, die
+für **beide** Zimmer passen muss, und schließt damit Kategorien aus, die für das Einzelzimmer
+gereicht hätten. Das ist die bekannte Lücke dieser Runde. Der Ausweg ist ein Feld mehr pro Position
+im `jsonb` aus E44, also additiv und ohne Schemaänderung.
+
+### E46 — Die Bestätigung behauptet keine Mail, und sie nennt die Buchungsnummer
+
+**Entscheidung:** Das Bestätigungs-Popup aus dem Entwurf sagt in v1 „Ihre Buchung ist bestätigt."
+statt „Bitte bestätigen Sie diese via erhaltener Email." und zeigt **`booking_reference`**,
+Zeitraum und Gesamtpreis.
+
+**Begründung:** Der Entwurfstext widerspricht E11. Dort wurde `pending` ausdrücklich verworfen — „ein
+Zustand, aus dem nichts herausführt, solange es keine Zahlung gibt". Eine Buchung ist im Moment ihrer
+Entstehung `confirmed` und verbindlich. Der Gast aufzufordern, etwas zu bestätigen, was bereits gilt,
+wäre falsch; ihn dafür auf eine Mail zu verweisen, die noch niemand versendet, wäre doppelt falsch.
+Und ohne Mail und ohne Kundenkonto ist die Buchungsnummer das **einzige**, woran der Gast seine
+Buchung je wiederfindet — sie wegzulassen macht die Bestätigung zu einer Höflichkeitsfloskel.
+
+**Der Satz kommt zurück**, sobald der Mailversand steht; ein Kommentar an der Stelle im Code hält
+fest, warum er weg ist. Damit ist es eine datierte Abweichung vom Entwurf, kein stiller Umbau.
+
+---
+
+## 4i. Entschieden (Runde 9) — Frühstück als Zusatzleistung
+
+Ausgangslage: Die Buchungsseite soll je Zimmerkategorie eine Checkbox „mit Frühstück" bekommen,
+17 € pro Person und Nacht. Die Frage war ausdrücklich, **ob** der Betrag in den Zimmerpreis wandert
+oder ein eigener Posten wird.
+
+### E47 — Das Frühstück ist ein eigener Posten, nicht Teil des Zimmerpreises
+
+**Entscheidung:** Zwei neue Tabellen — `services` (Stammdaten: was gilt heute) und `booking_extras`
+(Vertrag: was beim Buchen galt) — nach demselben Muster wie `room_type_rates`/`booking_nights`.
+`bookings` bekommt `extras_amount_cents` und die generierte Spalte `grand_total_cents`;
+`total_amount_cents` behält seine Bedeutung als **Zimmerpreis**. `create_booking` bekommt
+`p_with_breakfast boolean`. Preis: 17 € pro Erwachsenem, 8,50 € pro Kind, je Person **und Nacht** —
+gefrühstückt wird am Morgen nach jeder gebuchten Nacht, das letzte am Abreisetag.
+
+**Begründung — drei Gründe, von denen jeder allein reicht:**
+
+1. **Der Zimmerpreis kann es nicht ausdrücken.** `room_type_rates.amount_cents` gilt pro **Zimmer**
+   und Nacht, das Frühstück kostet pro **Person** und Morgen. Ein Doppelzimmer mit einem statt zwei
+   Gästen kostet dasselbe Zimmer, aber ein Frühstück weniger. In einer Preiszeile ist das erst mit
+   Belegungspreisen darstellbar (E5) — und die sind ausdrücklich vertagt.
+2. **Das Einfrieren wäre unumkehrbar.** `booking_nights` friert den Preis pro Nacht ein (E21). Wäre
+   das Frühstück eingebacken, ließe sich an einer bestehenden Buchung nie mehr trennen, was
+   Beherbergung und was Verpflegung war — und getrennt ausgewiesen werden muss beides, sobald aus
+   der Buchung eine Rechnung wird.
+3. **Der Client darf den Preis nicht setzen** (E6, Leitsatz 1). `create_booking` rechnet die Summe
+   selbst. Ein Aufschlag, den nur das Frontend kennt, stünde im Checkout und fehlte in der
+   angelegten Buchung — der Gast sähe den Rechenfehler auf der Bestätigung. Das ist derselbe Fall,
+   den V16 bei der Zeile „Extra Angebot 23 €" schon einmal verhindert hat.
+
+**Ausdrücklich verworfen: ein zweiter Rate-Plan** („Übernachtung mit Frühstück"). Der Seam aus E5
+liegt bereit, trägt hier aber nicht: derselbe Konflikt Person/Zimmer wie unter 1., dazu jede Saison
+und jede Kategorie doppelt zu pflegen — eine Preisänderung müsste an zwei Stellen passieren, und
+eine vergessene wäre stillschweigend ein falscher Preis. Der Rate-Plan-Seam ist für **andere
+Konditionen desselben Zimmers** gedacht (flexibel / nicht erstattbar), nicht für eine zusätzliche
+Leistung.
+
+**Warum `total_amount_cents` seine Bedeutung behält:** Die Spalte war bisher deckungsgleich mit der
+Summe der `booking_nights`. Diese Invariante umzudefinieren hieße, jede bestehende Abfrage, jeden
+Test und die Rückgabe von `create_booking` still etwas anderes meinen zu lassen. Der volle Betrag
+bekommt deshalb einen **eigenen Namen** (`grand_total_cents`, generiert) — damit gibt es keine
+Stelle mehr, an der „die Summe" zweideutig ist.
+
+**Erwachsene und Kinder sind zwei Positionen**, nicht eine Summe: Es sind zwei Preise, auf einer
+Rechnung stehen deshalb zwei Zeilen, und aus einem zusammengezogenen Betrag ließe sich „2 Erwachsene
+und 1 Kind" später nicht mehr zurückrechnen. Die Datenbank kennt nur die *Anzahl* der Kinder, kein
+Alter — eine Altersgrenze wäre eine eigene Entscheidung.
+
+**Preis, benannt:** `p_with_breakfast` gilt für **alle** Zimmer eines Aufrufs, also für eine
+Kategorie. Genau das ist die Granularität der Checkbox. Frühstück je **einzelnem** Zimmer verlangte
+`booking_items` (E20/E27) — der einzige teure Umbau, und er wird dafür nicht angefasst. Sobald E44
+`p_room_type_id`/`p_rooms` durch `p_positions jsonb` ersetzt, wandert der Wert als Feld in die
+Position; das ist derselbe Weg, den E45 für die Belegung je Position beschreibt.
+
+**Damit fällt ein Punkt hinter dem Scope-Zaun (E15) weg** — additiv, wie dort behauptet: Keine
+bestehende Tabelle ändert ihre Bedeutung, und der nächste Zusatz (Zustellbett, Kinderbett) ist ein
+`INSERT` in `services`, keine Migration.
+
+## 4j. Entschieden (Runde 10) — Belegung als Gesamtzahl
+
+Ausgangslage: Beim Entwurf der Zusatzleistungen (Kinderbett „höchstens eines je Zimmer, aber als
+Gesamtzahl") stellte sich heraus, dass die Oberfläche die Gästezahl als **Gesamtzahl** meint — „1 Kind"
+heißt ein Kind, nicht eines pro Zimmer. E45 hatte das Gegenteil festgelegt.
+
+### E48 — Die Belegung ist eine **Gesamtzahl** des Vorgangs (revidiert E45)
+
+**Entscheidung:** `p_adults`/`p_children` beschreiben den **ganzen** Vorgang. Umgesetzt zusammen mit
+E44 in `20260923101000_occupancy_total.sql`:
+
+1. **Prüfung erst an der Auswahl.** Eine Gruppe passt, wenn die Summe aus Zimmer × `max_occupancy`
+   über **alle** gewählten Positionen mindestens Erwachsene + Kinder ist. `search_availability`
+   sortiert deshalb keine Kategorie mehr als `zu_klein` aus — eine Double Suite ist für vier
+   Personen nicht zu klein, sie braucht zwei Zimmer. Verbindlich prüft `create_booking`; die
+   Oberfläche zeigt vorher „Noch n Personen ohne Bett".
+2. **Jedes Zimmer braucht einen Erwachsenen.** Zimmer ≤ Erwachsene, sonst `ungueltige_belegung`. Der
+   Mengenwähler deckelt entsprechend und nennt den Grund.
+3. **Der Kalender fragt das ganze Hotel.** Eine Nacht ist buchbar, wenn die Gruppe in die freien
+   Zimmer mit Preis passt — gerechnet von `group_capacity()` mit den größten Zimmern zuerst und
+   höchstens min(Erwachsene, 8) Zimmern. `zu_klein` heißt jetzt: auch leer reicht das Hotel nicht.
+4. **Die Datenbank verteilt die Gäste auf die Zimmer**, weil `bookings.adults/children` weiterhin
+   je Zimmerzeile gelten und `max_occupancy` dort die harte Grenze bleibt. Regel: Zimmer in der
+   Reihenfolge der Positionen; jedes bekommt einen Erwachsenen, dann die übrigen Erwachsenen
+   reihum, dann die Kinder reihum, jeweils bis `max_occupancy`. Die Aufteilung ist vorläufig — die
+   Rezeption kann sie ändern. Die Gesamtbelegung steht zusätzlich im `created`-Ereignis.
+5. **Frühstück gilt für alle Gäste des Vorgangs**, nicht je Kategorie: `p_with_breakfast` ist ein
+   Parameter des Vorgangs. Jede Zimmerzeile trägt das Frühstück **ihrer** Gäste; die Summe ist
+   genau der Betrag, den der Gast vorher gesehen hat. Die Checkbox wandert von der Zimmerkarte unter
+   die Liste.
+
+**Begründung:** Eine Gästezahl, die mit der Zimmerzahl multipliziert wird, lädt zu falschen
+Suchergebnissen und falschen Preisen ein (sechs Frühstücke für drei Personen). Die in E45 benannte
+Lücke — „ein Doppel- und ein Einzelzimmer für eine Familie" — ist mit Gesamtzahlen der Normalfall
+statt der Ausnahme.
+
+**Ausdrücklich verworfen:** die Gesamtbelegung nur an `booking_groups` zu speichern (größerer
+Schemaeingriff, und `max_occupancy` wäre je Zeile nicht mehr prüfbar) sowie eine Aufteilung durch den
+Gast (ein neues Bedienelement für eine Frage, die die Rezeption ohnehin klärt).
+
+**Preis, benannt:** Die Verteilung ist eine Regel der Datenbank, keine Aussage des Gastes. Wer genau
+in welchem Zimmer schläft, weiß die Buchung nicht. Und E44 ist damit ohne die Rechnungsadresse aus V13
+umgesetzt: `create_booking` wird für `billing_addresses` noch einmal ersetzt.
+
+### E49 — Zusatzleistungen je Vorgang
+
+**Entscheidung:** Unter der Zimmerliste steht die Sektion „Zusatzleistungen" mit dem Frühstück (E48)
+und fünf Leistungen je Vorgang. Umgesetzt in `20260923102000_services_per_booking.sql` und `seed.sql`:
+
+| Code | Leistung | `charge_basis` | Preis (Seed) |
+| --- | --- | --- | --- |
+| `CHILD_BED` | Kinderbett | `per_unit` | 0 € — nur mit Kind, höchstens eines je Zimmer |
+| `GARAGE` | Tiefgarage (1 Stellplatz) | `per_night` | 15 € |
+| `PET` | Haustier (1 Tier) | `per_stay` | 10 € |
+| `LATE_CHECKOUT` | Late Check-out bis 15 Uhr | `per_stay` | 0 € — nach Verfügbarkeit |
+| `MASSAGE` | Massage, 50 Minuten | `per_stay` | 75 € — Termin vor Ort |
+
+1. **Einmal je Vorgang, an der ersten Buchung.** Ein Häkchen heißt „für den Aufenthalt", nicht „je
+   Zimmer". Die Posten hängen an der ersten Buchungszeile, weil `booking_extras` an `booking_id`
+   hängt und ein Stellplatz sich nicht auf drei Zimmer aufteilen lässt.
+2. **Drei neue Bezugsgrößen statt neuer Spalten:** `per_night` (Nächte), `per_stay` (1), `per_unit`
+   (gewählte Menge). Das hatte der Kommentar an `charge_basis` in E47 so vorausgesagt.
+3. **0 € ist erlaubt.** Kinderbett und Late Check-out kosten nichts, müssen aber als Posten dastehen —
+   sonst weiß niemand, dass das Bett bereitstehen muss.
+4. **`guest_kind = 'none'`** für Leistungen, die nicht pro Person rechnen. Die Regel steht in
+   `create_booking`, weil ein Tabellen-`CHECK` nicht in `services` nachsehen kann.
+5. **`create_booking(…, p_services jsonb)`**, z. B. `[{"code":"GARAGE"},{"code":"CHILD_BED","quantity":2}]`.
+   Abgelehnt werden `BREAKFAST` in der Liste (eigener Parameter), doppelte Codes, Mengen ≠ 1 außerhalb
+   von `per_unit` (`ungueltige_leistung`), unbekannte Codes (`leistung_unbekannt`, maskiert) und ein
+   Kinderbett ohne Kind oder über min(Kinder, Zimmer) (`ungueltige_belegung`).
+6. **Hinweis statt Kapazitätsprüfung.** Tiefgarage, Massage und Late Check-out haben in Wirklichkeit
+   begrenzte Kapazität. v1 bucht und berechnet sie, die Beschreibung sagt „nach Verfügbarkeit" bzw.
+   „Termin vor Ort". Eine echte Prüfung wäre ein eigenes Inventar.
+
+**Ausdrücklich verworfen:** das Zustellbett (es hätte `max_occupancy` erhöhen müssen und damit Suche,
+Kalender und Buchung berührt) und Icons in der Datenbank (Darstellung, zugeordnet über `code` im
+Frontend wie die Ausstattung über `slug`).
+
+**Preis, benannt:** Die Kinderbett-Regel hängt am Code `CHILD_BED`, nicht an einer Spalte. Kommt eine
+zweite Leistung mit derselben Grenze, wird daraus eine Spalte.
+
+---
+
+## 4k. Entschieden (Runde 11) — Sitzadresse und optionale Rechnungsadresse
+
+Ausgangslage: Beim Anbinden des Adressformulars kam eine fachliche Unterscheidung dazu, die E42 nur
+als Begründung kannte: Die **Sitzadresse** gehört zum Kunden (wo er wohnt), die **Rechnungsadresse**
+ist optional. Ein Kunde hat genau eine Sitzadresse, aber über die Zeit mehrere Rechnungsadressen
+(Zweitwohnsitz, Firma A, später Firma B). Je Buchungsvorgang gibt es eine Sitzadresse und höchstens
+eine Rechnungsadresse. Fehlt sie, geht die Rechnung an die Sitzadresse. Kundenidentität bleibt die
+E-Mail (E26), einen Abgleich über Name und Adresse gibt es nicht.
+
+### E50 — Sitz- und Rechnungsadressen in **einer** Tabelle `customer_addresses` (revidiert E42)
+
+**Entscheidung:** `customer_addresses` mit `kind in ('residence', 'billing')`. Spalten wie in E42
+(`street`, `house_number`, `postal_code`, `city`, `country_code`, `archived_at`), dazu `company`
+(„Firma / z. Hd.“, nur bei `billing`) und die generierte Spalte `match_key`. Umgesetzt in
+`20260926101000_customer_addresses.sql`.
+
+1. **Eine aktive Sitzadresse je Kunde** über einen partiellen Unique-Index
+   (`where kind = 'residence' and archived_at is null`). Ein Umzug archiviert die alte Zeile.
+2. **Jede Adresse je Kunde und Art nur einmal**, auch archiviert: Unique-Index auf
+   `(customer_id, kind, match_key)`. Wer zurückzieht, bekommt die alte Zeile zurück.
+3. **`country_code` aus einer festen Liste** (AT/DE/CH/IT/SI) über `is_supported_country()`, einmal
+   im `CHECK` und einmal in `create_booking`. Ein neues Land ist eine Zeile in der Funktion, keine
+   Tabelle `countries` für fünf Werte.
+4. **`company` jetzt statt „mit der ersten Firmenbuchung“ (E42):** Der häufigste Grund für eine
+   abweichende Rechnungsadresse *ist* eine Firma. Ohne das Feld stünde auf der Rechnung an die
+   Firmenadresse der Privatname.
+
+**Begründung:** Beide sind Adressen desselben Kunden mit denselben sechs Spalten. Zwei Tabellen
+hätten dieselbe Struktur doppelt. Die drei Regeln (eine Sitzadresse, mehrere Rechnungsadressen,
+Rechnungsadresse optional) stehen damit im Schema: Index, 1:n, nullable Fremdschlüssel.
+
+**Verworfen:** Sitzadresse als Spalten an `customers`. Sie wäre überschreibbar, und die Rechnung
+einer alten Buchung, die an die Sitzadresse ging, hätte nach einem Umzug rückwirkend eine andere
+Anschrift (Leitsatz 3). Ebenfalls verworfen: die Sitzadresse in eine `billing`-Zeile zu kopieren,
+wenn keine Rechnungsadresse angegeben ist. Dann ließe sich nicht mehr unterscheiden, ob der Gast eine
+abweichende Rechnungsadresse wollte.
+
+### E51 — Die Buchung verweist auf Sitz- und optionale Rechnungsadresse; Stammdaten „neueste gewinnt“ (passt E43 an)
+
+**Entscheidung:**
+
+1. **`bookings.residence_address_id`** (Pflicht für jede neue Buchung) und
+   **`bookings.billing_address_id`** (nullable, `null` = Rechnung an die Sitzadresse). Beide als
+   zusammengesetzte Fremdschlüssel `(adresse, customer_id)`: Eine Buchung kann nur auf Adressen
+   *ihres* Kunden zeigen. Alle Zimmer eines Vorgangs zeigen auf dieselben Adressen.
+2. **Pflicht als `CHECK … NOT VALID`:** Die Buchungen vor dieser Migration haben keine Adresse und
+   können keine bekommen. Erfinden wäre schlimmer als leer. Postgres prüft den `CHECK` bei jedem
+   neuen `INSERT`/`UPDATE`, nur nicht rückwirkend.
+3. **Unveränderlich per Trigger statt Policy:** Eine Adresse, an der eine Buchung hängt, darf
+   inhaltlich nicht mehr geändert werden, auch nicht mit dem Service-Role-Key.
+   **Archivieren** bleibt erlaubt, denn genau das passiert bei jedem Umzug. Die UPDATE-Policy aus E43
+   hätte beides verboten und wäre vom Service-Role-Key umgangen worden.
+4. **`create_booking` bekommt elf Skalarparameter (V13):** Sitzadresse (Pflicht, trotz Default, weil
+   Parameter mit Default hinten stehen müssen) und Rechnungsadresse (alles oder nichts). Fehlende oder
+   halbe Angaben und unbekannte Länder → `ungueltige_adresse`, für Gäste sichtbar wie
+   `ungueltige_belegung`. Umgesetzt in `20260926102000_create_booking_addresses.sql`.
+5. **Wiederverwenden statt duplizieren:** Gleich heißt gleich nach `trim`, Kleinschreibung und
+   zusammengefassten Leerzeichen (`address_match_key()`). „Hauptstr.“ und „Hauptstraße“ bleiben
+   verschieden. Mehr Unschärfe wäre Raten, und eine Adresse zu viel schadet weniger als zwei falsch
+   zusammengelegte. Rechnungsadressen werden nie archiviert, weil ein Kunde mehrere zugleich hat.
+6. **Name und Telefon: die neueste Eingabe gewinnt.** Bisher blieb der erste Datensatz stehen. Die
+   E-Mail behält ihre ursprüngliche Schreibweise (E32).
+
+**Preis, benannt:** Ohne Login kann **jeder, der die E-Mail eines Kunden kennt**, mit einer Buchung
+dessen Namen, Telefon und aktive Sitzadresse ändern. Alte Buchungen sind geschützt, denn ihre
+Adressen sind unveränderlich. Die Stammdaten sind es nicht. Das wird mit den Kundenkonten
+abgesichert, nicht vorher.
+
 ---
 
 ## 5. Offene Punkte
@@ -910,7 +1276,7 @@ kann, wäre Ballast (E15).
 | #   | Frage | hängt an |
 | --- | ----- | -------- |
 
-**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E41).
+**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E51).
 
 Der zuvor offene Punkt ist erledigt: Die **Umsetzungsinterpretation in E28** (feine Sperrgründe nur
 für `is_staff()`) wurde in der Grilling-Runde vom 2026-09-02 ausdrücklich bestätigt. Ebenfalls dort
@@ -920,12 +1286,13 @@ Der Zeitpunkt für RLS (früh, direkt nach Phase 2) und der Seed-Umfang (minimal
 Umsetzungsplan, weil sie Vorgehen sind und nicht Domäne.
 
 Bewusst hinter dem Zaun (E15) und damit **kein** Teil dieses Schemas: Ausstattungsmerkmale,
-Zusatzleistungen, Zahlungen, Stornobedingungen, Gutscheine, Mehrsprachigkeit, OTA-Anbindung,
+Zahlungen, Stornobedingungen, Gutscheine, Mehrsprachigkeit, OTA-Anbindung,
 Housekeeping-Abläufe. Alle additiv nachrüstbar.
 
 Benannte Upgrade-Pfade, die aus Entscheidungen folgen: Tages-Inventar-Tabelle (E10), volles RBAC
 (E13), `booking_guests` (E16), `bookings` + `booking_items` (E20/E27), Belegungspreise und weitere
-Rate-Plans (E5).
+Rate-Plans (E5), Belegung **je Position** statt je Vorgang (E45), Absicherung der Kundenstammdaten über
+Kundenkonten (E51), Bestätigungsmail und damit der ursprüngliche Popup-Text (E46).
 
 ---
 
@@ -961,3 +1328,6 @@ Für den Call als Zusammenfassung auf einer Folie:
 | 2026-08-17 | Artifact-Seite und FigJam-Board veröffentlicht; FigJam nach Domänen eingefärbt (Stammdaten / Preise / Buchungsvorgang / Fremdsystem)                                                                                                |
 | 2026-09-02 | Grilling-Runde zur **Umsetzung**: Runde 6 (E32–E36) entschieden und begründet; E28 bestätigt; Cloud-Instanz als Wegwerf-Spike freigegeben; `schema.md` um E32/E33 korrigiert; Umsetzungsplan um die Vorgehensentscheidungen ergänzt |
 | 2026-09-02 | Phasen 1–7 umgesetzt und getestet (91 Tests). Runde 7 (E37–E41) aus der Umsetzung heraus entschieden; `schema.md` um Trigger, Teilindizes, `is_blocking_status` im Prädikat und die internen Funktionen nachgeführt                 |
+| 2026-09-09 | Grilling-Runde 8 zur **Anbindung der Buchungsseite**: E42–E46 entschieden. E44 revidiert den Nachsatz von E41 (mehrere Kategorien je Vorgang). Fragen/Antworten und V8–V16 im Umsetzungsplan, Phasen 8/9 dort ausgearbeitet, Phase 7b und 9b ergänzt |
+| 2026-09-26 | Runde 11: **E50/E51** — Sitzadresse und optionale Rechnungsadresse in `customer_addresses` (revidiert E42), Verweise an `bookings`, Unveränderlichkeit per Trigger (passt E43 an), `create_booking` mit Adressparametern, Stammdaten „neueste gewinnt“ |
+| 2026-09-16 | Runde 9: **E47** — Frühstück als eigener Posten (`services`, `booking_extras`, `bookings.extras_amount_cents`/`grand_total_cents`, `p_with_breakfast`). Zusatzleistungen damit aus dem Scope-Zaun E15 heraus; `schema.md` um beide Tabellen und die RLS-Zeilen ergänzt |

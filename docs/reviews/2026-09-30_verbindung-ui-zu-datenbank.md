@@ -1,0 +1,155 @@
+# Review `verbindung-ui-zu-datenbank` (gegen `main`), 2026-09-30
+
+Umfang: 15 Commits von `e724f6c` bis `813760d`.
+Grundlagen: `CLAUDE.md`, `tsconfig.json`, `eslint.config.ts` und `.prettierrc` für die Standards; `docs/datenbank/umsetzungsplan.md` (0c, 7b, 8, 9, 9b) für die Spec.
+
+Tooling:
+
+- `pnpm build` läuft durch.
+- `pnpm vitest run src` läuft durch (29 Tests).
+- `pnpm lint` schlägt mit 2 Fehlern fehl:
+  - `vite.config.ts:3`: `checker` wird nicht benutzt.
+  - `.projekt-tagebuch/…006…md:51`: fehlendes Label.
+- `pnpm test:db` wurde nicht ausgeführt.
+
+---
+
+## Refactoring-Checkliste
+
+Die Reihenfolge: zuerst Bugs, dann schnelle Aufräumarbeiten, dann Struktur, dann offene Spec-Punkte. Jeder Punkt ist für sich allein umsetzbar.
+
+### A. Bugs und Sicherheit (zuerst)
+
+- [x] **A1: Der Knopf „weiter“ im Kalender bucht verbindlich.**
+  - Wo: `Booking.ts:1471` (`data-action="submit"`) und `:1526` (`case 'submit': void this.submit()`).
+  - Folge: `submit()` ruft seit `bb243ce` `createBooking` auf.
+  - Lösung: Die Aktion heißt künftig `next-step` und scrollt nur zu `#booking-rooms`. Gebucht wird ausschließlich über `[data-action="checkout"]`.
+- [x] **A2: Netzwerkfehler sehen aus wie Ablehnungen, das kann zu Doppelbuchungen führen.**
+  - Wo: `booking.service.ts:109`. Dort wird jeder `error` zu `{ ok: false }`.
+  - Das widerspricht V15: „Ablehnung als Ergebnis, Infrastrukturfehler werfen“.
+  - Lösung: Nur `P0001` mit `DETAIL`-JSON ist eine Ablehnung, alles andere wird geworfen. Bei einem Wurf bleibt der Knopf gesperrt, und der Hinweis sagt „Status unklar, bitte nicht erneut buchen“.
+- [x] **A3: Werte aus der Datenbank landen ungeschützt in `innerHTML` (XSS).**
+  - Lösung: `src/shared/ui/html.ts` mit `escapeHtml()` anlegen.
+  - Anwenden auf `room.name/description/imageAlt`, `service.name/description`, `line.name` (auch im `aria-label`), die Hotelzeilen und `roomsError`.
+  - Stellen in `Booking.ts`: ca. Z. 434, 486, 580, 586, 918, 925, 1137, 1165, 1216, 1225.
+- [x] **A4: Späte Antworten aus einer alten View-Instanz überschreiben den globalen Zustand.**
+  - Wo: `loadRooms` (`Booking.ts:1332–1348`).
+  - Lösung: Vor dem Schreiben in den Store `if (!this.roomsEl?.isConnected) return;` prüfen, oder einen `AbortController` verwenden.
+- [x] **A5: Kinderbetten werden erst nach dem Laden abgeglichen.**
+  - Wird die Zahl der Kinder verringert und schlägt `loadRooms` danach fehl, bleiben zu viele Kinderbetten übrig. `create_booking` antwortet dann mit `ungueltige_leistung`.
+  - Lösung: Den Abgleich schon in `handleGuestChange` synchron ausführen.
+- [x] **A6: Überzähliges `</output>` entfernen** (`Booking.ts:1138`). Fehlalarm des Reviews, nichts zu ändern: Seit `813760d` steht im Code genau ein `<output>` mit passendem `</output>` (die Mengenanzeige der Zusatzleistungen); `getHotelAddressHtml` endet sauber mit `<hr>` und `</div>`.
+
+### B. Schnelle Aufräumarbeiten
+
+- [x] B1: Lint wieder grün machen: `checker` in `vite.config.ts` benutzen oder entfernen, den Label-Verweis im Tagebuch reparieren.
+- [x] B2: Veraltete Kommentare korrigieren:
+  - den TODO-Block in `Booking.ts:27-30`,
+  - `breakfast.ts:1` (dort steht „je Kategorie“, es gilt inzwischen „je Vorgang“),
+  - den JSDoc von `ROOM_AMENITIES`, der jetzt über `SERVICE_ICONS` hängt (`:156`).
+- [x] B3: Umbenennen:
+  - `getBillingFieldHtml` → `getInputFieldHtml`,
+  - `handleClick` → `handleCalendarClick`,
+  - gemischte deutsch-englische Bezeichner wie `preise`, `grenze`, `einheit` vereinheitlichen.
+- [x] B4: Magic Strings durch Konstanten ersetzen: `export const BREAKFAST = 'BREAKFAST'`, analog zu `CHILD_BED`; den `'EUR'`-Fallback zentral ablegen.
+- [x] B5: Freie Farbwerte (`#ffc571`, `#f6f2f2`, `#fbfbfb`, `#74687e`) als Tokens in den `@theme`-Block von `style.css` aufnehmen.
+- [x] B6: `as`-Casts auf `event.target` durch `instanceof`-Guards ersetzen:
+  - `Booking.ts:752, 1260, 1512, 1786, 1795`,
+  - `modal.ts:41`,
+  - in `services.ts:62` den Filter als Type-Guard schreiben.
+- [x] B7: `loadHotel` verschluckt Fehler. Den Fehler loggen oder anzeigen (`Booking.ts:1291`). Umgesetzt: Hinweis in der Zusammenfassung statt der Hoteladresse, Details per `console.error` (auch wenn kein Hotel hinterlegt ist).
+- [x] B8: `screenshots/fruehstueck-zimmerkarte.png` (258 KB) entweder bewusst behalten oder entfernen. Entscheidung: bewusst behalten.
+
+### C. Typen und Duplikate
+
+- [x] C1: `ServiceRow` existiert doppelt und unterschiedlich (`breakfast.ts:11`, `services.ts:18`). Die Store-Typen (`RoomQuantities`, `ServiceQuantities`) gehören nach `domain/booking.types.ts`, damit die Fachlogik keine Typen mehr aus dem Store importiert. Umgesetzt in `src/shared/types/booking.types.ts` (statt `domain/`), weil Store und Fachlogik beide von dort importieren.
+- [x] C2: `Booking`, `BookingPosition` und `BookingService` in `Booking.ts:44-68` doppeln `BookingRequest`. `BookingRequestAddress` doppelt `Address` mit `CountryCode`. Die Typen daraus ableiten, statt sie zu kopieren.
+- [x] C3: Einen Union-Typ `RejectionCode` statt `code: string` einführen und eine gemeinsame Map Code → Text anlegen. Sie ersetzt die zwei Switches `getRejectionMessage` und `formatUnavailableReason`.
+- [x] C4: `formatRoomsFree` gibt es doppelt mit unterschiedlichem Text (`roomQuantity.ts:138`, `Booking.ts:2036`). Zusammenführen. Umgesetzt: beide in `roomQuantity.ts` mit Namen, die ihren Zweck sagen (`formatRoomsLeftClause` für Sätze, `formatRoomsFreeLabel` für die Karte); Texte unverändert.
+- [x] C5: Ein gemeinsames `getStepButtonHtml()` für `getServiceStepHtml` (`:637`) und `getQuantityStepHtml` (`:738`) anlegen.
+
+### D. Trennen von Design, Datenfluss und Logik
+
+Ziel: Die View orchestriert nur noch. Templates sind reine Funktionen (Daten rein, String raus), die Fachlogik bleibt rein und getestet, Supabase wird nur noch in `services/` angesprochen.
+
+```text
+src/views/BookingView/
+  Booking.ts                  – nur Orchestrierung: afterRender, Events → Aktionen, subscribe → render
+  templates/                  – icons.ts, calendar.template.ts, rooms.template.ts, checkout.template.ts
+  domain/                     – booking.types.ts, calendar.ts, validation.ts, messages.ts
+                                + roomQuantity/services/breakfast/summary/address (wie bisher)
+src/shared/
+  format.ts                   – formatPrice, formatNights, formatGuests, formatStayDate
+  ui/html.ts                  – escapeHtml
+  services/catalog.service.ts – fetchRoomTypes, fetchServices, fetchHotel, searchAvailability, buildRoomCards
+  state/bookingState.ts       – inkl. guests, Aktionen mit genau einem notify
+```
+
+- [x] D1: Die Formatierer (`Booking.ts:1980–2073`) nach `src/shared/format.ts` verschieben und Tests dafür schreiben. Umgesetzt mit `format.spec.ts`; zusätzlich `formatDate` (statt `formatStayDate(…, '', null)`) sowie `formatAdults`/`formatChildren`, die auch die Gäste-Auswahl nutzt. `countNights` bleibt für D2 in `Booking.ts`.
+- [x] D2: Die Kalenderfunktionen (`buildDays`, `countNights`, `toISODate`, `parseISODate`) nach `domain/calendar.ts` verschieben. `buildDays` bekommt `today` als Parameter. Tests schreiben. Umgesetzt in `src/views/BookingView/domain/calendar.ts` mit `calendar.spec.ts`, samt `DayCell`, `stripTime` und `isSameDay`. `buildDays` bekommt ein Objekt (`year`, `month`, `checkIn`, `checkOut`, `today`) und liest nichts mehr aus dem Store.
+- [x] D3: `domain/validation.ts` anlegen mit `getCheckoutError(draft, rooms)` und `getCompletedSteps(state)`. Beide stützen sich auf `getMissingBeds() === 0`, **nicht** auf den Anzeigetext `getCapacityText() === ''` (`Booking.ts:1734, 1752`). Umgesetzt mit `validation.spec.ts`: `getCheckoutError(draft, rooms)` liefert `{ section, message }`, die View springt nur bei `section === 'form'` ins Formular (statt Textvergleich mit `FORM_INCOMPLETE`). Der Hinweistext zu fehlenden Betten steht als `formatMissingBedsNotice` in `roomQuantity.ts`; `BookingDraft` und `BookingStep` liegen jetzt in `shared/types/booking.types.ts`.
+- [x] D4: `catalog.service.ts` anlegen und alle Lesezugriffe dorthin verschieben: `hotels`, `room_types`, `services`, `search_availability`, `getPublicUrl` sowie das Mapping `buildRoomCards`/`pickImage` (`Booking.ts:1289–1359, 1925–1972`). Das erfüllt zugleich V9 und Phase 8.4. Umgesetzt mit `catalog.service.spec.ts`: `fetchHotel`, `fetchRoomTypes`, `fetchServices`, `searchAvailability` werfen bei Fehlern, `buildRoomCards` samt `pickImage` und Bild-URL liegt im Service. Die Zeilentypen und `RoomCard` sind aus `room.interface.ts`/`hotel.interface.ts` nach `src/shared/types/catalog.types.ts` umgezogen (sonst hinge `shared/` an `views/`), `RoomAmenity` nach `Booking.ts`. `Posts.ts`/`SinglePost.ts` bleiben für F2.
+- [x] D5: `guests` und die Kontakt-/Adressdaten in den `bookingState` übernehmen (V10). `completedSteps` fliegt aus dem Store, stattdessen leitet `MainHeader` die Schritte über `getCompletedSteps` ab. Damit entfällt auch die Sperre gegen Endlosschleifen in `bookingState.ts:130`. Umgesetzt: Der Store führt Gäste, Kontaktdaten und die geladenen Kategorien (`getRooms`, für die Bettenprüfung im Header) und liefert alles als `getSnapshot()`. `buildBookingDraft` steht in `domain/draft.ts`, `getCurrentStep` und `BOOKING_STEP_ORDER` in `domain/validation.ts`. Das Formular schreibt bei jeder Eingabe in den Store, die Zusammenfassung liest von dort. Tests: `draft.spec.ts`, `bookingState.spec.ts`, `getCurrentStep`; im Browser durchgespielt.
+- [x] D6: Aktionen im Store bündeln, zum Beispiel `selectRoomQuantity()`. Sie setzt die Menge, gleicht die Leistungen ab (heute dreimal kopiert in `:811`, `:1269`, `:1346`) und löst genau ein `notify` aus. Umgesetzt: `selectRoomQuantity()` (Menge + Leistungsabgleich), `setGuests()` (gleicht Kinderbetten sofort ab) und `applySearchResult(rooms, extraServices)` (Mengen- und Leistungsabgleich nach einer Suche, gibt den Hinweis zurück) – je genau ein `notify`. Der Store kennt dafür die Leistungen je Vorgang (`getExtraServices`); `reconcileSelectedServices` ist aus der View verschwunden. Tests in `bookingState.spec.ts`, im Browser durchgespielt.
+- [x] D7: Einen `destroy()`-Hook in `AbstractView` und `router.ts` einführen. Die Abo-Behelfslösung in `renderSummary` (`:1087`) wird dann entfernt, ebenso die versteckte Abhängigkeit vom `reset()` in `MainHeader.destroy()`. Umgesetzt: `AbstractView.destroy()` und `ViewInstance.destroy`; der Router merkt sich die View und ruft in `teardown()` erst `MainHeader.destroy()` (nur Abo lösen), dann `view.destroy()`. `BookingView.destroy()` löst das Abo, setzt `bookingState` zurück und markiert die Instanz, damit späte Antworten nichts mehr schreiben (statt `isConnected`). Nebenbei: Die Umleitung bei Trailing Slash steht jetzt am Anfang von `render()` – vorher wurde die Seite danach ein zweites Mal gerendert. Im Browser geprüft.
+- [x] D8: Die Templates schrittweise nach `templates/*.ts` verschieben, in dieser Reihenfolge: Icons, Kalender, Zimmer, Checkout. `Booking.ts` hat aktuell 2073 Zeilen. Umgesetzt: `templates/icons.ts`, `calendar.template.ts` (Seitengerüst, Gäste, Kalender), `rooms.template.ts` (Karten, Mengenwähler, Zusatzleistungen), `checkout.template.ts` (Formular, Zusammenfassung, Bestätigung). Die Templates bekommen fertige Werte und escapen ihre Text-Parameter; alle Entscheidungen (Texte, Mengen, Maxima, Zustandsklassen der Kalendertage) bleiben in `Booking.ts`, das von 1870 auf rund 1300 Zeilen schrumpft und kein Markup mehr enthält. Gerendertes HTML in sechs Zuständen per Browser mit dem vorherigen Commit verglichen: identisch.
+- [x] D9: `CLAUDE.md` aktualisieren. Dort steht noch „keine Service-Schicht“, es gibt aber inzwischen eine.
+
+### E. Tests
+
+- [x] E1: `address.spec.ts` für `getInvalidFields` schreiben. Umgesetzt in `src/views/BookingView/address.spec.ts`: Pflichtfelder in Formularreihenfolge, Leerzeichen, E-Mail-Grenzfälle, Länder, Rechnungsadresse nur wenn vorhanden; dazu `formatAddressLines`, `getCountryLabel`, `emptyToNull`.
+- [x] E2: `booking.service.spec.ts` für `parseRejection` und `parseCreatedBooking` schreiben. Ergänzt in `booking.service.spec.ts` (über `createBooking`, die Parser sind privat): Felder und Rückfälle aus dem DETAIL-JSON, sechs Formen, die keine Ablehnung sind; Antwortformen, die werfen (`outcomeUnknown`); dazu die `p_*`-Parameter mit und ohne Rechnungsadresse.
+- [x] E3: Die Regeln in `bookingState` testen, zum Beispiel „ohne Zimmer kein Frühstück“. Ergänzt in `bookingState.spec.ts` (Abschnitt „Regeln“): kein Frühstück und keine Leistungen ohne Zimmer, Frühstück kommt nicht unbestellt zurück, Mengen 0 fallen heraus, Kinderbett ohne Kind, unbekannte Leistungen, Zimmergrenze durch Erwachsene, Kopien, `reset`, `unsubscribe`.
+- [x] E4: Datenbanktests für E50/E51 schreiben: Umgesetzt in `supabase/tests/customer-addresses.spec.ts` (29 Fälle, alle grün; Gegenprobe mit abgeschaltetem Trigger schlägt erwartungsgemäß fehl). Aufräumen geht nicht: `booking_events` ist auch für `service_role` nur anhängbar (E12), also halten Buchung, Adressen und Kunde – das ist die Ursache der bekannten Fixture-Leichen der ganzen Suite.
+  - `ungueltige_adresse`,
+  - eine unvollständige Rechnungsadresse (Regel „alles oder nichts“),
+  - die Wiederverwendung über `match_key`,
+  - den Trigger `guard_customer_address_update`,
+  - die zusammengesetzten Fremdschlüssel.
+
+- [x] E5 (Fund beim Lauf von `pnpm test:db` am 2026-10-21): `rates.spec.ts` „meldet für den gedeckten Seed-Bestand keine Lücke“ schlug fehl. Ursache ist nicht der Seed – der legt 13 Monatsblöcke relativ zu `current_date` an –, sondern dass der Test 365 Tage ab HEUTE prüfte: Die lokale Datenbank war zuletzt im September 2026 zurückgesetzt, ihre Preise enden am 2027-09-30. Behoben: Der Test prüft jetzt bis zum Ende des Seed-Bestands (höchstens 365 Tage) und meldet einen abgelaufenen Bestand ausdrücklich mit dem Hinweis auf `pnpm db:reset`. Gegenprobe mit einer künstlichen Lücke im Seed: Test schlägt an.
+
+### F. Offene Punkte aus dem Umsetzungsplan
+
+- [x] F1: **Phase 8 / V8:** `pnpm db:types` ausführen, `src/shared/types/database.types.ts` anlegen, auf `createClient<Database>` umstellen und `post.interface.ts` entfernen. Umgesetzt: `database.types.ts` erzeugt, `createClient<Database>`, `HotelRow`/`RoomTypeDetail`/`RoomTypeImage`/`ServiceRow`/`Post` abgeleitet, `post.interface.ts` entfernt. `RoomAvailability` bleibt bewusst handgeschrieben (Funktionsrückgaben sind generiert nie nullbar, E37). Der typisierte Client fand `p_services` (readonly) und `p_phone`/`p_billing_company` (`null` statt weglassen). Dazu E36 nachgeholt: Migration `20261021101000_posts_spike.sql` plus Seed-Zeilen – `posts` fehlte lokal, `/posts` lief ins Leere. Gegenprobe: eine simulierte Spaltenumbenennung wird zum Typfehler.
+- [x] F2: **Phase 8.4 / V9:** Kein `supabase`-Import mehr außerhalb von `services/`. Das betrifft auch `Posts.ts` und `SinglePost.ts`. Siehe D4. Umgesetzt mit `posts.service.ts`; `grep -rn "from.*services/supabase" src/ --include=*.ts | grep -v src/shared/services/` findet nichts mehr.
+- [x] F3: **Phase 9 / V14 / E29:** Den Kalender an `availability_calendar` anbinden:
+  - `isSelectableAsCheckIn` und `isSelectableAsCheckOut` einführen,
+  - ausgebuchte Tage durchgestrichen mit Tooltip zeigen,
+  - `canGoNext()` mit `hotels.booking_horizon_days` bauen.
+
+  Heute ist Ausgebuchtes weiterhin wählbar.
+
+  Umgesetzt: `fetchAvailabilityCalendar` + `buildNightAvailability` (`catalog.service.ts`), einmal je Belegung über den ganzen Horizont geladen und gecacht (V14), ohne Belegung gar nicht (V16.7). In `domain/calendar.ts`: `getNightBlockReason`, `isSelectableAsCheckIn`, `isSelectableAsCheckOut` (prüft die ganze Kette bis zur Vornacht, nicht nur die Vornacht), `canGoPrev`/`canGoNext` mit `hotels.booking_horizon_days`. Gesperrte Tage sind durchgestrichen, tragen `aria-disabled` statt `disabled` (sonst zeigen manche Browser keinen Tooltip) und einen `title` mit Datum und Grund (`formatBlockedNight` in `messages.ts`). Nach einer Ablehnung wird der Cache geleert und der Kalender neu geladen (Teil von F5). Fertig-Kriterium im Browser geprüft: Eine gesperrte Nacht sperrt ihr Datum als Anreise und lässt es als Abreise zu; Blättern endet am Horizont.
+- [x] F4: **9b.2:** Eine Auswahlleiste unter der Zimmerliste bauen, etwa „2 Zimmer · 4 Nächte · 1.464 €“, mit Sprung zum Checkout. Umgesetzt: Leiste am Ende von Schritt 2 – unter den Zusatzleistungen, damit der Sprung sie nicht überspringt –, sichtbar ab einem Zimmer. Die Summe ist dieselbe wie die Gesamtsumme in „Ihre Buchung“ (`getOrderTotalCents`), der Text kommt aus `formatSelectionSummary` (`summary.ts`), das Markup aus `getSelectionBarHtml` (`rooms.template.ts`). Der Knopf „weiter zu Ihren Daten“ springt zu `#booking-details`. Im Browser geprüft, auch bei 375 px.
+- [x] F5: **9b.8:** Bei einer Ablehnung den Hinweis zusätzlich an der Zimmerkarte und am Kalenderdatum zeigen und danach Kalender und Zimmerliste neu laden. Umgesetzt: Bei Ablehnungen, die eine geänderte Verfügbarkeit bedeuten (`nicht_buchbar`, `ausgebucht`, `kein_preis`, `zu_klein`), steht zusätzlich ein Satz an der Zimmerkarte aus `room_type_id` und – mit Datum – ein roter Rahmen samt Tooltip am Kalendertag und ein Satz über „weiter“; der Kalender springt in den Monat der Nacht. Texte in `getRejectionHints` (`messages.ts`). Danach werden Kalender (Cache geleert) und Zimmerliste neu geladen. Die Hinweise verschwinden, sobald Zeitraum oder Belegung sich ändern. Im Browser mit einer per `room_blocks` nachträglich gesperrten Nacht geprüft – ohne angelegte Buchung.
+- [x] F6: **Den Plan pflegen:**
+  - den Kopf von E1–E46 auf E1–E51 bringen,
+  - in 9b festhalten, dass die Punkte 8–9 umgesetzt sind,
+  - V12 anpassen, denn es gibt inzwischen Frontend-Tests,
+  - Phase 7b auf E50 umschreiben,
+  - V17 und den Commit-Schnitt anpassen, weil Phase 8 und 9 noch ausstehen.
+
+  Umgesetzt in `docs/datenbank/umsetzungsplan.md`: Kopf und 0b auf E1–E51; V9 mit dem tatsächlichen Zuschnitt (`catalog`/`booking`/`posts`), V12 mit den 210 Frontend-Tests, V17 und ein Nachtrag „tatsächlicher Schnitt“ unter dem Commit-Schnitt (Plan gegen Commits). Phase 7b, Commit 1 beschreibt jetzt `customer_addresses` samt Trigger (E50/E51), Commit 2 hat einen Nachtrag zu Punkt 7. Phase 8 und 9 sind inzwischen umgesetzt und tragen je einen Nachtrag; 9b hält die Punkte 2, 8 und 9 fest. Bestehende Nachträge bleiben stehen, Überholtes ist durchgestrichen statt gelöscht.
+
+### G. Barrierefreiheit
+
+- [x] G1: Fehlermeldungen pro Feld mit `aria-describedby` verknüpfen, statt nur `aria-invalid` zu setzen. Umgesetzt: Jedes Pflichtfeld hat eine Fehlerzeile `#booking-<feld>-error` (`getFieldErrorHtml` in `checkout.template.ts`), die Texte stehen als `Record<InvalidField, string>` in `address.ts` (`getFieldErrorText`, getestet). `setFieldError` in `Booking.ts` setzt `aria-invalid` und Text gemeinsam und hebt beides beim Tippen wieder auf.
+- [x] G2: Das „ד zum Zurücksetzen ist ein `span role="button"` innerhalb eines `<button>` (`Booking.ts:1421`). Daraus einen eigenen Knopf außerhalb der Tageszelle machen. Umgesetzt: Jede Tageszelle ist ein `<div class="relative">` mit dem Tag und – am Anreisetag – einem eigenen `<button data-action="clear">` daneben, mit sichtbarem Fokus.
+- [x] G3: Den Tagen im Kalender ein `aria-label` mit dem vollen Datum und `aria-pressed` geben. Umgesetzt: `aria-label` wie „Mittwoch, 3. Juni 2026, Anreise, heute“ (`formatLongDate` in `format.ts`, getestet; „im gewählten Zeitraum“ für die Tage dazwischen), `aria-pressed` an Anreise- und Abreisetag. Der Sperrgrund bleibt im `title` und wird damit als Beschreibung vorgelesen.
+- [x] G4: Die Zahl der `aria-live`-Regionen verringern, zum Beispiel nicht jede `data-service-amount`-Zeile. Umgesetzt: kein `aria-live` mehr an den Preiszeilen der Leistungen und an der Gesamtsumme; doppeltes `aria-live` neben `role="status"` bzw. am `<output>` (ist von sich aus eine Statusregion) entfernt. Es bleiben die Hinweise an Gästen, Zimmerkarten und Betten sowie die Mengenanzeige.
+
+  Lint, 214 Tests und Build sind grün. **Im Browser noch nicht geprüft:** In der Sandbox (Ubuntu 26.04, arm64) gibt es weder Chrome noch ein Playwright-Chromium. Das Prüfskript für G1–G4 liegt bereit.
+
+---
+
+## Was gut gelöst ist
+
+- Die reine Fachlogik (`roomQuantity`, `services`, `breakfast`, `summary`) ist klein und getestet.
+- Die Anfrage-ID schützt vor veralteten Suchantworten.
+- Die Sperre `submitting` verhindert Doppelklicks.
+- Die RPC-Antwort wird geprüft geparst.
+- Das Modal hat genau einen Ausgang.
+- Gästedaten werden per `textContent` eingefügt.
+- Die Migrationen setzen `revoke`/`grant` sauber neu.
+- Es gibt Datenbanktests für zwei Kategorien, den Rollback und die Nebenläufigkeit.

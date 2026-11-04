@@ -2,18 +2,23 @@ import AbstractView from '../AbstractView';
 import logo from '../../assets/img/logo.svg';
 import stars from '../../assets/img/icons/stars.png';
 import mainHeaderBg from '../../assets/img/main-header-bg.jpg';
-import { bookingState, type BookingStep } from '../../shared/state/bookingState';
-import type { BookingHeaderConfig, PageHeaderConfig, HeaderConfig, StepState } from './header.types';
+import { bookingState } from '../../shared/state/bookingState';
+import type { BookingStep } from '../../shared/types/booking.types';
+import { buildBookingDraft } from '../BookingView/domain/draft';
+import { getCompletedSteps, getCurrentStep } from '../BookingView/domain/validation';
+import { scrollToSection } from '../../shared/ui/scroll';
+import type { PageHeaderConfig, HeaderConfig, StepState } from './header.types';
 
 type BookingStepDefinition = {
     step: BookingStep;
     label: string;
+    targetId: string;
 };
 
 const BOOKING_STEPS: readonly BookingStepDefinition[] = [
-    { step: 1, label: 'Datum & Gäste' },
-    { step: 2, label: 'Zimmerauswahl' },
-    { step: 3, label: 'persönliche Daten' },
+    { step: 1, label: 'Datum & Gäste', targetId: 'booking-dates' },
+    { step: 2, label: 'Zimmerauswahl', targetId: 'booking-rooms' },
+    { step: 3, label: 'persönliche Daten', targetId: 'booking-details' },
 ];
 
 const STEP_CIRCLE_CLASSES: Record<StepState, string> = {
@@ -28,12 +33,16 @@ const STEP_LABEL_CLASSES: Record<StepState, string> = {
     done: 'text-purple-haze-dark',
 };
 
-function getStepState(step: BookingStep, activeStep: BookingStep): StepState {
-    if (bookingState.isStepComplete(step)) {
+function getStepState(step: BookingStep, completedSteps: readonly BookingStep[]): StepState {
+    if (completedSteps.includes(step)) {
         return 'done';
     }
 
-    return step === activeStep ? 'current' : 'pending';
+    return step === getCurrentStep(completedSteps) ? 'current' : 'pending';
+}
+
+function getCompletedBookingSteps(): BookingStep[] {
+    return getCompletedSteps(buildBookingDraft(bookingState.getSnapshot()), bookingState.getRooms());
 }
 
 export const homeHeader: HeaderConfig = {
@@ -65,7 +74,6 @@ export const postsHeader: HeaderConfig = {
 
 export const bookingHeader: HeaderConfig = {
     variant: 'booking',
-    activeStep: 1,
 };
 
 export class MainHeader extends AbstractView {
@@ -79,32 +87,25 @@ export class MainHeader extends AbstractView {
 
     // eslint-disable-next-line @typescript-eslint/require-await
     async getHtml(): Promise<string> {
-        return this.config.variant === 'booking' ? this.getBookingHeaderHtml(this.config) : this.getPageHeaderHtml(this.config);
+        return this.config.variant === 'booking' ? this.getBookingHeaderHtml() : this.getPageHeaderHtml(this.config);
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await
     async afterRender(): Promise<void> {
         if (this.config.variant !== 'booking') return;
 
+        document.getElementById('booking-steps')?.addEventListener('click', (event: MouseEvent): void => {
+            this.handleStepClick(event);
+        });
+
         this.unsubscribe = bookingState.subscribe((): void => {
             this.renderSteps();
         });
     }
 
-    /**
-     * Räumt den Header ab, bevor der Router das Layout neu aufbaut.
-     * Reihenfolge ist wichtig: erst abmelden, dann zurücksetzen – so erreicht die
-     * Reset-Benachrichtigung diesen Header nicht mehr. Mehrfachaufrufe sind unschädlich.
-     */
     destroy(): void {
-        if (this.unsubscribe) {
-            this.unsubscribe();
-            this.unsubscribe = null;
-        }
-
-        if (this.config.variant === 'booking') {
-            bookingState.reset();
-        }
+        this.unsubscribe?.();
+        this.unsubscribe = null;
     }
 
     private getPageHeaderHtml(config: PageHeaderConfig): string {
@@ -168,42 +169,50 @@ export class MainHeader extends AbstractView {
         `;
     }
 
-    private getBookingHeaderHtml(config: BookingHeaderConfig): string {
+    private getBookingHeaderHtml(): string {
         return /*html*/ `
-            <header class="relative w-full bg-cover bg-center mb-0 456:mb-10" style="background-image: url('${mainHeaderBg}')">
-                <div class="w-full bg-eggshell/65">
-                    <div class="w-full max-w-360 mx-auto flex flex-col 768:flex-row 768:items-center gap-y-6 768:gap-x-24 px-4 pt-4 pb-6">
-                        <a href="/" data-link><img src="${logo}" alt="Karawanken Hof Logo"></a>
-                    </div>
-                    <div class="hidden 456:block absolute -bottom-11 w-full">
-                        <ol id="booking-steps" class="w-full max-w-120 flex mx-auto">
-                            ${this.getBookingStepsHtml(config.activeStep)}
-                        </ol>
+            <header class="sticky top-0 z-40 w-full bg-cover bg-center shadow-md" style="background-image: url('${mainHeaderBg}')">
+                <div class="w-full bg-eggshell/85 backdrop-blur-sm">
+                    <div class="w-full max-w-360 mx-auto flex flex-col 768:flex-row items-center gap-y-3 768:gap-x-12 px-4 py-3">
+                        <a href="/" data-link class="shrink-0"><img src="${logo}" alt="Karawanken Hof Logo" class="h-12 768:h-16 w-auto"></a>
+                        <nav aria-label="Buchungsschritte" class="w-full 768:flex-1">
+                            <ol id="booking-steps" class="w-full max-w-120 flex mx-auto">
+                                ${this.getBookingStepsHtml()}
+                            </ol>
+                        </nav>
                     </div>
                 </div>
             </header>
         `;
     }
 
-    /** Ersetzt nur die Steps – dieselbe Funktion für Erst-Render und Neu-Render nach einer Zustandsänderung. */
+    private handleStepClick(event: MouseEvent): void {
+        if (!(event.target instanceof Element)) return;
+        const link = event.target.closest('a[data-step-target]');
+        if (!(link instanceof HTMLAnchorElement)) return;
+
+        event.preventDefault();
+        scrollToSection(link.dataset.stepTarget ?? '');
+    }
+
     private renderSteps(): void {
         const stepsEl: HTMLElement | null = document.getElementById('booking-steps');
         if (!stepsEl || this.config.variant !== 'booking') return;
 
-        stepsEl.innerHTML = this.getBookingStepsHtml(this.config.activeStep);
+        stepsEl.innerHTML = this.getBookingStepsHtml();
     }
 
-    private getBookingStepsHtml(activeStep: BookingStep): string {
-        const states: StepState[] = BOOKING_STEPS.map((definition: BookingStepDefinition): StepState => getStepState(definition.step, activeStep));
+    private getBookingStepsHtml(): string {
+        const completedSteps = getCompletedBookingSteps();
+        const states: StepState[] = BOOKING_STEPS.map((definition: BookingStepDefinition): StepState => getStepState(definition.step, completedSteps));
         const items: string[] = BOOKING_STEPS.map((definition: BookingStepDefinition, index: number): string => {
-            return this.getBookingStepHtml(definition.label, states[index] ?? 'pending', states[index - 1]);
+            return this.getBookingStepHtml(definition, states[index] ?? 'pending', states[index - 1]);
         });
 
         return items.join('');
     }
 
-    private getBookingStepHtml(label: string, state: StepState, previousState: StepState | undefined): string {
-        // Die Verbinder-Linie zeigt den zurückgelegten Weg, hängt also am Vorgänger-Step.
+    private getBookingStepHtml(definition: BookingStepDefinition, state: StepState, previousState: StepState | undefined): string {
         const lineColor: string = previousState === 'done' ? 'bg-purple-haze' : 'bg-purple-haze/45';
         const connector: string =
             previousState === undefined
@@ -214,8 +223,10 @@ export class MainHeader extends AbstractView {
         return /*html*/ `
             <li class="relative flex flex-1 flex-col items-center gap-y-2"${currentAttribute}>
                 ${connector}
-                <span class="w-6 h-6 rounded-full border-2 transition-colors ${STEP_CIRCLE_CLASSES[state]}"></span>
-                <span class="font-lato text-16 transition-colors ${STEP_LABEL_CLASSES[state]}">${label}</span>
+                <a href="#${definition.targetId}" data-step-target="${definition.targetId}" class="group flex flex-col items-center gap-y-2 rounded-md focus-visible:outline-2 focus-visible:outline-purple-haze">
+                    <span class="w-6 h-6 rounded-full border-2 transition-colors ${STEP_CIRCLE_CLASSES[state]}"></span>
+                    <span class="font-lato text-14 456:text-16 text-center leading-tight transition-colors group-hover:underline ${STEP_LABEL_CLASSES[state]}">${definition.label}</span>
+                </a>
             </li>
         `;
     }

@@ -90,15 +90,21 @@ describe('Verhalten des anonymen Clients', () => {
             create_booking: {
                 p_check_in: '2035-01-03',
                 p_check_out: '2035-01-01',
-                p_room_type_id: SEED_KATEGORIEN[0],
+                p_positions: [{ room_type_id: SEED_KATEGORIEN[0], rooms: 1 }],
                 p_adults: 2,
                 p_email: 'rechtepruefung@muster.test',
                 p_first_name: 'Test',
                 p_last_name: 'Test',
+                p_street: 'Teststraße',
+                p_house_number: '1',
+                p_postal_code: '9500',
+                p_city: 'Villach',
+                p_country_code: 'AT',
             },
         };
         const intern: Record<string, Record<string, unknown>> = {
-            availability_nights: { p_hotel_id: SEED_HOTEL, p_from: '2035-01-01', p_to: '2035-01-02', p_adults: 2 },
+            availability_nights: { p_hotel_id: SEED_HOTEL, p_from: '2035-01-01', p_to: '2035-01-02' },
+            group_capacity: { p_rooms: [1], p_occupancy: [2], p_room_limit: 1 },
             find_rate_gaps: { tage: 30 },
             reject_booking: { p_code: 'ausgebucht' },
             rls_audit: {},

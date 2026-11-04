@@ -1,8 +1,6 @@
 import './style.css';
 import { HomeView } from './views/HomeView/Home';
-import { homeHeader, postsHeader, aboutHeader, bookingHeader } from './views/LayoutViews/MainHeader';
-import { PostsView } from './views/PostsView/Posts';
-import { SinglePostView } from './views/PostsView/SinglePostView/SinglePost';
+import { homeHeader, aboutHeader, bookingHeader } from './views/LayoutViews/MainHeader';
 import { AboutView } from './views/AboutView/About';
 import { BookingView } from './views/BookingView/Booking';
 import { AdminDashboardView } from './views/admin/AdminDashboardView/AdminDashboard';
@@ -18,17 +16,6 @@ const routes: Route[] = [
         kind: 'static',
         header: homeHeader,
         view: HomeView,
-    },
-    {
-        path: '/posts',
-        kind: 'static',
-        header: postsHeader,
-        view: PostsView,
-    },
-    {
-        path: '/posts/:id',
-        kind: 'dynamic',
-        view: SinglePostView,
     },
     {
         path: '/about',

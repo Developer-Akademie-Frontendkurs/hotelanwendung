@@ -1,0 +1,78 @@
+import { describe, expect, it } from 'vitest';
+import { REJECTION_CODES, UNAVAILABLE_REASONS, isRejectionCode, isUnavailableReason } from '../../shared/types/booking.codes';
+import { formatBlockedNight, formatUnavailableReason, getRejectionHints, getRejectionMessage } from './messages';
+
+const noContext = { roomName: null, night: null };
+
+describe('Codes aus der Datenbank', () => {
+    it('erkennt bekannte Codes und lehnt fremde ab', () => {
+        expect(isRejectionCode('ausgebucht')).toBe(true);
+        expect(isRejectionCode('ungueltige_adresse')).toBe(true);
+        expect(isRejectionCode('neuer_code')).toBe(false);
+        expect(isUnavailableReason('ungueltige_adresse')).toBe(false);
+    });
+
+    it('hat für jeden Code einen eigenen, nicht leeren Satz', () => {
+        for (const code of REJECTION_CODES) expect(getRejectionMessage(code, noContext)).not.toBe('');
+        for (const reason of UNAVAILABLE_REASONS) expect(formatUnavailableReason(reason)).not.toBe('');
+    });
+});
+
+describe('getRejectionMessage', () => {
+    it('nennt Kategorie und Nacht, wenn die Verfügbarkeit sich geändert hat', () => {
+        expect(getRejectionMessage('ausgebucht', { roomName: 'Double Suite', night: '12.10.2026' })).toBe(
+            'Double Suite ist für die Nacht vom 12.10.2026 leider nicht mehr buchbar. Wir haben die Verfügbarkeit aktualisiert – bitte prüfen Sie Ihre Auswahl.',
+        );
+    });
+
+    it('fällt ohne Kategorie und Nacht auf „Ihre Auswahl" zurück', () => {
+        expect(getRejectionMessage('nicht_buchbar', noContext)).toMatch(/^Ihre Auswahl ist leider nicht mehr buchbar\./);
+    });
+
+    it('nimmt für Vergangenheit und Horizont denselben Satz wie die Zimmerkarte', () => {
+        expect(getRejectionMessage('vergangenheit', noContext)).toBe(formatUnavailableReason('vergangenheit'));
+        expect(getRejectionMessage('ausserhalb_horizont', noContext)).toBe(formatUnavailableReason('ausserhalb_horizont'));
+    });
+
+    it('hat für unbekannte Codes einen allgemeinen Satz', () => {
+        expect(getRejectionMessage(null, noContext)).toBe('Die Buchung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.');
+    });
+});
+
+describe('formatUnavailableReason', () => {
+    it('zeigt für unbekannte Gründe „nicht buchbar"', () => {
+        expect(formatUnavailableReason(null)).toBe('Für diesen Zeitraum nicht buchbar.');
+    });
+});
+
+describe('formatBlockedNight (E24)', () => {
+    it('nennt Datum und Grund – für Gäste meist nicht_buchbar (E28)', () => {
+        expect(formatBlockedNight('24.10.2026', 'nicht_buchbar')).toBe('24.10.2026: Anreise nicht möglich – für diese Nacht ist keine Buchung möglich.');
+    });
+
+    it('hat für jeden Grund einen eigenen Satz', () => {
+        const texts = UNAVAILABLE_REASONS.map((reason) => formatBlockedNight('24.10.2026', reason));
+        expect(new Set(texts).size).toBe(UNAVAILABLE_REASONS.length);
+    });
+});
+
+describe('getRejectionHints (Phase 9b, Punkt 8)', () => {
+    it.each(['nicht_buchbar', 'ausgebucht', 'kein_preis', 'zu_klein'] as const)('zeigt bei %s Hinweise an Karte und Kalender', (code) => {
+        expect(getRejectionHints(code, '30.10.2026')).toEqual({
+            room: 'Für die Nacht vom 30.10.2026 nicht mehr buchbar.',
+            calendar: 'Die Nacht vom 30.10.2026 ist nicht mehr buchbar – bitte prüfen Sie Ihren Zeitraum.',
+        });
+    });
+
+    it('kommt ohne Nacht aus – dann nur an der Karte', () => {
+        expect(getRejectionHints('nicht_buchbar', null)).toEqual({ room: 'Nicht mehr buchbar – bitte prüfen Sie Ihre Auswahl.', calendar: null });
+    });
+
+    it.each(['ungueltige_adresse', 'ungueltige_leistung', 'ungueltige_belegung', 'vergangenheit'] as const)('lässt %s nur am Buchen-Knopf stehen', (code) => {
+        expect(getRejectionHints(code, '30.10.2026')).toBeNull();
+    });
+
+    it('lässt einen unbekannten Code nur am Buchen-Knopf stehen', () => {
+        expect(getRejectionHints(null, '30.10.2026')).toBeNull();
+    });
+});

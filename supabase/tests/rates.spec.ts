@@ -58,6 +58,10 @@ describe('room_type_rates: Überlappungsschutz (E5)', () => {
     });
 });
 
+/** Der Standardtarif des Seed-Hotels (`supabase/seed.sql`). */
+const SEED_HOTEL_ID = '00000000-0000-4000-8000-000000000001';
+const SEED_RATE_PLAN_ID = '00000000-0000-4000-8000-000000000201';
+
 describe('find_rate_gaps (E25)', () => {
     let fixture: Fixture;
 
@@ -109,10 +113,28 @@ describe('find_rate_gaps (E25)', () => {
     it('meldet für den gedeckten Seed-Bestand keine Lücke', async () => {
         // Der Gegentest zum vorigen: eine Prüffunktion, die immer etwas findet, ist
         // so wertlos wie eine, die nie etwas findet.
-        const { data, error } = await serviceClient.rpc('find_rate_gaps', { tage: 365 });
+        //
+        // Der Seed legt 13 Monatsblöcke ab dem Monat des letzten Resets an (relativ zu
+        // current_date). Wie weit die von HEUTE aus reichen, hängt also davon ab, wann
+        // zuletzt zurückgesetzt wurde – geprüft wird deshalb bis zum Ende des Bestands,
+        // höchstens über den Buchungshorizont. Sonst wird der Test ein paar Monate nach
+        // dem Reset rot, ohne dass am Seed etwas falsch ist.
+        const { data: lastRate, error: rateError } = await serviceClient
+            .from('room_type_rates')
+            .select('valid_to')
+            .eq('rate_plan_id', SEED_RATE_PLAN_ID)
+            .order('valid_to', { ascending: false })
+            .limit(1)
+            .single();
+        expect(rateError).toBeNull();
+
+        const coveredDays = Math.round((Date.parse((lastRate as { valid_to: string }).valid_to) - Date.parse(isoDay(0))) / 86_400_000);
+        expect(coveredDays, 'Die Seed-Preise sind abgelaufen – lokale Datenbank zurücksetzen (pnpm db:reset).').toBeGreaterThan(0);
+
+        const { data, error } = await serviceClient.rpc('find_rate_gaps', { tage: Math.min(coveredDays, 365) });
         expect(error).toBeNull();
 
-        const seedHotel = (data as { hotel_id: string }[]).filter((row) => row.hotel_id === '00000000-0000-4000-8000-000000000001');
+        const seedHotel = (data as { hotel_id: string }[]).filter((row) => row.hotel_id === SEED_HOTEL_ID);
         expect(seedHotel).toHaveLength(0);
     });
 

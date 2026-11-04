@@ -3,7 +3,7 @@
 > **Dies ist das normative Dokument.** Artifact-Seite und FigJam-Board sind **Ableitungen** (E9).
 > Geändert wird immer erst hier.
 >
-> Begründung jeder Entscheidung: [README.md](./README.md) (E1–E36).
+> Begründung jeder Entscheidung: [README.md](./README.md) (E1–E51).
 > Umsetzung: [umsetzungsplan.md](./umsetzungsplan.md).
 
 ---
@@ -15,6 +15,7 @@ erDiagram
     HOTELS ||--o{ ROOM_TYPES : "hat"
     HOTELS ||--o{ ROOMS : "hat"
     HOTELS ||--o{ RATE_PLANS : "hat"
+    HOTELS ||--o{ SERVICES : "bietet an"
 
     ROOM_TYPES ||--o{ ROOMS : "gruppiert"
     ROOM_TYPES ||--o{ ROOM_TYPE_IMAGES : "zeigt"
@@ -27,9 +28,14 @@ erDiagram
     ROOM_TYPES ||--o{ BOOKINGS : "verkauft als"
     RATE_PLANS ||--o{ BOOKINGS : "gebucht zu"
     CUSTOMERS ||--o{ BOOKINGS : "bucht"
+    CUSTOMERS ||--o{ CUSTOMER_ADDRESSES : "wohnt an / rechnet an"
+    CUSTOMER_ADDRESSES ||--o{ BOOKINGS : "Sitzadresse"
+    CUSTOMER_ADDRESSES |o--o{ BOOKINGS : "Rechnungsadresse (optional)"
     BOOKING_GROUPS ||--o{ BOOKINGS : "fasst zusammen"
 
     BOOKINGS ||--|{ BOOKING_NIGHTS : "eingefroren pro Nacht"
+    BOOKINGS ||--o{ BOOKING_EXTRAS : "eingefroren je Leistung"
+    SERVICES ||--o{ BOOKING_EXTRAS : "berechnet als"
     BOOKINGS ||--o{ BOOKING_EVENTS : "Historie"
 
     AUTH_USERS |o--o| CUSTOMERS : "Konto (optional, spaeter)"
@@ -105,6 +111,20 @@ erDiagram
         text phone
     }
 
+    CUSTOMER_ADDRESSES {
+        uuid id PK
+        uuid customer_id FK
+        text kind "residence oder billing - E50"
+        text company "nullable, nur billing - E50"
+        text street
+        text house_number
+        text postal_code
+        text city
+        text country_code "AT DE CH IT SI - E50"
+        text match_key "generiert - E51"
+        timestamptz archived_at "nullable - E22"
+    }
+
     BOOKING_GROUPS {
         uuid id PK
         timestamptz created_at
@@ -118,6 +138,8 @@ erDiagram
         uuid room_id FK "nullable - Zuweisung beim Check-in"
         uuid rate_plan_id FK
         uuid booking_group_id FK "nullable - E27"
+        uuid residence_address_id FK "Pflicht fuer neue Buchungen - E51"
+        uuid billing_address_id FK "nullable = an Sitzadresse - E51"
         date check_in
         date check_out "halb-offen"
         daterange stay "generiert"
@@ -279,6 +301,29 @@ Zwei widersprüchliche Preise für dieselbe Nacht sind damit **unmöglich** — 
 Doku", sondern von der Datenbank abgelehnt. Lücken bleiben erlaubt und bedeuten „nicht buchbar"
 (E25).
 
+### `services` — Zusatzleistungen (E47, E49)
+
+| Spalte | Typ | Regeln |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `hotel_id` | `uuid` | `NOT NULL REFERENCES hotels ON DELETE RESTRICT` |
+| `code` | `text` | `NOT NULL`, `UNIQUE (hotel_id, code)` — `BREAKFAST`, `CHILD_BED`, `GARAGE`, `PET`, `LATE_CHECKOUT`, `MASSAGE` |
+| `name` | `text` | `NOT NULL` — der Text, den der Gast liest |
+| `description` | `text` | Zeile unter dem Namen auf der Buchungsseite (E49) |
+| `sort_order` | `int` | `NOT NULL DEFAULT 0` — Reihenfolge in der Sektion „Zusatzleistungen" (E49) |
+| `charge_basis` | `text` | `NOT NULL CHECK (IN ('per_person_night', 'per_night', 'per_stay', 'per_unit'))` — sagt, was **eine** Einheit in `booking_extras.quantity` ist: Personen × Nächte, Nächte, 1, gewählte Menge |
+| `amount_cents` | `int` | `NOT NULL CHECK (>= 0)` — `0` heißt „kostenlos, aber bestellt" (Kinderbett, Late Check-out; E49) |
+| `child_amount_cents` | `int` | `CHECK (>= 0)`, nur bei `per_person_night` (`CHECK`) — `NULL` heißt „kein eigener Preis", Kinder zahlen dann wie Erwachsene |
+| `currency` | `text` | `NOT NULL DEFAULT 'EUR' CHECK (char_length(currency) = 3)` |
+| `archived_at` | `timestamptz` | |
+
+Dasselbe Verhältnis wie `room_type_rates` zu `booking_nights`: Was hier steht, gilt **heute**.
+
+`0` ist bei `child_amount_cents` **erlaubt** und heißt „Kinder frei" — anders als bei
+`room_type_rates`, wo eine fehlende Zeile bereits „nicht buchbar" sagt (E25) und ein Nullpreis
+deshalb immer ein Versehen wäre. Eine Leistung, die es für Kinder gratis gibt, ist dagegen eine
+echte Konfiguration.
+
 ### `customers` (E4, E26, E32)
 
 | Spalte | Typ | Regeln |
@@ -300,6 +345,40 @@ Spalte**. Der Vergleich ist damit eine Spalte und keine Konvention: gesucht wird
 Originalschreibweise bleibt in `email` erhalten, weil sie in der Bestätigungsmail sichtbar ist. Die
 Case-Insensitivität selbst ist nicht verhandelbar (E26) — nur ihr Mechanismus war offen.
 
+### `customer_addresses` — Sitzadresse und Rechnungsadressen (E50, E51)
+
+| Spalte | Typ | Regeln |
+| --- | --- | --- |
+| `id` | `uuid` | PK, zusätzlich `UNIQUE (id, customer_id)` als Ziel der Fremdschlüssel aus `bookings` |
+| `customer_id` | `uuid` | `NOT NULL REFERENCES customers ON DELETE RESTRICT` |
+| `kind` | `text` | `NOT NULL CHECK (kind IN ('residence', 'billing'))` |
+| `company` | `text` | „Firma / z. Hd.“, `CHECK (kind = 'billing' OR company IS NULL)` |
+| `street` | `text` | `NOT NULL`, nicht leer |
+| `house_number` | `text` | `NOT NULL`, nicht leer |
+| `postal_code` | `text` | `NOT NULL`, nicht leer |
+| `city` | `text` | `NOT NULL`, nicht leer |
+| `country_code` | `text` | `NOT NULL CHECK (is_supported_country(country_code))` — AT/DE/CH/IT/SI |
+| `match_key` | `text` | `GENERATED ALWAYS AS (address_match_key(...)) STORED` — Vergleichsform (E51) |
+| `archived_at` | `timestamptz` | `NULL` = aktiv (E22) |
+
+**Eine Tabelle, zwei Arten (E50):** Die Sitzadresse ist, wo der Gast wohnt; die Rechnungsadresse,
+wohin die Rechnung geht. Beide haben dieselben Spalten, also trennt sie `kind` und keine zweite
+Tabelle. Genau **eine aktive** Sitzadresse je Kunde erzwingt ein partieller Unique-Index; bei einem
+Umzug wird die alte archiviert. Rechnungsadressen gibt es beliebig viele (Firma A, Firma B,
+Zweitwohnsitz), sie werden nicht archiviert.
+
+**Jede Adresse nur einmal (E51):** `UNIQUE (customer_id, kind, match_key)`, auch über archivierte
+Zeilen. `create_booking` sucht über `match_key` und legt nur an, was es noch nicht gibt.
+
+**Straße und Hausnummer getrennt** — anders als bei `hotels`, wo `address_line1` genügt. Das Formular
+hat zwei Felder; Zusammenkleben und späteres Auseinanderparsen verliert genau bei den Adressen
+Information, bei denen es darauf ankommt.
+
+**Unveränderlich, sobald benutzt (E43, E51):** Zeigt eine Buchung auf die Zeile, darf sie inhaltlich
+nicht mehr geändert werden, auch nicht mit dem Service-Role-Key. Durchgesetzt über den Trigger
+`guard_customer_address_update()`. `archived_at` bleibt änderbar. Eine Korrektur ist damit eine neue
+Zeile, kein stilles `UPDATE` auf der Vergangenheit.
+
 ### `booking_groups` (E27)
 
 | Spalte | Typ | Regeln |
@@ -317,6 +396,8 @@ dann ist E20 gefallen (siehe E27).
 | `id` | `uuid` | PK |
 | `booking_reference` | `text` | `NOT NULL UNIQUE`, 8 Zeichen, Alphabet ohne `I O 0 1` (E23) |
 | `customer_id` | `uuid` | `NOT NULL REFERENCES customers ON DELETE RESTRICT` |
+| `residence_address_id` | `uuid` | `FOREIGN KEY (residence_address_id, customer_id) REFERENCES customer_addresses (id, customer_id) ON DELETE RESTRICT`, Pflicht per `CHECK (residence_address_id IS NOT NULL) NOT VALID` — gilt für jede neue Buchung, nicht für die vor E51 (E51) |
+| `billing_address_id` | `uuid` | `NULL` = Rechnung an die Sitzadresse; `FOREIGN KEY (billing_address_id, customer_id) REFERENCES customer_addresses (id, customer_id) ON DELETE RESTRICT` (E51) |
 | `room_type_id` | `uuid` | `NOT NULL REFERENCES room_types ON DELETE RESTRICT` |
 | `room_id` | `uuid` | `NULL REFERENCES rooms ON DELETE RESTRICT` — Zuweisung beim Check-in (E3) |
 | `rate_plan_id` | `uuid` | `NOT NULL REFERENCES rate_plans ON DELETE RESTRICT` |
@@ -326,7 +407,9 @@ dann ist E20 gefallen (siehe E27).
 | `adults` | `int` | `NOT NULL CHECK (adults >= 1)` |
 | `children` | `int` | `NOT NULL DEFAULT 0 CHECK (children >= 0)` |
 | `status` | `text` | `NOT NULL DEFAULT 'confirmed'` + `CHECK` (E11) |
-| `total_amount_cents` | `int` | `NOT NULL CHECK (>= 0)` — eingefroren (E5) |
+| `total_amount_cents` | `int` | `NOT NULL CHECK (>= 0)` — **Zimmerpreis**, Summe der `booking_nights`, eingefroren (E5) |
+| `extras_amount_cents` | `int` | `NOT NULL DEFAULT 0 CHECK (>= 0)` — Summe der `booking_extras` (E47) |
+| `grand_total_cents` | `int` | `GENERATED ALWAYS AS (total_amount_cents + extras_amount_cents) STORED` — was der Gast zahlt (E47) |
 | `currency` | `text` | `NOT NULL` |
 | `cancelled_at` | `timestamptz` | denormalisiert für Abfragen (E22) |
 
@@ -363,6 +446,29 @@ Doppelbelegung physisch unmöglich.
 der Abreisetag **nicht**. Damit ist Umsatz pro Monat, Verlängerung und Teilstorno überhaupt
 beantwortbar.
 
+### `booking_extras` — eingefrorene Zusatzleistungen (E21, E47)
+
+| Spalte | Typ | Regeln |
+| --- | --- | --- |
+| `booking_id` | `uuid` | `REFERENCES bookings ON DELETE CASCADE`, Teil des PK |
+| `service_id` | `uuid` | `REFERENCES services ON DELETE RESTRICT`, Teil des PK |
+| `guest_kind` | `text` | `CHECK (IN ('adult', 'child', 'none'))`, Teil des PK — `none` genau bei Leistungen, die nicht pro Person rechnen (geprüft in `create_booking`, E49) |
+| `quantity` | `int` | `NOT NULL CHECK (> 0)` — Einheiten nach `services.charge_basis` |
+| `unit_amount_cents` | `int` | `NOT NULL CHECK (>= 0)` |
+| `amount_cents` | `int` | `NOT NULL CHECK (>= 0)` |
+
+```sql
+PRIMARY KEY (booking_id, service_id, guest_kind)
+CHECK (amount_cents = quantity * unit_amount_cents)
+```
+
+Erwachsene und Kinder stehen als **getrennte Zeilen**: Es sind zwei Preise und damit zwei Positionen
+auf der Rechnung — zusammengezogen ließe sich „2 Erwachsene und 1 Kind" aus dem Betrag nicht mehr
+zurückrechnen.
+
+Das `CHECK` macht die Zeile selbstprüfend. Ohne es wäre eine Position denkbar, die eine andere Summe
+behauptet als ihre eigenen Faktoren ergeben — und niemand wüsste, welche der beiden Zahlen stimmt.
+
 ### `booking_events` — append-only Historie (E12)
 
 | Spalte | Typ | Regeln |
@@ -393,12 +499,16 @@ Ohne Backend ist die Datenbank die letzte Verteidigungslinie (Leitsatz 1). Alle 
 | `is_staff()` | einziger Ort, an dem Mitarbeitendenrechte geprüft werden. v1: `false` | E13 |
 | `current_customer_id()` | mappt `auth.uid()` → `customers.id`. Einziger Ort. | E13 |
 | `is_blocking_status(text)` | `IMMUTABLE`; „belegt Kapazität" = alles außer `cancelled`. Einziger Ort. | E11 |
-| `availability_nights(hotel, von, bis, erwachsene, kinder, kategorie?)` | **interner Kern** (E37): rohe Kapazitäts- und Preiszahlen pro Nacht und Kategorie, **ohne** Maskierung. Nicht für den Browser. | E17, E37 |
+| `availability_nights(hotel, von, bis, kategorie?)` | **interner Kern** (E37): rohe Kapazitäts- und Preiszahlen pro Nacht und Kategorie samt `max_occupancy`, **ohne** Belegung und **ohne** Maskierung. Nicht für den Browser. | E17, E37, E48 |
+| `group_capacity(zimmer[], betten[], zimmerlimit)` | `IMMUTABLE`; höchste Personenzahl, die in einen Bestand passt, wenn höchstens `zimmerlimit` Zimmer belegt werden (größte Zimmer zuerst). Einziger Ort dieser Regel. | E48 |
 | `mask_reason(grund)` | Zweistufigkeit an einer Stelle: `ausgebucht`/`kein_preis`/`zu_klein` → `nicht_buchbar`, sofern nicht `is_staff()` | E28 |
-| `availability_calendar(von, bis, erwachsene, kinder, kategorie?, hotel?)` | **eine Zeile pro Nacht**: `rooms_free`, `unavailable_reason`. Füttert den Kalender. | E24, E28 |
-| `search_availability(anreise, abreise, erwachsene, kinder, hotel?)` | **eine Zeile pro Kategorie**: Minimum über den Zeitraum, Gesamtpreis. Füttert die Ergebnisliste. | E17, E28 |
-| `reject_booking(code, datum)` | erzeugt die strukturierte Ablehnung; Code durch `mask_reason`, maschinenlesbare Fassung im `DETAIL` | E31 |
-| `create_booking(...)` | Hotelweiter Advisory-Lock → Prüfung über `availability_nights` → `customers`-Upsert → `bookings` + `booking_nights` + `booking_events`, alles in **einer** Transaktion. Strukturierter Fehler bei Ablehnung. | E10, E26, E31, E32, E33 |
+| `availability_calendar(von, bis, erwachsene, kinder, kategorie?, hotel?)` | **eine Zeile pro Nacht**: `rooms_free`, `unavailable_reason`. Buchbar, wenn die **ganze** Gruppe in die freien Zimmer passt (`group_capacity`, Zimmerlimit = min(Erwachsene, 8)). Füttert den Kalender. | E24, E28, E48 |
+| `search_availability(anreise, abreise, erwachsene, kinder, hotel?)` | **eine Zeile pro Kategorie**: Minimum über den Zeitraum, Gesamtpreis. **Keine** Belegungsprüfung je Kategorie. Füttert die Ergebnisliste. | E17, E28, E48 |
+| `reject_booking(code, datum?, kategorie?)` | erzeugt die strukturierte Ablehnung; Code durch `mask_reason`, maschinenlesbare Fassung im `DETAIL` samt `room_type_id` der gescheiterten Position | E31, E44 |
+| `create_booking(positionen, ...)` | Hotelweiter Advisory-Lock → Prüfung über `availability_nights` **je Position** → Gesamtkapazität → Verteilung der Gäste auf die Zimmer → `customers`-Upsert (Name/Telefon: neueste gewinnt) → Sitz- und optionale Rechnungsadresse suchen oder anlegen → `bookings` + `booking_nights` + `booking_extras` + `booking_events`, alles in **einer** Transaktion. Strukturierter Fehler bei Ablehnung. | E10, E26, E31, E32, E33, E44, E47, E48, E49, E51 |
+| `is_supported_country(text)` | `IMMUTABLE`; die Länderliste an einer Stelle — im `CHECK` von `customer_addresses` und in `create_booking` | E50 |
+| `address_match_key(...)` | `IMMUTABLE`; Vergleichsform einer Adresse (trim, lower, Leerzeichen zusammengefasst). Grundlage für `match_key` und die Suche in `create_booking` | E51 |
+| `guard_customer_address_update()` | Trigger, `SECURITY DEFINER`: benutzte Adressen sind inhaltlich unveränderlich, Archivieren bleibt erlaubt | E43, E51 |
 | `find_rate_gaps(tage)` | Admin: Nächte ohne Preiszeile | E25 |
 | `rls_audit()` | Admin: Abnahme des Schutzes als Dauerprüfung. Keine Zeilen = in Ordnung. | E40 |
 
@@ -438,16 +548,35 @@ aus, für den Betrieb sind es entgegengesetzte Signale.
 ### `create_booking` — Ablauf
 
 ```text
+0. p_positions validieren: nicht leer, keine Kategorie doppelt,
+   rooms >= 1 je Position, Summe <= 8                -- E44
+   Summe der Zimmer <= Erwachsene                    -- E48: jedes Zimmer braucht einen
 1. pg_advisory_xact_lock(hashtext('booking:' || hotel_id))  -- EIN Lock fuers Hotel (E10, E33)
-2. Horizont, Vergangenheit, Belegung pruefen        -- E30, E15
-3. search_availability() fuer den Zeitraum          -- eine Wahrheit, kein Copy-Paste
+   -- deckt ALLE Positionen ab; genau dafuer wurde er hotelweit gewaehlt
+2. Horizont, Vergangenheit pruefen                  -- E30
+3. availability_nights() je Position und Nacht      -- eine Wahrheit, kein Copy-Paste
+3b. Summe(Zimmer x max_occupancy) >= Erwachsene + Kinder, sonst zu_klein
+   -- Belegung gilt fuer den GANZEN Vorgang          -- E48 (revidiert E45)
+3c. Gaeste verteilen: je Zimmer ein Erwachsener, dann reihum die
+    uebrigen Erwachsenen, dann die Kinder, bis max_occupancy  -- E48
 4. bei Ablehnung: strukturierter Fehler
-   { code, datum, grund }                          -- E31
-5. customers: per email_normalized finden oder anlegen -- E26, E32
-6. bookings einfuegen (Referenz erzeugen)           -- E23
-7. booking_nights aus den Saisonpreisen einfrieren  -- E21
-8. booking_events: 'created'                        -- E12
-   -- bei mehreren Zimmern: booking_groups-Zeile + n bookings, alles in DIESER Transaktion (E20/E27)
+   { code, datum, room_type_id, grund }             -- E31, E44
+0a. Adressen pruefen: Sitzadresse Pflicht, Rechnungsadresse
+    alles oder nichts, sonst ungueltige_adresse     -- E51
+5. customers: per email_normalized finden oder anlegen,
+   bekannt: Name/Telefon ueberschreiben             -- E26, E32, E51
+6. customer_addresses: ueber match_key wiederverwenden oder anlegen;
+   neue Sitzadresse archiviert die alte             -- E50, E51
+7. bookings einfuegen (Referenz erzeugen)           -- E23
+8. booking_nights aus den Saisonpreisen einfrieren  -- E21
+8b. booking_extras je gewaehlter Zusatzleistung einfrieren,
+    getrennt nach Erwachsenen und Kindern           -- E47
+    Fruehstueck je Zimmerzeile fuer DEREN Gaeste     -- E48
+    p_services: an der ERSTEN Buchung, guest_kind 'none',
+    Menge nach charge_basis                         -- E49
+9. booking_events: 'created'                        -- E12
+   -- ab der ZWEITEN Buchung (auch ueber zwei Positionen mit je einem Zimmer):
+   -- booking_groups-Zeile, alles in DIESER Transaktion (E20/E27/E44)
 ```
 
 Schritt 3 ruft dieselbe Funktion auf, die auch die Ergebnisliste füttert. Zwei Implementierungen
@@ -470,13 +599,14 @@ Jede Tabelle bekommt `ENABLE ROW LEVEL SECURITY`. Policies **ausschließlich** �
 | Tabelle | lesen | schreiben |
 | --- | --- | --- |
 | `hotels` | alle | `is_staff()` |
-| `room_types`, `room_type_images`, `rate_plans`, `room_type_rates` | alle (nicht archiviert) | `is_staff()` |
+| `room_types`, `room_type_images`, `rate_plans`, `room_type_rates`, `services` | alle (nicht archiviert) | `is_staff()` |
 | `rooms`, `room_blocks` | nur `is_staff()` | `is_staff()` |
 | `customers` | eigener Datensatz oder `is_staff()` | eigener Datensatz oder `is_staff()` |
 | `bookings` | eigene oder `is_staff()` | **keine** Insert-Policy — nur über `create_booking()` |
-| `booking_nights` | eigene (über Buchung) oder `is_staff()` | keine |
+| `booking_nights`, `booking_extras` | eigene (über Buchung) oder `is_staff()` | keine |
 | `booking_events` | eigene oder `is_staff()` | keine (nur `SECURITY DEFINER`-Funktionen) |
 | `booking_groups` | `is_staff()` | keine |
+| `customer_addresses` | eigene oder `is_staff()` | `UPDATE` eigene oder `is_staff()`; was sich an benutzten Zeilen ändern darf, entscheidet der Trigger (nur `archived_at`). Kein `INSERT`/`DELETE` — angelegt wird nur in `create_booking()` (E43, E51) |
 
 Der Key im Browser (`src/shared/services/supabase.ts`) ist kein Geheimnis, sondern eine öffentliche
 Kennung. RLS *ist* der Schutz — es gibt keinen zweiten.
@@ -496,6 +626,9 @@ Kennung. RLS *ist* der Schutz — es gibt keinen zweiten.
 | Teil-Index `rooms(room_type_id)` `WHERE archived_at IS NULL` | Kapazitätszählung |
 | `booking_events(booking_id, created_at)` | Historie einer Buchung in Reihenfolge |
 | `room_type_images(room_type_id, sort_order, id)` | stabile Bildreihenfolge |
+| Unique `customer_addresses(customer_id, kind, match_key)` | „gibt es die Adresse schon?“ in `create_booking` (E51) |
+| Unique-Teilindex `customer_addresses(customer_id)` `WHERE kind = 'residence' AND archived_at IS NULL` | eine aktive Sitzadresse je Kunde (E50) |
+| `bookings(residence_address_id)`, Teil-Index `bookings(billing_address_id)` `WHERE NOT NULL` | Trigger `guard_customer_address_update()` — wird bei **jedem** Änderungsversuch ausgewertet (E51) |
 
 Zwei frühere Einträge sind hier bewusst **weggefallen**:
 
@@ -508,8 +641,16 @@ Zwei frühere Einträge sind hier bewusst **weggefallen**:
 
 ## 6. Was hier absichtlich fehlt (E15)
 
-Ausstattungsmerkmale, Zusatzleistungen (Frühstück/Parkplatz), Zahlungen, Stornobedingungen,
-Gutscheine, Mehrsprachigkeit, OTA-/Channel-Anbindung, Housekeeping-Abläufe.
+Ausstattungsmerkmale, Zahlungen, Stornobedingungen, Gutscheine, Mehrsprachigkeit, OTA-/Channel-Anbindung,
+Housekeeping-Abläufe.
+
+Die **Zusatzleistungen** standen bis 2026-09-16 ebenfalls hier. Sie sind mit E47 (`services` /
+`booking_extras`) hereingekommen — rein additiv, wie E15 es versprochen hatte: keine bestehende
+Tabelle hat dabei ihre Bedeutung geändert. Seit E49 gibt es Leistungen je Vorgang (Kinderbett,
+Tiefgarage, Haustier, Late Check-out, Massage); weitere mit einer dieser Bezugsgrößen sind Datenzeilen.
+
+Ebenso: eine Belegung **je Position** statt je Vorgang (E45, seit E48 als Gesamtzahl). Der abweichende
+Rechnungsempfänger ist seit E50 als `customer_addresses.company` drin.
 
 Alle **additiv** nachrüstbar. Die einzige Erweiterung mit strukturellen Kosten ist
 `bookings` → `bookings` + `booking_items` (E20/E27) — der Punkt, an dem man vorher nachdenkt.
