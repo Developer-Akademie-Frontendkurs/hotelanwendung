@@ -95,4 +95,4 @@ Für Lernende ist das die zweite Hälfte der Lektion aus 039: Der Compiler finde
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md) · [Nächster Commit →](042_2026-11-04_update-project-diary.md)

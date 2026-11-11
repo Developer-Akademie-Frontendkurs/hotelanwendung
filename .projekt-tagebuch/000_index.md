@@ -16,7 +16,7 @@ Ziel dieses Tagebuchs ist es, für Lernende nachvollziehbar zu machen, **was** i
 
 ## Branch-Übersicht
 
-Die Branches sind chronologisch nach ihrem ersten Commit sortiert. Inhaltlich bauen sie aufeinander auf: `spa-struktur` setzt auf `project-setup` auf, `testing-spike` auf `spa-struktur`, `startseite-erstellen` auf `testing-spike`, `buchungs-seite` auf `startseite-erstellen`, `datenbank-anbindung` auf `buchungs-seite`, `buchungsseite-ui-fertigstellen` auf `datenbank-anbindung` und `verbindung-ui-zu-datenbank` auf `main`.
+Die Branches sind chronologisch nach ihrem ersten Commit sortiert. Inhaltlich bauen sie aufeinander auf: `spa-struktur` setzt auf `project-setup` auf, `testing-spike` auf `spa-struktur`, `startseite-erstellen` auf `testing-spike`, `buchungs-seite` auf `startseite-erstellen`, `datenbank-anbindung` auf `buchungs-seite`, `buchungsseite-ui-fertigstellen` auf `datenbank-anbindung` und `verbindung-ui-zu-datenbank` auf `main`. Seit dem Merge von Pull Request #5 (2026-11-04) sind alle Branches in `main` aufgenommen.
 
 Eine Besonderheit ab Branch 006: `buchungsseite-ui-fertigstellen` wurde **von** `datenbank-anbindung` abgezweigt, bevor dieser gemergt war. Deshalb kamen beide Branches gemeinsam über **einen** Pull Request (#4) in `main` – im `git log` von `main` stehen die Datenbank-Commits und die UI-Commits direkt hintereinander.
 
@@ -29,7 +29,7 @@ Eine Besonderheit ab Branch 006: `buchungsseite-ui-fertigstellen` wurde **von** 
 | [005](005_2026-07-22_buchungs-seite.md)                 | 2026-07-22 | buchungs-seite                 | 9       | gemergt in `main` |
 | [006](006_2026-08-26_datenbank-anbindung.md)            | 2026-08-26 | datenbank-anbindung            | 12      | gemergt in `main` |
 | [007](007_2026-09-06_buchungsseite-ui-fertigstellen.md) | 2026-09-06 | buchungsseite-ui-fertigstellen | 2       | gemergt in `main` |
-| [008](008_2026-09-09_verbindung-ui-zu-datenbank.md)     | 2026-09-09 | verbindung-ui-zu-datenbank     | 41      | offen             |
+| [008](008_2026-09-09_verbindung-ui-zu-datenbank.md)     | 2026-09-09 | verbindung-ui-zu-datenbank     | 42      | gemergt in `main` |
 
 ## Wie lese ich dieses Tagebuch?
 

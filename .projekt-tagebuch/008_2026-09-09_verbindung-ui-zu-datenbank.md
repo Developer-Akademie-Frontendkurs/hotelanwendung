@@ -2,7 +2,7 @@
 
 # 008 – Branch `verbindung-ui-zu-datenbank`
 
-**Erster Commit:** 2026-09-09 · **Commits:** 41 · **Status:** offen
+**Erster Commit:** 2026-09-09 · **Commits:** 42 · **Status:** gemergt in `main` (PR #5, 2026-11-04)
 
 ## Ziel des Branches
 
@@ -68,8 +68,9 @@ Vertagt bleibt allein Phase 10 (Cloud-Deployment).
 | [039](008_2026-09-09_verbindung-ui-zu-datenbank/039_2026-11-04_refactor-booking-templates-remove-comments.md)      | 2026-11-04 | Kommentare entfernt, Posts-Views gelöscht (Build-Bruch, behoben in 041)                 |
 | [040](008_2026-09-09_verbindung-ui-zu-datenbank/040_2026-11-04_update-project-diary.md)                            | 2026-11-04 | Projekttagebuch um die Einträge 036–039 ergänzt (reiner Doku-Commit)                    |
 | [041](008_2026-09-09_verbindung-ui-zu-datenbank/041_2026-11-04_remove-unused-posts-routes.md)                      | 2026-11-04 | Posts-Routen und -Imports aus `main.ts` entfernt – Build wieder grün                    |
+| [042](008_2026-09-09_verbindung-ui-zu-datenbank/042_2026-11-04_update-project-diary.md)                            | 2026-11-04 | Projekttagebuch um die Einträge 040–041 ergänzt (reiner Doku-Commit)                    |
 
-Merge-Commits gibt es in diesem Branch nicht – er ist seit seinem Start nicht mit `main` synchronisiert worden.
+Merge-Commits gibt es im Branch selbst nicht – er ist seit seinem Start nicht mit `main` synchronisiert worden. In `main` kam er am 2026-11-04 über **Pull Request #5** (Merge-Commit `9cdecc8`).
 
 ## Zusammenfassung
 
@@ -217,7 +218,23 @@ Mit 038 sind im Review-Dokument **alle Gruppen A bis G abgehakt**. Commit 039 hi
 
 Commit 040 trägt die Tagebuch-Einträge 036–039 nach (reiner Doku-Commit); weil der Link zu 038 länger ist als alle bisherigen, formatiert Prettier dabei die ganze Commit-Tabelle neu. Commit 041 (`d78f56b`) **behebt den Build-Bruch aus 039**: Er entfernt die Imports von `PostsView`, `SinglePostView` und `postsHeader` sowie die Routen `/posts` und `/posts/:id` aus `src/main.ts`. `tsc --noEmit` läuft damit wieder fehlerfrei.
 
-Die Lehre aus 039 und 041 zusammen: Der Compiler findet **kaputte** Importe zuverlässig, **verwaiste** nicht. Nach 041 sind `posts.service.ts` und der Export `postsHeader` ungenutzt, und `CLAUDE.md` nennt die Posts-Views noch als Beispiel. Der Prüfvermerk über `ROOM_AMENITIES` steht ebenfalls noch. Der Branch ist weiterhin **nicht in `main` gemergt**.
+Die Lehre aus 039 und 041 zusammen: Der Compiler findet **kaputte** Importe zuverlässig, **verwaiste** nicht. Nach 041 sind `posts.service.ts` und der Export `postsHeader` ungenutzt, und `CLAUDE.md` nennt die Posts-Views noch als Beispiel. Der Prüfvermerk über `ROOM_AMENITIES` steht ebenfalls noch.
+
+### Abschluss (Commit 042 und Merge in `main`)
+
+Commit 042 trägt die Einträge 040–041 nach (reiner Doku-Commit) und ist der letzte Commit des Branches. Am selben Morgen, um 07:38 Uhr, wird der Branch über **Pull Request #5** in `main` gemergt (Merge-Commit `9cdecc8`).
+
+Ein Blick auf die Eltern des Merge-Commits zeigt, wie sauber dieser Merge ist:
+
+```bash
+git log --oneline -1 9cdecc8^1   # 9b81803 – Merge von PR #4, Stand von main
+git log --oneline -1 9cdecc8^2   # 4ee10fb – letzter Commit des Branches
+git merge-base 9cdecc8^1 9cdecc8^2   # 9b81803
+```
+
+Die Merge-Basis ist identisch mit `main`: Seit PR #4 ist in `main` **nichts** passiert. Konflikte waren deshalb ausgeschlossen – Git hätte sogar vorspulen können (Fast-Forward), GitHub legt bei einem Pull Request aber standardmäßig einen Merge-Commit an. Der Unterschied `9cdecc8^1..9cdecc8` umfasst 132 Dateien, rund 22 600 neue und knapp 1 000 entfernte Zeilen – das ganze Volumen von zwei Monaten Arbeit in einem einzigen Pull Request.
+
+Damit ist die Buchungsseite vollständig an die Datenbank angebunden, die Review-Gruppen A–G sind erledigt und alle Branches liegen in `main`. Mit in `main` gekommen sind auch die offenen Reste aus 041: `posts.service.ts` und `postsHeader` sind ungenutzt, `CLAUDE.md` nennt `SinglePostView` noch als Beispiel, und über `ROOM_AMENITIES` steht weiterhin der Prüfvermerk `CHECK`. Vertagt bleibt laut Plan Phase 10 (Cloud-Deployment).
 
 ---
 
