@@ -12,7 +12,7 @@ import './home.css';
 export class HomeView extends AbstractView {
     constructor() {
         super();
-        this.setTitle('Start Seite View');
+        this.setTitle('Startseite | Karawanken Hof');
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await

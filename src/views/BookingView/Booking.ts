@@ -79,6 +79,7 @@ type GuestOption = {
 type RoomsState = 'loading' | 'ready' | 'error';
 
 const WEEKDAYS: readonly string[] = ['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO'];
+
 const MONTHS: readonly string[] = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 
 const MAX_ADULTS = 6;
@@ -151,7 +152,7 @@ export class BookingView extends AbstractView {
 
     constructor() {
         super();
-        this.setTitle('Buchung');
+        this.setTitle('Buchung | Karawanken Hof');
         this.today = stripTime(new Date());
         this.displayedYear = this.today.getFullYear();
         this.displayedMonth = this.today.getMonth();

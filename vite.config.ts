@@ -8,6 +8,7 @@ export default defineConfig({
     // also in `src/` suchen und die im Projektwurzelverzeichnis nie laden. Relativ zu `root`
     // aufgeloest zeigt '..' zurueck auf die Wurzel, wo `.env` und `.env.example` liegen (E35).
     envDir: '..',
+    publicDir: '../public',
     build: {
         emptyOutDir: true,
         outDir: '../dist',

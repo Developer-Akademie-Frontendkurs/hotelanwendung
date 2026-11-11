@@ -116,7 +116,9 @@ export class MainHeader extends AbstractView {
             <header class="mobile-menu bg-cover bg-center" style="background-image: url('${config.backgroundImage}')">
                 <div class="w-full max-w-360 ${heightClass} mx-auto">
                     <div class="w-full flex items-center justify-between pt-4">
-                        <img src="${logo}" alt="Karawanken Hof Logo">
+                        <a href="/">
+                            <img src="${logo}" alt="Karawanken Hof Logo">
+                        </a>
 
                         ${this.getMobileNavigationHtml()}
 

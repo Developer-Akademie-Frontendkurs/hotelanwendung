@@ -3,7 +3,7 @@ import AbstractView from '../AbstractView';
 export class AboutView extends AbstractView {
     constructor() {
         super();
-        this.setTitle('About Seite View');
+        this.setTitle('Über uns | Karawanken Hof');
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await
