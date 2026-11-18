@@ -77,7 +77,7 @@ export function getGuestFieldHtml(view: GuestFieldView): string {
                     <select
                         data-guests="${escapeHtml(view.field)}"
                         aria-label="${escapeHtml(view.ariaLabel)}"
-                        class="w-full appearance-none rounded-xl border border-purple-haze bg-white py-2 pl-6 pr-12 font-antic-didone text-18 456:text-24 leading-tight text-center text-purple-haze-dark cursor-pointer transition-colors hover:bg-purple-haze-light focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
+                        class="w-full appearance-none rounded-xl border border-purple-haze bg-white py-2 pl-4 pr-10 font-antic-didone text-18 456:text-20 leading-tight text-center text-purple-haze-dark cursor-pointer transition-colors hover:bg-purple-haze-light focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
                     >
                         <option value=""${view.placeholderSelected ? ' selected' : ''}>${escapeHtml(view.placeholder)}</option>
                         ${optionsHtml}
