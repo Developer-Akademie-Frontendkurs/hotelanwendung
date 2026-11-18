@@ -187,7 +187,7 @@ export function getRoomQuantityHtml(view: RoomQuantityView): string {
                         max="${view.max.toString()}"
                         step="1"
                         value="${view.quantity.toString()}"
-                        class="booking__quantity w-16 456:w-20 appearance-none rounded-xl border border-purple-haze bg-white px-2 py-2 font-antic-didone text-18 456:text-24 leading-tight text-center text-purple-haze-dark transition-colors hover:bg-purple-haze-light focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
+                        class="booking__quantity w-16 appearance-none rounded-xl border border-purple-haze bg-white px-2 py-2 font-antic-didone text-18 456:text-20 leading-tight text-center text-purple-haze-dark transition-colors hover:bg-purple-haze-light focus:outline-none focus:ring-2 focus:ring-purple-haze/40"
                     />
                     ${view.increaseHtml}
                 </div>
@@ -208,7 +208,7 @@ export function getStepButtonHtml(step: Step, dataAttributes: Readonly<Record<st
             ${getDataAttributesHtml(dataAttributes)}
             aria-label="${escapeHtml(ariaLabel)}"
             ${disabled ? 'disabled' : ''}
-            class="shrink-0 flex items-center justify-center w-9 h-9 456:w-10 456:h-10 rounded-full bg-purple-haze font-antic-didone text-24 leading-none text-white cursor-pointer transition-colors hover:bg-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-haze"
+            class="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-purple-haze font-antic-didone text-22 leading-none text-white cursor-pointer transition-colors hover:bg-purple-haze-dark focus:outline-none focus:ring-2 focus:ring-purple-haze/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-haze"
         >${step > 0 ? '+' : '&minus;'}</button>
     `;
 }
@@ -262,7 +262,7 @@ export function getServiceQuantityHtml(view: ServiceQuantityView): string {
     return /*html*/ `
         <div class="shrink-0 flex items-center gap-2">
             ${view.decreaseHtml}
-            <output id="${escapeHtml(view.inputId)}" data-service-quantity="${escapeHtml(view.code)}" class="w-8 text-center font-antic-didone text-18 456:text-24 leading-tight text-purple-haze-dark">${view.quantity.toString()}</output>
+            <output id="${escapeHtml(view.inputId)}" data-service-quantity="${escapeHtml(view.code)}" class="w-8 text-center font-antic-didone text-18 456:text-22 leading-tight text-purple-haze-dark">${view.quantity.toString()}</output>
             ${view.increaseHtml}
         </div>
     `;
