@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildBreakfastService, getBreakfastAmountCents } from './breakfast';
+import { buildBreakfastService, getBreakfastAmountCents } from '../breakfast';
 
 const service = buildBreakfastService({ id: 'x', name: 'Frühstück', description: null, amount_cents: 1700, child_amount_cents: 850, currency: 'EUR' });
 

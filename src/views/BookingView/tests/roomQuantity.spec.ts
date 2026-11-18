@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { RoomCard } from '../../shared/types/catalog.types';
-import { clampQuantity, getMissingBeds, getRoomLimit, getRoomMax, MAX_ROOMS_PER_BOOKING, reconcileQuantities, formatRoomsFreeLabel } from './roomQuantity';
+import type { RoomCard } from '../../../shared/types/catalog.types';
+import { clampQuantity, getMissingBeds, getRoomLimit, getRoomMax, MAX_ROOMS_PER_BOOKING, reconcileQuantities, formatRoomsFreeLabel } from '../roomQuantity';
 
 function card(roomTypeId: string, maxOccupancy: number, roomsFree: number | null = 5): RoomCard {
     return {

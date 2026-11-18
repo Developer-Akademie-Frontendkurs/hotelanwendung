@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { REJECTION_CODES, UNAVAILABLE_REASONS, isRejectionCode, isUnavailableReason } from '../../shared/types/booking.codes';
-import { formatBlockedNight, formatUnavailableReason, getRejectionHints, getRejectionMessage } from './messages';
+import { REJECTION_CODES, UNAVAILABLE_REASONS, isRejectionCode, isUnavailableReason } from '../../../shared/types/booking.codes';
+import { formatBlockedNight, formatUnavailableReason, getRejectionHints, getRejectionMessage } from '../messages';
 
 const noContext = { roomName: null, night: null };
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { BreakfastService } from './breakfast';
-import type { RoomCard } from '../../shared/types/catalog.types';
-import { BREAKFAST, type ExtraService } from './services';
-import { buildOrderLines, formatSelectionSummary, getOrderTotalCents, type OrderInput } from './summary';
+import type { BreakfastService } from '../breakfast';
+import type { RoomCard } from '../../../shared/types/catalog.types';
+import { BREAKFAST, type ExtraService } from '../services';
+import { buildOrderLines, formatSelectionSummary, getOrderTotalCents, type OrderInput } from '../summary';
 
 function room(roomTypeId: string, amountCents: number | null): RoomCard {
     return {

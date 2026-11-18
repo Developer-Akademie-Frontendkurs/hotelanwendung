@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { BillingAddress, CustomerDetails } from '../../shared/types/booking.types';
-import { emptyToNull, formatAddressLines, getCountryLabel, getFieldErrorText, getInvalidFields, isCountryCode } from './address';
+import type { BillingAddress, CustomerDetails } from '../../../shared/types/booking.types';
+import { emptyToNull, formatAddressLines, getCountryLabel, getFieldErrorText, getInvalidFields, isCountryCode } from '../address';
 
 const BILLING: BillingAddress = { company: 'Beispiel GmbH', street: 'Ringstraße', houseNumber: '5', postalCode: '1010', city: 'Wien', countryCode: 'AT' };
 
