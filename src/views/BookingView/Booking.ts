@@ -129,6 +129,7 @@ export class BookingView extends AbstractView {
     private calendarEl: HTMLElement | null = null;
     private readonly calendarCache = new Map<string, NightAvailability>();
     private calendarRequestId = 0;
+    private calendarLoading = false;
 
     private roomsEl: HTMLElement | null = null;
     private customerFormEl: HTMLFormElement | null = null;
@@ -806,6 +807,7 @@ export class BookingView extends AbstractView {
 
         if (adults === null) {
             this.nights = null;
+            this.calendarLoading = false;
             this.renderCalendar();
             return;
         }
@@ -814,14 +816,24 @@ export class BookingView extends AbstractView {
         const cached = this.calendarCache.get(key);
         if (cached !== undefined) {
             this.nights = cached;
+            this.calendarLoading = false;
             this.renderCalendar();
             return;
         }
 
+        this.nights = null;
+        this.calendarLoading = true;
+        this.renderCalendar();
+
         await this.hotelLoaded;
         if (isStale()) return;
         const horizonDays = this.hotel?.booking_horizon_days;
-        if (horizonDays === undefined) return;
+        if (horizonDays === undefined) {
+            // Without the hotel there is no horizon to load – unlock, create_booking still checks on submit.
+            this.calendarLoading = false;
+            this.renderCalendar();
+            return;
+        }
 
         try {
             const rows = await fetchAvailabilityCalendar({
@@ -838,11 +850,18 @@ export class BookingView extends AbstractView {
             console.error('Verfügbarkeit für den Kalender konnte nicht geladen werden:', error);
             this.nights = null;
         }
+        this.calendarLoading = false;
         this.renderCalendar();
     }
 
     private getCalendarRules(): CalendarRules {
-        return { today: this.today, horizonDays: this.hotel?.booking_horizon_days ?? null, nights: this.nights };
+        return { today: this.today, horizonDays: this.hotel?.booking_horizon_days ?? null, nights: this.nights, locked: this.getCalendarNotice() !== null };
+    }
+
+    private getCalendarNotice(): string | null {
+        if (bookingState.getGuests().adults === null) return 'Bitte zuerst die Anzahl der Erwachsenen wählen.';
+        if (this.calendarLoading) return 'Verfügbarkeit wird geladen …';
+        return null;
     }
 
     private async loadRooms(): Promise<void> {
@@ -886,6 +905,9 @@ export class BookingView extends AbstractView {
     private renderCalendar(): void {
         if (!this.calendarEl) return;
         this.calendarEl.innerHTML = this.getCalendarHeaderHtml() + this.getCalendarGridHtml() + this.getCalendarFooterHtml();
+
+        const noticeEl = document.querySelector<HTMLElement>('[data-calendar-notice]');
+        if (noticeEl) noticeEl.textContent = this.getCalendarNotice() ?? '';
     }
 
     private getCalendarHeaderHtml(): string {
@@ -918,6 +940,7 @@ export class BookingView extends AbstractView {
             stateClass: this.getCellStateClass(cell),
             selectable: cell.selectable,
             blocked: cell.blocked,
+            unavailable: cell.unavailable,
             tooltip: this.getDayTooltip(cell),
             flagged: this.isRejectedNight(cell.date),
             withClearButton: cell.isStart,
@@ -929,6 +952,7 @@ export class BookingView extends AbstractView {
         if (label !== null) parts.push(label);
         else if (cell.inRange) parts.push('im gewählten Zeitraum');
         if (cell.isToday) parts.push('heute');
+        if (cell.unavailable) parts.push('nicht buchbar');
         return parts.join(', ');
     }
 
@@ -944,11 +968,12 @@ export class BookingView extends AbstractView {
     }
 
     private getCellStateClass(cell: DayCell): string {
+        const cursor = cell.selectable ? 'cursor-pointer' : 'cursor-not-allowed';
         if (cell.isStart || cell.isEnd) {
-            return 'bg-purple-haze/65 text-white cursor-pointer';
+            return `bg-purple-haze/65 text-white ${cursor}`;
         }
         if (cell.inRange) {
-            return 'bg-purple-haze/35 text-purple-haze-dark cursor-pointer';
+            return `bg-purple-haze/35 text-purple-haze-dark ${cursor}`;
         }
         if (cell.blocked) {
             return cell.isToday ? 'bg-purple-haze/40 text-white cursor-not-allowed' : 'text-purple-haze-dark/45 cursor-not-allowed';

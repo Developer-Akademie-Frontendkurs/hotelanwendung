@@ -14,6 +14,13 @@
     }
 }
 
+/* Diagonal from top left to bottom right; currentColor keeps it white on today's filled cell. */
+.booking__day--unavailable {
+    background-image: linear-gradient(to top right, transparent calc(50% - 1.25px), currentColor calc(50% - 0.5px), currentColor calc(50% + 0.5px), transparent calc(50% + 1.25px));
+    background-origin: border-box;
+    background-repeat: no-repeat;
+}
+
 .booking__clear {
     opacity: 0.75;
     transition: opacity 0.2s ease;
