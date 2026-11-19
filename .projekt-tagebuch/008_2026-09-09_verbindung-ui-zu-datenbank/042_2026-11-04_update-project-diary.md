@@ -57,4 +57,4 @@ Das Tagebuch steht auf dem Stand bis einschließlich Commit 041. Rund 50 Minuten
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../008_2026-09-09_verbindung-ui-zu-datenbank.md) · [Nächster Commit →](../009_2026-11-11_favicon-hinterlegen/001_2026-11-11_add-favicon-update-page-titles.md)

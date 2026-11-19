@@ -1,4 +1,4 @@
-[← Vorheriger Branch](007_2026-09-06_buchungsseite-ui-fertigstellen.md) · [📓 Index](000_index.md)
+[← Vorheriger Branch](007_2026-09-06_buchungsseite-ui-fertigstellen.md) · [📓 Index](000_index.md) · [Nächster Branch →](009_2026-11-11_favicon-hinterlegen.md)
 
 # 008 – Branch `verbindung-ui-zu-datenbank`
 
@@ -238,4 +238,4 @@ Damit ist die Buchungsseite vollständig an die Datenbank angebunden, die Review
 
 ---
 
-[← Vorheriger Branch](007_2026-09-06_buchungsseite-ui-fertigstellen.md) · [📓 Index](000_index.md)
+[← Vorheriger Branch](007_2026-09-06_buchungsseite-ui-fertigstellen.md) · [📓 Index](000_index.md) · [Nächster Branch →](009_2026-11-11_favicon-hinterlegen.md)
