@@ -12,6 +12,7 @@ export type DayCell = {
     isWeekend: boolean;
     selectable: boolean;
     blocked: boolean;
+    unavailable: boolean;
     blockReason: UnavailableReason | null;
 };
 
@@ -19,6 +20,7 @@ export type CalendarRules = {
     today: Date;
     horizonDays: number | null;
     nights: NightAvailability | null;
+    locked: boolean;
 };
 
 export type CalendarMonth = {
@@ -42,7 +44,8 @@ export function buildDays({ year, month, checkIn, checkOut, rules }: CalendarMon
     for (let i = 0; i < CALENDAR_CELLS; i++) {
         const date = new Date(year, month, 1 - leading + i);
         const isPast = date < startOfToday;
-        const selectable = isSelectableAsCheckIn(date, rules) || (awaitingCheckOut && isSelectableAsCheckOut(date, checkIn, rules));
+        const selectable = !rules.locked && (isSelectableAsCheckIn(date, rules) || (awaitingCheckOut && isSelectableAsCheckOut(date, checkIn, rules)));
+        const blockReason = getNightBlockReason(date, rules);
 
         cells.push({
             date,
@@ -55,7 +58,8 @@ export function buildDays({ year, month, checkIn, checkOut, rules }: CalendarMon
             isWeekend: date.getDay() === 0 || date.getDay() === 6,
             selectable,
             blocked: !selectable && !isPast,
-            blockReason: getNightBlockReason(date, rules),
+            unavailable: !selectable && !rules.locked && isUnavailableNight(blockReason),
+            blockReason,
         });
     }
     return cells;
@@ -69,6 +73,11 @@ export function getNightBlockReason(night: Date, rules: CalendarRules): Unavaila
     const status = rules.nights?.get(toISODate(night));
     if (status === undefined || status.available) return null;
     return status.reason ?? 'nicht_buchbar';
+}
+
+/** Only nights the database refuses are struck through, not past or out-of-horizon days. */
+function isUnavailableNight(reason: UnavailableReason | null): boolean {
+    return reason !== null && reason !== 'vergangenheit' && reason !== 'ausserhalb_horizont';
 }
 
 export function isSelectableAsCheckIn(date: Date, rules: CalendarRules): boolean {

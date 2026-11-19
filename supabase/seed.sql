@@ -1,9 +1,10 @@
 -- Seed der lokalen Entwicklungsdatenbank (V4, Minimalseed).
 --
 -- Laeuft bei jedem `pnpm db:reset` nach allen Migrationen. Bewusst klein:
--- 1 Hotel, 3 Kategorien, 8 Zimmer, NULL Buchungen. Buchungen entstehen beim
--- Durchklicken und beweisen damit, dass create_booking laeuft. Tests legen ihre
--- Fixtures selbst an (E34), nicht der Seed.
+-- 1 Hotel, 3 Kategorien, 8 Zimmer, zwei Buchungen fuer den Kalender (siehe
+-- Ende der Datei). Weitere Buchungen entstehen beim Durchklicken und beweisen
+-- damit, dass create_booking laeuft. Tests legen ihre Fixtures selbst an (E34),
+-- nicht der Seed.
 --
 -- Feste UUIDs, damit ein Reset reproduzierbar ist und Links auf Kategorien nach
 -- jedem Reset weiter funktionieren.
@@ -190,3 +191,50 @@ insert into public.posts (id, title, description)
 values
     ('00000000-0000-4000-8000-000000000901', 'Willkommen im Karawanken Hof', 'Der erste Beitrag aus dem Supabase-Tutorial.'),
     ('00000000-0000-4000-8000-000000000902', 'Frühling in den Alpen', 'Ein zweiter Beitrag, damit die Liste nicht nur aus einer Zeile besteht.');
+
+-- ---------------------------------------------------------------------------
+-- Buchungen fuer den Kalender
+-- ---------------------------------------------------------------------------
+--
+-- Ohne Buchungen gibt es lokal keinen ausgebuchten Tag, und das Durchstreichen
+-- im Kalender laesst sich nicht nachstellen. Relativ zu current_date, damit die
+-- Naechte nach jedem Reset in der Zukunft liegen. Ueber create_booking statt per
+-- INSERT, damit Naechte, Preise und Zimmerzuteilung genau wie beim Gast entstehen.
+--
+-- 1. Alle 8 Zimmer in den Naechten +14 und +15: fuer jede Belegung "nicht buchbar".
+-- 2. Alle 3 Suiten in der Nacht +21: bleibt frei, weil die Gruppe in die anderen
+--    Kategorien passt - eine volle Kategorie sperrt keinen Tag. Erst ab 12
+--    Erwachsenen (mehr, als die Oberflaeche anbietet) passt sie nicht mehr.
+select public.create_booking(
+    p_check_in => current_date + 14,
+    p_check_out => current_date + 16,
+    p_positions => '[
+        {"room_type_id": "00000000-0000-4000-8000-000000000101", "rooms": 3},
+        {"room_type_id": "00000000-0000-4000-8000-000000000102", "rooms": 3},
+        {"room_type_id": "00000000-0000-4000-8000-000000000103", "rooms": 2}
+    ]'::jsonb,
+    p_adults => 8,
+    p_email => 'reisegruppe@example.com',
+    p_first_name => 'Erika',
+    p_last_name => 'Muster',
+    p_street => 'Seestrasse',
+    p_house_number => '1',
+    p_postal_code => '9020',
+    p_city => 'Klagenfurt',
+    p_country_code => 'AT'
+);
+
+select public.create_booking(
+    p_check_in => current_date + 21,
+    p_check_out => current_date + 22,
+    p_positions => '[{"room_type_id": "00000000-0000-4000-8000-000000000101", "rooms": 3}]'::jsonb,
+    p_adults => 6,
+    p_email => 'familie@example.com',
+    p_first_name => 'Max',
+    p_last_name => 'Muster',
+    p_street => 'Bergweg',
+    p_house_number => '2',
+    p_postal_code => '9500',
+    p_city => 'Villach',
+    p_country_code => 'AT'
+);

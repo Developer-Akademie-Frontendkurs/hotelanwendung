@@ -20,7 +20,7 @@ import {
 
 // Juni 2026 beginnt an einem Montag, Oktober 2026 an einem Donnerstag.
 const TODAY = new Date(2026, 5, 10);
-const NO_DATA: CalendarRules = { today: TODAY, horizonDays: null, nights: null };
+const NO_DATA: CalendarRules = { today: TODAY, horizonDays: null, nights: null, locked: false };
 const JUNE: CalendarMonth = { year: 2026, month: 5, checkIn: null, checkOut: null, rules: NO_DATA };
 
 function findCell(cells: DayCell[], date: Date): DayCell {
@@ -136,7 +136,12 @@ function nightsFrom(today: Date, free: readonly boolean[]): NightAvailability {
 }
 
 /** Wie das Beispiel in E29: Nächte am 12., 13., 14. frei, die Nacht am 15. voll. */
-const E29_RULES: CalendarRules = { today: new Date(2026, 5, 12), horizonDays: 30, nights: nightsFrom(new Date(2026, 5, 12), [true, true, true, false, true]) };
+const E29_RULES: CalendarRules = {
+    today: new Date(2026, 5, 12),
+    horizonDays: 30,
+    nights: nightsFrom(new Date(2026, 5, 12), [true, true, true, false, true]),
+    locked: false,
+};
 const day = (date: number): Date => new Date(2026, 5, date);
 
 describe('Tagesregeln (E29)', () => {
@@ -192,11 +197,11 @@ describe('buildDays mit Verfügbarkeit', () => {
     const month: CalendarMonth = { year: 2026, month: 5, checkIn: null, checkOut: null, rules: E29_RULES };
 
     it('streicht die volle Nacht als Anreisetag durch und nennt den Grund', () => {
-        expect(findCell(buildDays(month), day(15))).toMatchObject({ selectable: false, blocked: true, blockReason: 'nicht_buchbar' });
+        expect(findCell(buildDays(month), day(15))).toMatchObject({ selectable: false, blocked: true, unavailable: true, blockReason: 'nicht_buchbar' });
     });
 
-    it('macht denselben Tag wählbar, sobald eine Anreise davor steht', () => {
-        expect(findCell(buildDays({ ...month, checkIn: day(12) }), day(15))).toMatchObject({ selectable: true, blocked: false });
+    it('macht denselben Tag als Abreise wählbar und streicht ihn nicht durch, sobald eine Anreise davor steht', () => {
+        expect(findCell(buildDays({ ...month, checkIn: day(12) }), day(15))).toMatchObject({ selectable: true, blocked: false, unavailable: false });
     });
 
     it('lässt Tage hinter der Lücke als neue Anreise wählbar', () => {
@@ -204,17 +209,45 @@ describe('buildDays mit Verfügbarkeit', () => {
     });
 
     it('streicht Vergangenes nicht durch – es ist einfach vorbei', () => {
-        expect(findCell(buildDays(month), day(11))).toMatchObject({ selectable: false, blocked: false, isPast: true });
+        expect(findCell(buildDays(month), day(11))).toMatchObject({ selectable: false, blocked: false, unavailable: false, isPast: true });
     });
 
-    it('streicht Tage jenseits des Horizonts durch', () => {
+    it('sperrt Tage jenseits des Horizonts, ohne sie durchzustreichen', () => {
         const july: CalendarMonth = { ...month, month: 6 };
-        expect(findCell(buildDays(july), new Date(2026, 6, 20))).toMatchObject({ blocked: true, blockReason: 'ausserhalb_horizont' });
+        expect(findCell(buildDays(july), new Date(2026, 6, 20))).toMatchObject({ blocked: true, unavailable: false, blockReason: 'ausserhalb_horizont' });
+    });
+
+    it('streicht nach der Anreise die volle Nacht hinter dem ersten gesperrten Tag wieder durch', () => {
+        const rules: CalendarRules = { ...E29_RULES, nights: nightsFrom(day(12), [true, true, true, false, false, true]) };
+        const cells = buildDays({ ...month, checkIn: day(12), rules });
+        expect(findCell(cells, day(15))).toMatchObject({ selectable: true, unavailable: false });
+        expect(findCell(cells, day(16))).toMatchObject({ selectable: false, unavailable: true });
+    });
+});
+
+describe('buildDays im gesperrten Kalender', () => {
+    const month: CalendarMonth = { year: 2026, month: 5, checkIn: null, checkOut: null, rules: { ...E29_RULES, locked: true } };
+
+    it('lässt keinen Tag wählen', () => {
+        expect(buildDays(month).some((cell: DayCell): boolean => cell.selectable)).toBe(false);
+    });
+
+    it('streicht keinen Tag durch, auch keine volle Nacht', () => {
+        expect(buildDays(month).some((cell: DayCell): boolean => cell.unavailable)).toBe(false);
+    });
+
+    it('sperrt kommende Tage, Vergangenes bleibt einfach vorbei', () => {
+        expect(findCell(buildDays(month), day(13))).toMatchObject({ blocked: true });
+        expect(findCell(buildDays(month), day(11))).toMatchObject({ blocked: false, isPast: true });
+    });
+
+    it('lässt auch nach gewählter Anreise keine Abreise zu', () => {
+        expect(findCell(buildDays({ ...month, checkIn: day(12) }), day(14)).selectable).toBe(false);
     });
 });
 
 describe('canGoPrev / canGoNext (E30)', () => {
-    const rules: CalendarRules = { today: new Date(2026, 5, 12), horizonDays: 365, nights: null };
+    const rules: CalendarRules = { today: new Date(2026, 5, 12), horizonDays: 365, nights: null, locked: false };
 
     it('blättert nicht vor den laufenden Monat zurück', () => {
         expect(canGoPrev(2026, 5, rules)).toBe(false);

@@ -29,6 +29,7 @@ export type DayCellView = {
     stateClass: string;
     selectable: boolean;
     blocked: boolean;
+    unavailable: boolean;
     tooltip: string | null;
     flagged: boolean;
     withClearButton: boolean;
@@ -46,6 +47,7 @@ export function getBookingPageHtml(guestsHtml: string, checkoutHtml: string): st
         <section class="px-3 py-10 768:py-16">
             <div id="booking-dates" class="${STEP_TARGET_CLASSES} w-full max-w-300 mx-auto bg-eggshell rounded-3xl shadow-pic p-4 456:p-6 768:p-10">
                 ${guestsHtml}
+                <p data-calendar-notice aria-live="polite" class="font-antic-didone text-16 leading-tight text-purple-haze-dark text-center empty:hidden mb-6 768:mb-8"></p>
                 <div id="booking-calendar"></div>
             </div>
             <div id="booking-rooms" class="${STEP_TARGET_CLASSES} w-full max-w-212 mx-auto mt-10 768:mt-16"></div>
@@ -137,8 +139,6 @@ function getDayCellHtml(cell: DayCellView): string {
         ? /*html*/ `<button type="button" data-action="clear" aria-label="Auswahl zurücksetzen" class="booking__clear absolute top-0.5 right-0.5 px-1 leading-none text-14 768:text-16 text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded">&times;</button>`
         : '';
 
-    const strike = cell.blocked ? ' line-through decoration-purple-haze/70' : '';
-
     return /*html*/ `
         <div class="relative">
             <button
@@ -148,10 +148,10 @@ function getDayCellHtml(cell: DayCellView): string {
                 aria-pressed="${cell.pressed ? 'true' : 'false'}"
                 ${cell.selectable ? '' : cell.blocked ? 'aria-disabled="true"' : 'disabled'}
                 ${cell.tooltip === null ? '' : `title="${escapeHtml(cell.tooltip)}"`}
-                class="w-full flex flex-col items-center justify-center gap-0.5 456:gap-1 rounded-lg border border-purple-haze/20 py-2 456:py-3 768:py-4 transition-colors ${cell.stateClass} ${cell.flagged ? 'ring-2 ring-red-600' : ''}"
+                class="w-full flex flex-col items-center justify-center gap-0.5 456:gap-1 rounded-lg border border-purple-haze/20 py-2 456:py-3 768:py-4 transition-colors ${cell.stateClass} ${cell.unavailable ? 'booking__day--unavailable' : ''} ${cell.flagged ? 'ring-2 ring-red-600' : ''}"
             >
-                <span class="text-[0.625rem] 456:text-14 768:text-16 tracking-wide${strike}">${escapeHtml(cell.weekday)}</span>
-                <span class="font-antic-didone text-18 456:text-24 768:text-28 leading-none${strike}">${escapeHtml(cell.day)}</span>
+                <span class="text-[0.625rem] 456:text-14 768:text-16 tracking-wide">${escapeHtml(cell.weekday)}</span>
+                <span class="font-antic-didone text-18 456:text-24 768:text-28 leading-none">${escapeHtml(cell.day)}</span>
                 <span class="text-14 leading-none">${cell.label === null ? '&nbsp;' : escapeHtml(cell.label)}</span>
             </button>
             ${clearButton}
