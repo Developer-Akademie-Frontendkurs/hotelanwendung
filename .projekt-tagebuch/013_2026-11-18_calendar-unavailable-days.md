@@ -1,8 +1,8 @@
-[← Vorheriger Branch](012_2026-11-18_feat-ausgebuchte-tage-im-callender-anzeigen.md) · [📓 Index](000_index.md)
+[← Vorheriger Branch](012_2026-11-18_feat-ausgebuchte-tage-im-callender-anzeigen.md) · [📓 Index](000_index.md) · [Nächster Branch →](014_2026-11-25_room-slider.md)
 
 # 013 – Branch `feature/calendar-unavailable-days`
 
-**Erster Commit:** 2026-11-18 · **Commits:** 1 · **Status:** lokal noch offen, in `origin/main` gemergt (PR #9, 2026-11-19)
+**Erster Commit:** 2026-11-18 · **Commits:** 1 · **Status:** gemergt in `main` (PR #9, 2026-11-19)
 
 ## Ziel des Branches
 
@@ -20,7 +20,7 @@ Der Branch (Branchname bewusst neu und englisch, siehe Vorgänger [`feat-ausgebu
 | ---------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------- |
 | [001](013_2026-11-18_calendar-unavailable-days/001_2026-11-18_nicht-buchbare-tage-im-calender-nicht-waehlbar.md) | 2026-11-18 | `unavailable` und `locked` im Kalendermodell, Diagonale per CSS, Hinweis, Seed-Buchungen |
 
-Der Branch zweigt von `e08e20d` ab, dem aktuellen Stand von `main`. Auf GitHub wurde er am 2026-11-19 über **Pull Request #9** (Merge-Commit `b9f4c03`) in `main` gemergt. Im lokalen `main` fehlt dieser Merge noch – erst nach `git pull` taucht er dort auf. Bis dahin meldet `git log main..feature/calendar-unavailable-days` den Commit als „offen".
+Der Branch zweigt von `e08e20d` ab, dem damaligen Stand von `main`. Auf GitHub wurde er am 2026-11-19 über **Pull Request #9** (Merge-Commit `b9f4c03`) in `main` gemergt. Ins lokale `main` kam der Merge am selben Tag per `git pull`: Weil dort zuvor ein Tagebuch-Commit (`a611925`) entstanden war, erzeugte Git dabei den zusätzlichen Merge-Commit `824cc44` („Merge branch 'main' of …").
 
 ## Zusammenfassung
 
@@ -36,4 +36,4 @@ Auf dem Stand des Commits laufen alle 132 Tests unter `src/views` grün, und `ts
 
 ---
 
-[← Vorheriger Branch](012_2026-11-18_feat-ausgebuchte-tage-im-callender-anzeigen.md) · [📓 Index](000_index.md)
+[← Vorheriger Branch](012_2026-11-18_feat-ausgebuchte-tage-im-callender-anzeigen.md) · [📓 Index](000_index.md) · [Nächster Branch →](014_2026-11-25_room-slider.md)

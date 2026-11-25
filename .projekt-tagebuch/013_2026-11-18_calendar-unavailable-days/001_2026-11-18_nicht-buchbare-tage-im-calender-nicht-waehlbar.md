@@ -370,4 +370,4 @@ Der Kalender zeigt jetzt ehrlich, was er weiß: Nur Nächte, die die Datenbank f
 
 ---
 
-[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../013_2026-11-18_calendar-unavailable-days.md)
+[📓 Index](../000_index.md) · [↑ Branch-Übersicht](../013_2026-11-18_calendar-unavailable-days.md) · [Nächster Commit →](../014_2026-11-25_room-slider/001_2026-11-25_update-supabase-dependency.md)
