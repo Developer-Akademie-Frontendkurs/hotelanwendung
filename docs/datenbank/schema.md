@@ -3,7 +3,9 @@
 > **Dies ist das normative Dokument.** Artifact-Seite und FigJam-Board sind **Ableitungen** (E9).
 > Geändert wird immer erst hier.
 >
-> Begründung jeder Entscheidung: [README.md](./README.md) (E1–E51).
+> Begründung jeder Entscheidung: [README.md](./README.md) (E1–E54).
+> **Geplant, noch nicht umgesetzt:** Mitarbeitende und Rollen (E52–E54, Phase 11). Alles dazu ist unten
+> mit „geplant (Phase 11)“ markiert.
 > Umsetzung: [umsetzungsplan.md](./umsetzungsplan.md).
 
 ---
@@ -39,6 +41,8 @@ erDiagram
     BOOKINGS ||--o{ BOOKING_EVENTS : "Historie"
 
     AUTH_USERS |o--o| CUSTOMERS : "Konto (optional, spaeter)"
+    AUTH_USERS ||--o| STAFF_MEMBERS : "Personal (geplant, Phase 11)"
+    STAFF_ROLES ||--o{ STAFF_MEMBERS : "Rolle"
 
     HOTELS {
         uuid id PK
@@ -169,6 +173,20 @@ erDiagram
 
     AUTH_USERS {
         uuid id PK "gehoert Supabase, nicht der Domaene"
+    }
+
+    STAFF_MEMBERS {
+        uuid id PK "= auth.users.id, on delete cascade - E52"
+        text role FK "staff_roles.code"
+        text first_name
+        text last_name
+        text email "Anzeige, per Trigger aus auth.users"
+        boolean is_active
+    }
+
+    STAFF_ROLES {
+        text code PK "admin, staff - E52"
+        text label
     }
 ```
 
@@ -487,6 +505,35 @@ vollständig; ohne diesen Schritt könnte das Seed-Skript die Historie umschreib
 ihm erlaubt, damit Ereignisse überhaupt entstehen können. Eine Historie, die man ändern kann, ist
 keine.
 
+### `staff_roles` — Rollen des Personals (E52) — geplant (Phase 11)
+
+| Spalte | Typ | Regeln |
+| --- | --- | --- |
+| `code` | `text` | PK. Startwerte aus der Migration: `admin`, `staff` |
+| `label` | `text` | `NOT NULL` — Anzeigename |
+
+Eine neue Rolle ist eine neue Zeile. **Aber:** Bevor eine dritte Rolle dazukommt, wird `is_staff()` in
+Fähigkeitsfunktionen aufgeteilt (E53), sonst bekommt die neue Rolle automatisch alle Rechte.
+
+### `staff_members` — Mitarbeitende (E52, E54) — geplant (Phase 11)
+
+| Spalte | Typ | Regeln |
+| --- | --- | --- |
+| `id` | `uuid` | PK, `REFERENCES auth.users(id) ON DELETE CASCADE`, unveränderlich |
+| `role` | `text` | `NOT NULL REFERENCES staff_roles(code)` |
+| `first_name`, `last_name` | `text` | `NOT NULL` |
+| `email` | `text` | `NOT NULL` — nur Anzeige. Ein Trigger setzt sie bei Insert/Update aus `auth.users`, ein Trigger auf `auth.users` zieht sie nach |
+| `is_active` | `boolean` | `NOT NULL DEFAULT true` — `false` = keine Personalrechte, Zeile bleibt |
+
+Getrennt von `customers` (E4): Ein Konto kann Kunde, Mitarbeiter:in oder beides sein. `ON DELETE
+CASCADE` ist hier richtig, weil eine Personalzeile ohne Konto keinen Sinn ergibt, und anders als bei
+`customers` hängen keine Verträge daran.
+
+**Trigger `guard_staff_member_admins()` (E54):** Herabstufen, Deaktivieren und Löschen eines aktiven
+Admins werden abgelehnt, wenn danach kein aktiver Admin mehr bliebe (`letzter_admin`,
+transaktionsweiter Advisory-Lock) oder wenn ein angemeldeter Admin es an sich selbst tut
+(`eigene_admin_rechte`). Gilt auch für die Kaskade aus `auth.users`.
+
 ---
 
 ## 3. Funktionen — hier leben die Geschäftsregeln
@@ -496,7 +543,9 @@ Ohne Backend ist die Datenbank die letzte Verteidigungslinie (Leitsatz 1). Alle 
 
 | Funktion | Aufgabe | Entscheidung |
 | --- | --- | --- |
-| `is_staff()` | einziger Ort, an dem Mitarbeitendenrechte geprüft werden. v1: `false` | E13 |
+| `is_staff()` | einziger Ort, an dem Mitarbeitendenrechte geprüft werden. v1: `false`. **Geplant (Phase 11):** `current_staff_member_id() is not null`, `SECURITY DEFINER` | E13, E53 |
+| `is_admin()` | **geplant (Phase 11):** aktiv und `role = 'admin'`. Für Personalverwaltung und andere reine Admin-Aktionen | E53 |
+| `current_staff_member_id()` | **geplant (Phase 11):** mappt `auth.uid()` → aktive `staff_members.id`, sonst `null`. Einziger Ort. | E53 |
 | `current_customer_id()` | mappt `auth.uid()` → `customers.id`. Einziger Ort. | E13 |
 | `is_blocking_status(text)` | `IMMUTABLE`; „belegt Kapazität" = alles außer `cancelled`. Einziger Ort. | E11 |
 | `availability_nights(hotel, von, bis, kategorie?)` | **interner Kern** (E37): rohe Kapazitäts- und Preiszahlen pro Nacht und Kategorie samt `max_occupancy`, **ohne** Belegung und **ohne** Maskierung. Nicht für den Browser. | E17, E37, E48 |
@@ -511,6 +560,7 @@ Ohne Backend ist die Datenbank die letzte Verteidigungslinie (Leitsatz 1). Alle 
 | `guard_customer_address_update()` | Trigger, `SECURITY DEFINER`: benutzte Adressen sind inhaltlich unveränderlich, Archivieren bleibt erlaubt | E43, E51 |
 | `find_rate_gaps(tage)` | Admin: Nächte ohne Preiszeile | E25 |
 | `rls_audit()` | Admin: Abnahme des Schutzes als Dauerprüfung. Keine Zeilen = in Ordnung. | E40 |
+| `staff_members_set_email()`, `sync_staff_member_email()`, `guard_staff_member_admins()` | **geplant (Phase 11):** Trigger, `SECURITY DEFINER`, intern (kein `EXECUTE` für `anon`) | E52, E54 |
 
 **Alle drei Verfügbarkeitsaufrufer lesen aus `availability_nights`** — Kalender,
 Ergebnisliste und `create_booking`. Warum es drei Funktionen sind und nicht zwei: E37.
@@ -593,8 +643,9 @@ die Inventartabelle aus E10 ein.
 
 ## 4. RLS — ab Tag 1, deny by default (E13)
 
-Jede Tabelle bekommt `ENABLE ROW LEVEL SECURITY`. Policies **ausschließlich** über `is_staff()` und
-`current_customer_id()` — kein verstreutes `auth.uid()`.
+Jede Tabelle bekommt `ENABLE ROW LEVEL SECURITY`. Policies **ausschließlich** über `is_staff()`,
+`current_customer_id()` und (geplant, Phase 11) `is_admin()` und `current_staff_member_id()` — kein
+verstreutes `auth.uid()`.
 
 | Tabelle | lesen | schreiben |
 | --- | --- | --- |
@@ -607,6 +658,8 @@ Jede Tabelle bekommt `ENABLE ROW LEVEL SECURITY`. Policies **ausschließlich** �
 | `booking_events` | eigene oder `is_staff()` | keine (nur `SECURITY DEFINER`-Funktionen) |
 | `booking_groups` | `is_staff()` | keine |
 | `customer_addresses` | eigene oder `is_staff()` | `UPDATE` eigene oder `is_staff()`; was sich an benutzten Zeilen ändern darf, entscheidet der Trigger (nur `archived_at`). Kein `INSERT`/`DELETE` — angelegt wird nur in `create_booking()` (E43, E51) |
+| `staff_roles` (geplant) | `is_staff()` | `is_admin()` |
+| `staff_members` (geplant) | eigene Zeile (`current_staff_member_id()`) oder `is_admin()` | `is_admin()` — Grenzen setzt der Trigger (E54) |
 
 Der Key im Browser (`src/shared/services/supabase.ts`) ist kein Geheimnis, sondern eine öffentliche
 Kennung. RLS *ist* der Schutz — es gibt keinen zweiten.

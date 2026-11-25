@@ -1,7 +1,7 @@
 # Datenbank-Schema Hotelanwendung — Entscheidungsprotokoll
 
-> **Status:** Entscheidungsbaum vollständig (E1–E31), am 2026-08-17 freigegeben
-> **Stand:** 2026-08-17
+> **Status:** Entscheidungsbaum vollständig (E1–E31), am 2026-08-17 freigegeben; fortgeschrieben bis E54 (2026-11-25, Phase 11 geplant)
+> **Stand:** 2026-11-25
 >
 > **Dokumente in diesem Ordner:**
 >
@@ -372,6 +372,10 @@ Buchungen auditiert werden muss.
 **Verschoben:** `profiles.role` (naher Schritt), Rolle als Custom Claim im JWT via Auth Hook
 (Performance-Schritt), volles RBAC mit `roles`/`permissions`/`role_permissions` (nur wenn
 Berechtigungen wirklich feingranular werden).
+
+> **Nachtrag 2026-11-25 (E52–E54):** Der „nahe Schritt“ ist geplant, aber als eigene Tabelle
+> `staff_members` mit Rollentabelle `staff_roles` statt als `profiles.role`. `is_staff()` liest dort,
+> `is_admin()` kommt dazu. Umsetzung in Phase 11.
 
 ### E14 — `hotels`-Tabelle mit einer Zeile; `hotel_id` nur auf `room_types` und `rooms`
 
@@ -804,6 +808,12 @@ Administrative läuft über den Service-Role-Key. Der Tag, an dem jemand diesen 
 weil „der Admin-Bereich sonst nicht geht", ist der Tag, an dem RLS wertlos wird. Der Ausweg ist dann
 nicht der Key, sondern der in E13 benannte Seam: `is_staff()` an genau einer Stelle ändern.
 
+> **Nachtrag 2026-11-25 (E53, V18):** Genau dieser Ausweg ist mit Phase 11 geplant. Dazu kommt ein
+> lokaler Admin aus `supabase/seed.sql` (`admin@karawanken-hof.local`). Seine Zugangsdaten gelten
+> **nur lokal**: `seed.sql` läuft bei `db reset`, nie bei `db push`. Für die Cloud gilt deshalb:
+> **niemals** `supabase db push --include-seed`, und Admins der Cloud entstehen nur über die spätere
+> Edge Function.
+
 ### E36 — `posts` bleibt, aber als eigene, benannte Spike-Migration
 
 **Entscheidung:** Die Tutorial-Tabelle `posts` bekommt eine eigene, **letzte** Migration mit
@@ -860,6 +870,12 @@ kann, ist keine.
 Die feinen Gründe `ausgebucht`, `kein_preis` und `zu_klein` erreichen niemanden, auch nicht über den
 Service-Role-Key, und sind deshalb ungetestet. Der billigste Ausweg wäre eine Zeile in `is_staff()`:
 `select auth.role() = 'service_role'`. Das ist eine Änderung am Seam aus E13 und steht bewusst offen.
+
+> **Nachtrag 2026-11-25 (E53):** Der offene Punkt ist entschieden. `service_role` wird **nicht**
+> Personal. Die Entscheidung oben (Zugang über EXECUTE-Rechte) bleibt gültig. Mit Phase 11 ist der
+> Staff-Zweig **kein toter Code mehr**: Ein angemeldeter aktiver Admin oder `staff` sieht die feinen
+> Gründe und die ungedeckten Zahlen. Getestet wird das mit dem angemeldeten Seed-Admin, nicht mit dem
+> Service-Role-Key.
 
 ### E39 — Der Nebenläufigkeitstest braucht **mehr als zwei** gleichzeitige Anfragen
 
@@ -1271,12 +1287,152 @@ abgesichert, nicht vorher.
 
 ---
 
+## 4l. Entschieden (Runde 12) — Mitarbeitende und Rollen
+
+Ausgangslage: Für eine spätere Administrationsoberfläche braucht die Datenbank Mitarbeitende und
+Rollen. Bisher gab `is_staff()` hart `false` zurück, und alles Administrative lief über den
+Service-Role-Key (E13, E35). Diese Runde legt nur die **Grundlage in der Datenbank** fest. Nicht
+dazu gehören der Admin-Login im Frontend, der Routenschutz für `/admin*`, die Oberfläche zur
+Benutzerverwaltung, die Edge Function für `auth.admin.*` und ein feingranulares RBAC.
+Umgesetzt wird das in **Phase 11** des Umsetzungsplans. Begriffe stehen im
+[`GLOSSARY.md`](../../GLOSSARY.md) im Projektwurzelverzeichnis.
+
+Grilling-Runde vom 2026-11-25 (Q1–Q12, alle Empfehlungen angenommen):
+
+| #   | Frage                                       | Entscheidung                                                                                  |
+| --- | ------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Q1  | Tabellenname, Abgrenzung zu Kunden           | `staff_members`; keine generische `profiles`-Tabelle; das Kundenprofil bleibt `customers`      |
+| Q2  | Rollen als Enum, Check oder Tabelle?         | Nachschlagetabelle `staff_roles`, FK von `staff_members.role`                                  |
+| Q3  | Was darf `staff` heute?                      | Alles, was `is_staff()` heute freigibt. Upgrade-Pfad: Fähigkeitsfunktionen (E53)               |
+| Q4  | Gast und Mitarbeiter:in zugleich?            | Ja, beide Tabellen sind unabhängig                                                            |
+| Q5  | Schutzregel für Admins                       | Invariante „mindestens ein aktiver Admin“ **und** Selbstschutz, beides per Trigger (E54)        |
+| Q6  | Löschen oder deaktivieren?                   | Beides erlaubt für Admins; Normalfall ist `is_active = false`; Auth-Konto bleibt               |
+| Q7  | Spalte `email`                               | bleibt, wird per Trigger aus `auth.users` gefüllt und nachgezogen; nicht von Hand schreibbar    |
+| Q8  | `is_staff()` auch für `service_role`?         | Nein. E38 bleibt bei EXECUTE-Rechten                                                          |
+| Q9  | `(select is_staff())` in alten Policies?     | Nicht jetzt; neue Policies ja; Upgrade-Pfad benannt                                           |
+| Q10 | Seed-Zugangsdaten                            | `admin@karawanken-hof.local` / `admin-lokal-1234`, in `.env.example` (V18)                     |
+| Q11 | Ablage der Doku                              | E52–E54 hier, Phase 11 im Umsetzungsplan, `GLOSSARY.md`, `schema.md`                          |
+| Q12 | Zuschnitt der Tests                          | `staff-members.spec.ts` + Staff-Fälle in `availability.spec.ts`, drei neue angemeldete Clients |
+
+### E52 — Mitarbeitende in **`staff_members`**, Rollen in **`staff_roles`**, getrennt von `customers`
+
+**Entscheidung:**
+
+1. `staff_members` mit `id uuid primary key references auth.users(id) on delete cascade`, `role`
+   (FK auf `staff_roles.code`), `first_name`, `last_name`, `email`, `is_active boolean not null
+   default true`, `created_at`, `updated_at` (Trigger `set_updated_at()`, E8).
+2. `staff_roles (code text primary key, label text not null)` mit den Zeilen `admin` und `staff`.
+   Eine neue Rolle ist eine neue Zeile, kein `ALTER TYPE`. Später kann `role_permissions` hier
+   andocken.
+3. **Keine** generische `profiles`-Tabelle. Das Kundenprofil ist und bleibt `customers` (E4). Ein
+   Benutzerkonto kann Kunde, Mitarbeiter:in oder beides sein. Die Tabellen wissen nichts
+   voneinander.
+4. `email` dient der Anzeige in der späteren Oberfläche, die `auth.users` nicht lesen kann.
+   Maßgeblich bleibt `auth.users`: Ein Trigger setzt `email` bei jedem Insert und Update aus
+   `auth.users`, egal was der Aufrufer schickt. Ein Trigger auf `auth.users`
+   (`after update of email`) zieht die Adresse nach.
+5. `delete` auf `staff_members` heißt nur „hat keine Personalrechte mehr“. Das Benutzerkonto bleibt
+   bestehen. Der Normalfall in der Oberfläche wird `is_active = false` sein (E22: nichts verschwindet
+   ohne Not).
+
+**Begründung:** Der Name folgt dem Muster von `customers`: Die Zeile *ist* das Personalmitglied, kein
+„Profil“ davon. Eine gemeinsame `profiles`-Tabelle für Gäste und Personal würde genau die Trennung
+wieder aufheben, die E4 billig gemacht hat. Gäste existieren ohne Konto, Personal nie. Für die
+Nachschlagetabelle spricht, dass Abteilungsrollen angekündigt sind (Rezeption, Housekeeping,
+Buchhaltung …). Werte aus einem Postgres-Enum lassen sich nur umständlich wieder entfernen.
+
+**Verworfen:** `profiles` für alle Konten. `role` als Enum. `role` als `text` mit `CHECK`.
+`email` ohne Synchronisation, also eine Kopie, die veraltet.
+
+**Bekannte Folge:** Ein Auth-Benutzer, der in `booking_events.actor_user_id` vorkommt, lässt sich
+nicht löschen (FK ohne `on delete`). Für die spätere Edge Function heißt das: Deaktivieren statt
+Löschen ist nicht nur Konvention.
+
+### E53 — `is_staff()` und `is_admin()` lesen `staff_members`; „Personal“ heißt vorerst **alle Rechte**
+
+**Entscheidung:**
+
+1. Neuer Seam `current_staff_member_id()`: liefert die `id` des angemeldeten Benutzers, **wenn** es
+   eine **aktive** Zeile in `staff_members` gibt, sonst `null`. Das ist der einzige Ort, an dem
+   `auth.uid()` zu einem Personalmitglied wird, analog zu `current_customer_id()` (E13). Policies
+   für „das eigene Profil“ benutzen ihn, damit `rls_audit()` kein `auth.uid()` findet.
+2. `is_staff()` = `current_staff_member_id() is not null`, also aktiv, egal mit welcher Rolle.
+3. `is_admin()` = aktiv **und** `role = 'admin'`.
+4. Alle drei Funktionen sind `SECURITY DEFINER` mit `set search_path = ''`. Das ist neu für
+   `is_staff()`, sonst würde die Policy auf `staff_members` sich über `is_admin()` selbst aufrufen
+   (dieselbe Rekursion wie bei `current_customer_id()`). `EXECUTE` erhalten `anon`,
+   `authenticated` und `service_role`, denn Policies rufen sie für jeden Aufrufer auf.
+5. `service_role` ist **kein** Personal: `auth.uid()` ist dort `null`, also liefern beide
+   Funktionen `false`. E38 bleibt unverändert gültig (Zugang zu Admin-Funktionen über
+   EXECUTE-Rechte).
+6. Neue Policies schreiben `(select public.is_admin())` usw., damit die Funktion einmal pro Abfrage
+   läuft statt pro Zeile. Die rund 25 bestehenden Policies mit nacktem `public.is_staff()` bleiben
+   **vorerst** so.
+
+**Begründung:** Das ist genau der Schritt, für den E13 den Seam gebaut hat. Eine Funktion wird
+geändert, und jede Policy im Schema gilt sofort mit. Dass `staff` heute alles darf, was hinter
+`is_staff()` liegt, ist bewusst grob. Es gibt nur zwei Rollen, und Personal anlegen kann nur ein
+Admin, für den es noch keine Oberfläche gibt. Feinere Rechte schon jetzt hieße, alle Policies
+umzuschreiben, und das sprengt den Rahmen.
+
+**Was sich durch die Änderung sofort ändert (bewusst geprüft):**
+
+| Stelle                                                                           | vorher                    | nachher (angemeldet als aktives Personal)       |
+| -------------------------------------------------------------------------------- | ------------------------- | ----------------------------------------------- |
+| Schreib-Policies auf Stammdaten, Preisen, Leistungen, Bildern, Storage, `posts`  | niemand außer Service-Key | jede:r Mitarbeiter:in                           |
+| Lese-Policies auf `customers`, Adressen, `bookings`, Nächte, Extras, Events      | nur eigene                | alle                                            |
+| `mask_reason()`, `availability_calendar()`, `search_availability()` (E28, E37)   | immer maskiert            | feine Gründe und ungedeckte Zahlen              |
+| `create_booking()` → `reject_booking()`                                          | Code maskiert             | feiner Code, wenn Personal bucht                |
+| anonym, angemeldeter Gast, `service_role`                                        | —                         | **unverändert**: `is_staff()` = `false`         |
+
+**Upgrade-Pfad (benannt, nicht gebaut):** Sobald eine dritte Rolle dazukommt (z. B. `reception`,
+`housekeeping`), wird **vorher** `is_staff()` in **Fähigkeitsfunktionen** aufgeteilt, z. B.
+`can_manage_catalog()`, `can_manage_rates()`, `can_read_bookings()`, `can_manage_staff()`. Sie
+werden nach demselben Seam-Prinzip gebaut, und Policies fragen dann Fähigkeiten ab, nie Rollen.
+Ohne diesen Schritt bekäme jede neue Rolle automatisch alle Rechte. Wird es noch feiner, folgt
+`role_permissions` an `staff_roles` (E13, „volles RBAC“). Die Rolle als JWT-Claim per Auth Hook
+bleibt der Performance-Schritt aus E13. Ebenso offen bleibt, die alten Policies auf
+`(select …)` umzustellen.
+
+**Verworfen:** Fähigkeitsfunktionen schon jetzt. `is_staff()` liefert `true` für `service_role`
+(der Ausweg aus E38 ist mit echten Konten überflüssig). Rollenprüfung direkt in Policies.
+
+### E54 — Es gibt **immer** mindestens einen aktiven Admin; niemand entzieht sich selbst die Admin-Rechte
+
+**Entscheidung:** Ein `before update or delete`-Trigger auf `staff_members` setzt zwei Regeln durch.
+
+1. **Invariante:** Eine Änderung, nach der es keinen aktiven Admin mehr gäbe, wird abgelehnt. Das gilt
+   fürs Herabstufen (`role` weg von `admin`), fürs Deaktivieren (`is_active = false`) und fürs
+   Löschen, auch fürs Löschen über die Kaskade von `auth.users`. Der Trigger nimmt vorher einen
+   transaktionsweiten Advisory-Lock (wie E33). Zwei Admins, die sich gleichzeitig gegenseitig
+   herabstufen, würden eine bloße Zählprüfung sonst beide bestehen. Fehlercode: `letzter_admin`.
+2. **Selbstschutz:** Ein angemeldeter Admin darf **sich selbst** nicht herabstufen, nicht
+   deaktivieren und nicht löschen. Fehlercode: `eigene_admin_rechte`. Für Aufrufe ohne Benutzer
+   (Seed, `service_role`, die spätere Edge Function) greift nur die Invariante.
+
+Die Codes sind deutsch, weil es Werte sind, die die Datenbank vorgibt (wie `ausgebucht`). Sie werden
+mit `raise exception … using errcode = 'P0001'` geworfen, damit Tests und die spätere Oberfläche sie
+sicher erkennen.
+
+**Begründung:** Die Invariante schützt das System: Ohne aktiven Admin gibt es keinen Weg zurück außer
+über den Service-Role-Key, also genau den Weg, den E35 aus dem Alltag verbannt. Der Selbstschutz ist
+billiger Unfallschutz in der Oberfläche. Er allein reicht aber nicht: Zwei Admins können sich
+gegenseitig herabstufen, und eine Kaskade von `auth.users` kennt keinen „selbst“. Ein `CHECK`
+kann keine Aussage über andere Zeilen treffen, deshalb ein Trigger.
+
+**Verworfen:** nur Selbstschutz (siehe oben). Nur die Prüfung in der späteren Edge Function, denn
+dann wäre die Regel eine Absprache, keine Regel (Leitsatz 1).
+
+---
+
 ## 5. Offene Punkte
 
 | #   | Frage | hängt an |
 | --- | ----- | -------- |
 
-**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E51).
+**Die Frontier ist leer** — alle Entscheidungen des Entscheidungsbaums sind getroffen (E1–E54).
+E52–E54 (Mitarbeitende und Rollen) sind **entschieden, aber noch nicht umgesetzt** → Phase 11 im
+Umsetzungsplan.
 
 Der zuvor offene Punkt ist erledigt: Die **Umsetzungsinterpretation in E28** (feine Sperrgründe nur
 für `is_staff()`) wurde in der Grilling-Runde vom 2026-09-02 ausdrücklich bestätigt. Ebenfalls dort
@@ -1292,7 +1448,9 @@ Housekeeping-Abläufe. Alle additiv nachrüstbar.
 Benannte Upgrade-Pfade, die aus Entscheidungen folgen: Tages-Inventar-Tabelle (E10), volles RBAC
 (E13), `booking_guests` (E16), `bookings` + `booking_items` (E20/E27), Belegungspreise und weitere
 Rate-Plans (E5), Belegung **je Position** statt je Vorgang (E45), Absicherung der Kundenstammdaten über
-Kundenkonten (E51), Bestätigungsmail und damit der ursprüngliche Popup-Text (E46).
+Kundenkonten (E51), Bestätigungsmail und damit der ursprüngliche Popup-Text (E46),
+Fähigkeitsfunktionen statt `is_staff()` **bevor** eine dritte Rolle kommt (E53), `(select …)` in den
+alten `is_staff()`-Policies und Rolle als JWT-Claim (E53).
 
 ---
 
@@ -1331,3 +1489,4 @@ Für den Call als Zusammenfassung auf einer Folie:
 | 2026-09-09 | Grilling-Runde 8 zur **Anbindung der Buchungsseite**: E42–E46 entschieden. E44 revidiert den Nachsatz von E41 (mehrere Kategorien je Vorgang). Fragen/Antworten und V8–V16 im Umsetzungsplan, Phasen 8/9 dort ausgearbeitet, Phase 7b und 9b ergänzt |
 | 2026-09-26 | Runde 11: **E50/E51** — Sitzadresse und optionale Rechnungsadresse in `customer_addresses` (revidiert E42), Verweise an `bookings`, Unveränderlichkeit per Trigger (passt E43 an), `create_booking` mit Adressparametern, Stammdaten „neueste gewinnt“ |
 | 2026-09-16 | Runde 9: **E47** — Frühstück als eigener Posten (`services`, `booking_extras`, `bookings.extras_amount_cents`/`grand_total_cents`, `p_with_breakfast`). Zusatzleistungen damit aus dem Scope-Zaun E15 heraus; `schema.md` um beide Tabellen und die RLS-Zeilen ergänzt |
+| 2026-11-25 | Runde 12: **E52–E54** — Mitarbeitende (`staff_members`) und Rollen (`staff_roles`), `is_staff()`/`is_admin()`/`current_staff_member_id()` lesen die Tabelle, Admin-Invariante per Trigger. Nachträge in E13, E35, E38. Phase 11 und V18 im Umsetzungsplan, `GLOSSARY.md` neu, `schema.md` ergänzt. **Nur geplant, nicht umgesetzt** |

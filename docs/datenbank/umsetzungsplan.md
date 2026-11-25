@@ -3,7 +3,7 @@
 > **Zweck:** Diese Datei ist so geschrieben, dass die Umsetzung in einer **späteren Session**
 > aufgesetzt werden kann, ohne die Grilling-Unterhaltung wiederholen zu müssen.
 >
-> **Vorher lesen:** [README.md](./README.md) (Entscheidungen E1–E51 mit Begründung) und
+> **Vorher lesen:** [README.md](./README.md) (Entscheidungen E1–E54 mit Begründung) und
 > [schema.md](./schema.md) (normatives Schema).
 >
 > **Regel für die Umsetzung:** `schema.md` ist die Quelle der Wahrheit. Weicht der Plan davon ab,
@@ -17,7 +17,7 @@ Kopiervorlage für den ersten Prompt:
 
 > Lies `docs/datenbank/README.md`, `docs/datenbank/schema.md` und
 > `docs/datenbank/umsetzungsplan.md`. Wir setzen Phase **N** um. Halte dich an die Entscheidungen
-> E1–E51 und die Vorgehensentscheidungen V1–V17; wenn dir etwas widersprüchlich vorkommt, frag
+> E1–E54 und die Vorgehensentscheidungen V1–V18; wenn dir etwas widersprüchlich vorkommt, frag
 > nach, statt zu raten.
 
 **Branch- und Commit-Schnitt (V6):** Phasen 1–7 laufen auf **einem** Themenbranch
@@ -126,7 +126,7 @@ Frage *war*.
 Makel: Q24 hat Q12 („`p_rooms` fest auf 1") kassiert, und Q30 hat gezeigt, dass Q28 und Q9 sich
 widersprachen. Beide Widersprüche wären sonst als Code entstanden und erst beim Debuggen aufgefallen.
 
-### Vorgehensentscheidungen V8–V17
+### Vorgehensentscheidungen V8–V18
 
 | #   | Entscheidung | Begründung in Kurzform |
 | --- | ------------ | ---------------------- |
@@ -140,6 +140,7 @@ widersprachen. Beide Widersprüche wären sonst als Code entstanden und erst bei
 | **V15** | `bookingService.createBooking()` liefert `{ ok: true, data } \| { ok: false, error: { code, date, roomTypeId, message } }`. Lesezugriffe **werfen** weiterhin. Der Service parst `error.details` als JSON und fällt bei unparsbarem Inhalt auf `error.message` zurück. | Eine ausgebuchte Nacht ist ein erwartetes Ergebnis, kein Ausnahmefall — und die Oberfläche braucht `datum` und Kategorie, um den Hinweis an der richtigen Stelle zu zeigen (E31). Bei Lesezugriffen gibt es keine fachliche Ablehnung, nur kaputte Infrastruktur. |
 | **V16** | Oberfläche: Mengenwähler je Zimmerkarte (0 bis `min(rooms_free, 8 − bereits gewählte)`), Hervorhebung ab Menge > 0, Auswahlleiste mit Summe; Bestellzeilen je Kategorie mit Menge > 0; Absende-Button immer aktiv mit Prüfung beim Klick; Gästezahl verpflichtend; Datenschutzhinweis bleibt Text; Extra-Angebot-Zeile wird nicht gerendert; Bestätigung über `src/shared/ui/modal.ts` (`<dialog>`, genau ein Ausgang). Wählbarkeits- und Zusammenführungsregeln werden als **eigenständige Funktionen** herausgezogen. | Details und Begründungen in Phase 9/9b. Das Herausziehen der Regeln passiert trotz V12 — es kostet nichts und ist die Voraussetzung dafür, dass die Tests später ohne Umbau nachgezogen werden können. |
 | **V17** | ~~**Fünf Commits**~~ auf `verbindung-ui-zu-datenbank`, jeder für sich lauffähig (anders als die Phasen 1–7). Danach ein Tagebuch-Eintrag. **Stand 2026-10-28:** Es sind deutlich mehr Commits geworden, weil E47–E51 und das Review (`docs/reviews/2026-09-30_verbindung-ui-zu-datenbank.md`) dazwischenkamen. Geblieben ist „jeder Commit lauffähig“ und der Tagebuch-Eintrag. | Siehe „Commit-Schnitt" unten. Der Tagebuch-Eintrag, weil dieser Branch drei Entscheidungen enthält, die man aus Migrationen nicht rekonstruiert (V7). |
+| **V18** | Der lokale Admin entsteht in `supabase/seed.sql` (`auth.users` + `auth.identities` + `staff_members`) mit `admin@karawanken-hof.local` / `admin-lokal-1234`. Dokumentiert in `.env.example` als `LOCAL_ADMIN_EMAIL`/`LOCAL_ADMIN_PASSWORD` (ohne `VITE_`) und in der Projekt-README. Die Tests lesen die Werte aus der `.env`. **Nie** `supabase db push --include-seed`. | Bekannte, feste Zugangsdaten sind lokal ein Komfort und in der Cloud ein offenes Tor. `seed.sql` läuft nur bei `db reset`. Diese Grenze wird hier und in Phase 10 ausdrücklich festgehalten, damit sie keine Annahme bleibt (E35, E53). |
 
 ### Commit-Schnitt
 
@@ -655,6 +656,207 @@ ist am 2026-09-02 ausdrücklich freigegeben worden; die Instanz enthält ausschl
 2. `supabase db push` — die Cloud erhält damit erstmals eine echte Migrationshistorie
 3. `posts` kommt per E36 als eigene, letzte Migration mit — nichts weiter zu entscheiden
 4. `.env` für die Cloud **nicht** committen (E35); nur `.env.example` ist im Repo
+5. **Niemals** `supabase db push --include-seed` (V18): `seed.sql` enthält den lokalen Admin mit
+   bekanntem Passwort. Admins der Cloud entstehen nur über die spätere Edge Function (E52–E54)
+
+---
+
+## Phase 11 — Mitarbeitende und Rollen (E52–E54, V18) — geplant, nicht umgesetzt
+
+> **Stand 2026-11-25:** In der Grilling-Runde 12 geplant und entschieden. Umgesetzt wird in einer
+> eigenen Session. Begründungen: README E52–E54. Begriffe: [`GLOSSARY.md`](../../GLOSSARY.md).
+
+**Einstieg (Kopiervorlage):**
+
+> Lies `GLOSSARY.md`, `docs/datenbank/README.md` (vor allem E13, E28, E35, E37, E38, E52–E54),
+> `docs/datenbank/schema.md` und Phase 11 in `docs/datenbank/umsetzungsplan.md`. Setze Phase 11 um.
+> Wenn dir etwas widersprüchlich vorkommt, frag nach, statt zu raten.
+
+**Ziel:** Es gibt Mitarbeitende und Rollen in der Datenbank. Nach `pnpm db:reset` existiert genau ein
+lokaler Admin. `is_staff()` entscheidet anhand der Rolle des angemeldeten Benutzers.
+
+**Ausdrücklich nicht in Phase 11:** Admin-Login im Frontend, Routenschutz für `/admin*`, Oberfläche
+der Benutzerverwaltung, Edge Function für `auth.admin.*` (später: prüft `is_admin()` des Aufrufers,
+dann Service-Role-Key **nur serverseitig**, E35), Fähigkeitsfunktionen und `role_permissions`
+(Upgrade-Pfad aus E53), Umstellung der alten Policies auf `(select is_staff())`.
+
+### Branch und Commits
+
+Branch `feature/staff-roles` von `main`. Ein Commit pro Schritt 1–3 (Migration, Seed + Env, Tests),
+danach einer für Typen und Doku. Jeder Commit muss für sich `pnpm db:reset` überstehen.
+
+### Schritt 1 — Migration `<datum>101000_staff_members.sql`
+
+Die Reihenfolge innerhalb der Datei ist wichtig, weil die Funktionen die Tabelle brauchen und die
+Policies die Funktionen.
+
+1. **`staff_roles`**: `code text primary key`, `label text not null`, `created_at`, `updated_at`
+   + Trigger `set_updated_at()`. Seed-Zeilen **in der Migration** (keine Testdaten, sondern
+   Stammwerte, die jede Umgebung braucht): `('admin', 'Administration')`,
+   `('staff', 'Mitarbeiter:in')`.
+2. **`staff_members`**:
+   - `id uuid primary key references auth.users(id) on delete cascade`
+   - `role text not null references public.staff_roles(code) on update cascade on delete restrict`
+   - `first_name text not null`, `last_name text not null`
+   - `email text not null`. Kommentar: Anzeige, maßgeblich ist `auth.users` (E52)
+   - `is_active boolean not null default true`
+   - `created_at`, `updated_at` + Trigger `set_updated_at()`
+   - Index auf `role` ist nicht nötig, weil es nur eine Handvoll Zeilen gibt
+3. **`current_staff_member_id()`**: `language sql stable security definer set search_path = ''`,
+   `select s.id from public.staff_members s where s.id = auth.uid() and s.is_active`.
+4. **`is_staff()`** per `create or replace` umstellen: `select public.current_staff_member_id() is
+   not null`, jetzt **`security definer`** (E53, Punkt 4). Den Kommentar aus der Foundation-Migration
+   per `comment on function` ersetzen („v1: immer false“ stimmt dann nicht mehr).
+5. **`is_admin()`**: `security definer`, `set search_path = ''`, `exists (… where id = auth.uid() and
+   is_active and role = 'admin')`.
+6. Rechte: `revoke all … from public`, danach `grant execute on function` für alle drei an `anon,
+   authenticated, service_role`. Policies werden mit den Rechten des Aufrufers ausgewertet.
+7. **E-Mail-Synchronisation (E52, Punkt 4):**
+   - `staff_members_set_email()` (Trigger `before insert or update`, `security definer`,
+     `search_path = ''`): `new.email := (select u.email from auth.users u where u.id = new.id)`.
+     Gibt es den Benutzer nicht, scheitert der Insert ohnehin am FK.
+   - `sync_staff_member_email()` (Trigger auf **`auth.users`**, `after update of email`,
+     `security definer`): `update public.staff_members set email = new.email where id = new.id`.
+   - `revoke all … from public, anon, authenticated` für beide Triggerfunktionen.
+8. **Unveränderliche `id`:** Im selben `before update`-Trigger oder in einem eigenen Trigger:
+   `new.id <> old.id` → Fehler. Ein Profil darf nicht auf ein anderes Konto umgehängt werden.
+9. **Schutzregeln (E54):** Triggerfunktion `guard_staff_member_admins()`, `before update or delete`,
+   `security definer`, `search_path = ''`:
+   - Betroffen ist eine Zeile nur, wenn sie **vorher** ein aktiver Admin war
+     (`old.role = 'admin' and old.is_active`) und **danach** keiner mehr ist (Delete, `role` geändert
+     oder `is_active = false`). Sonst sofort `return`.
+   - **Selbstschutz:** `old.id = auth.uid()` → `raise exception 'eigene_admin_rechte' using errcode
+     = 'P0001'`. Ist `auth.uid()` `null` (Seed, `service_role`, Kaskade aus der Edge Function), greift
+     das nicht.
+   - **Invariante:** `perform pg_advisory_xact_lock(hashtext('staff_members.admins'))`, danach
+     zählen: aktive Admins mit `id <> old.id`. Ist das null, dann `raise exception 'letzter_admin'
+     using errcode = 'P0001'`.
+   - `return` mit `old` bei Delete, sonst mit `new`.
+   - Gilt auch für die Kaskade `auth.users` → `staff_members`. Das ist gewollt, denn das Löschen des
+     letzten Admin-Kontos scheitert damit.
+10. **RLS:**
+    - `staff_roles`: `enable row level security`. `select` für `(select public.is_staff())`, `all`
+      (insert/update/delete) für `(select public.is_admin())`.
+    - `staff_members`: `enable row level security`.
+      - `staff_members_select`: `using (id = (select public.current_staff_member_id()) or
+        (select public.is_admin()))`
+      - `staff_members_insert`: `with check ((select public.is_admin()))`
+      - `staff_members_update`: `using ((select public.is_admin())) with check ((select
+        public.is_admin()))`
+      - `staff_members_delete`: `using ((select public.is_admin()))`
+    - **Kein** `auth.uid()` in einer Policy, sonst schlägt `rls_audit()` an (E13).
+11. **`rls_audit()` nachziehen** (`create or replace`, komplette Funktion aus
+    `20260902121000_rls_audit.sql` übernehmen):
+    - Prüfung 3: Den Befundtext auf „statt `current_customer_id()`/`current_staff_member_id()`“
+      erweitern.
+    - Prüfung 5: Die Liste der internen Funktionen um `staff_members_set_email`,
+      `sync_staff_member_email` und `guard_staff_member_admins` ergänzen.
+12. **Kommentare** (`comment on`) an Tabellen und Funktionen mit Verweis auf E52–E54, kurz wie in
+    den bestehenden Migrationen.
+
+**Bewusst prüfen, nicht nur hoffen (Hinweis aus dem Ticket):** Nach dieser Migration sind die
+Staff-Zweige in `mask_reason()`, `availability_calendar()`, `search_availability()` und
+`create_booking()` für angemeldetes Personal **aktiv** (Tabelle in E53). An diesen Funktionen
+ändert sich nichts. Was sich ändert, ist allein das Ergebnis von `is_staff()`. Die Tests aus
+Schritt 3 belegen beide Seiten.
+
+### Schritt 2 — Seed, `.env.example`, README (V18)
+
+1. **`supabase/seed.sql`**, am Anfang (vor den Hotel-Daten), mit fester UUID
+   `00000000-0000-4000-8000-00000000a001`:
+   - `insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
+     email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+     confirmation_token, recovery_token, email_change, email_change_token_new)` mit
+     `instance_id = '00000000-0000-0000-0000-000000000000'`, `aud = role = 'authenticated'`,
+     `encrypted_password = extensions.crypt('admin-lokal-1234', extensions.gen_salt('bf'))`,
+     `raw_app_meta_data = '{"provider":"email","providers":["email"]}'`,
+     `raw_user_meta_data = '{}'`. Die vier Token-Spalten bekommen `''` statt `null`, **sonst
+     scheitert der Login** in GoTrue mit einem Scan-Fehler auf `NULL`.
+   - `insert into auth.identities (id, user_id, provider_id, provider, identity_data,
+     last_sign_in_at, created_at, updated_at)` mit `provider = 'email'`, `provider_id` = die
+     User-ID als Text, `identity_data = jsonb_build_object('sub', <id>::text, 'email', <email>,
+     'email_verified', true)`.
+   - `insert into public.staff_members (id, role, first_name, last_name, email)` mit `role =
+     'admin'`, Name z. B. „Lokale“ / „Administration“, `email = ''` (der Trigger setzt sie).
+   - Kopfkommentar: **nur lokal**, gilt nie für Cloud oder Produktion (E35, V18).
+   - Vorher prüfen, ob `pgcrypto` im Schema `extensions` liegt (Supabase-Standard).
+2. **`.env.example`**: Block „Lokaler Admin (nur Seed, nur lokal)“ mit `LOCAL_ADMIN_EMAIL=admin@karawanken-hof.local`
+   und `LOCAL_ADMIN_PASSWORD=admin-lokal-1234`, **ohne** `VITE_`-Präfix. Das Frontend braucht sie
+   nicht, und Vite soll sie nie bündeln. Die eigene `.env` entsprechend ergänzen.
+3. **`README.md`** im Projektwurzelverzeichnis: kurzer Abschnitt „Lokaler Admin“ mit den
+   Zugangsdaten, dem Hinweis „nur lokal“ und dem Verbot `supabase db push --include-seed` (siehe
+   Phase 10).
+
+### Schritt 3 — Tests
+
+1. **`supabase/tests/helpers/clients.ts`**: Funktion `signInClient(email, password)`, die einen
+   **frischen** Client (publishable key, `persistSession: false`) erzeugt, ihn per
+   `signInWithPassword` anmeldet und zurückgibt. `adminCredentials` aus `LOCAL_ADMIN_EMAIL` und
+   `LOCAL_ADMIN_PASSWORD` über das vorhandene `requireEnv`.
+2. **`supabase/tests/helpers/fixtures.ts`**: `createAuthUser()` (über
+   `serviceClient.auth.admin.createUser`, `email_confirm: true`, zufällige E-Mail unter
+   `@test.karawanken-hof.local`) und `createStaffMember(role)` (Auth-Benutzer + Zeile in
+   `staff_members` über `serviceClient`). Aufräumen über `auth.admin.deleteUser`, die Kaskade
+   entfernt die Zeile. Vorher müssen Admins, die der Test angelegt hat, wieder herabgestuft sein,
+   sonst hält die Invariante.
+3. **Neu: `supabase/tests/staff-members.spec.ts`**, ein Block je Akzeptanzkriterium:
+
+| # | Fall | erwartet |
+| --- | --- | --- |
+| 1 | Nach dem Seed: Admins in `staff_members` (über `serviceClient`) | genau **eine** Zeile, `email = LOCAL_ADMIN_EMAIL`, aktiv |
+| 2 | Seed-Admin angemeldet: `rpc('is_staff')`, `rpc('is_admin')` | `true`, `true` |
+| 3 | anonym: `is_staff`, `is_admin` | `false`, `false` |
+| 4 | angemeldeter Gast (Auth-Benutzer ohne `staff_members`-Zeile): `is_staff`, `is_admin` | `false`, `false` |
+| 5 | `staff` angemeldet: `is_staff`, `is_admin` | `true`, `false` |
+| 6 | deaktivierte:r Mitarbeiter:in (`is_active = false`): `is_staff`, `is_admin` | `false`, `false` |
+| 7 | anonym: `select` auf `staff_members` | **0 Zeilen**, kein Fehler |
+| 8 | anonym: `insert` in `staff_members` | Fehler (RLS) |
+| 9 | angemeldeter Gast: `select` | 0 Zeilen |
+| 10 | `staff`: `select` | genau die **eigene** Zeile |
+| 11 | `staff`: `insert` einer Zeile | Fehler (RLS) |
+| 12 | `staff`: `update` der eigenen `role` auf `admin` und `update` fremder Zeilen | 0 betroffene Zeilen; anschließend über `serviceClient` unverändert. **Achtung:** Ein Update, das RLS ausfiltert, wirft keinen Fehler, deshalb den Zustand prüfen |
+| 13 | `staff`: `delete` einer fremden Zeile | 0 betroffene Zeilen, Zeile existiert weiter |
+| 14 | Admin: `select` | alle Zeilen |
+| 15 | Admin: `insert` für einen bestehenden Auth-Benutzer mit falscher `email` | gelingt; `email` stammt aus `auth.users` |
+| 16 | Admin: `update` `role`/`is_active` einer `staff`-Zeile, `delete` einer `staff`-Zeile | gelingt |
+| 17 | Seed-Admin stuft sich selbst herab / deaktiviert sich / löscht sich | Fehler `eigene_admin_rechte` |
+| 18 | `serviceClient` stuft den Seed-Admin herab, während er der einzige Admin ist | Fehler `letzter_admin` |
+| 19 | `serviceClient.auth.admin.deleteUser(seedAdmin)`, während er der einzige Admin ist | scheitert, Admin existiert weiter |
+| 20 | zweiter Admin vorhanden: Seed-Admin stuft ihn herab | gelingt (danach zurücksetzen) |
+| 21 | Nebenläufigkeit (E54, wie E39): zwei Test-Admins, Seed-Admin vorübergehend über `serviceClient` deaktiviert, beide stufen **gleichzeitig** den jeweils anderen herab | genau **einer** gelingt, der andere bekommt `letzter_admin`; danach Ausgangszustand wiederherstellen |
+| 22 | `staff_roles`: `staff` liest, `staff` schreibt, anonym liest | liest / Fehler / 0 Zeilen |
+| 23 | E-Mail-Änderung in `auth.users` (über `auth.admin.updateUserById`) | `staff_members.email` folgt |
+
+4. **`availability.spec.ts` ergänzen** (E28/E37, Hinweis aus dem Ticket): An einem Fixture mit einer
+   Preislücke (`kein_preis`) liefert `availability_calendar` bzw. `search_availability`
+   - für den angemeldeten Seed-Admin den **feinen** Grund und die Zahlen,
+   - für anonym und einen angemeldeten Gast weiterhin `nicht_buchbar` ohne Zahlen.
+   Damit ist der Staff-Zweig aus E38 erstmals getestet.
+5. **`rls-abnahme.spec.ts`**: Muss ohne Änderung grün bleiben. `rls_audit()` liefert keine Zeilen.
+
+### Schritt 4 — Typen, Prüfungen, Doku
+
+1. `pnpm db:reset`, dann `pnpm db:types`. `src/shared/types/database.types.ts` wird **nicht** von
+   Hand geändert. Neu sind `staff_members`, `staff_roles`, `is_admin` und `current_staff_member_id`.
+2. `pnpm test:db`, `pnpm test`, `pnpm build`, `pnpm lint`. Alles muss ohne Fehler durchlaufen.
+3. Doku nachziehen:
+   - `schema.md`: Den Abschnitt „geplant (Phase 11)“ in den Normalbestand übernehmen.
+   - README: E52–E54 als „umgesetzt“ markieren, Eintrag in der Änderungshistorie.
+   - Diesen Phasenkopf auf „umgesetzt“ setzen.
+   - `CLAUDE.md`: Abschnitt „Admin-Bereich“ (Rollen existieren in der DB, Frontend-Login noch
+     nicht) und Hinweis zu `is_staff()`/`is_admin()` unter „Supabase“.
+
+**Fertig, wenn** die Akzeptanzkriterien des Tickets erfüllt sind:
+
+- [ ] `pnpm db:reset` läuft fehlerfrei, danach gibt es genau einen Admin
+- [ ] Admin-Zugangsdaten → `is_staff()` und `is_admin()` sind `true`
+- [ ] anonym und angemeldeter Nicht-Mitarbeiter → beide `false`
+- [ ] anonym: `select` auf `staff_members` liefert 0 Zeilen, `insert` wird abgelehnt
+- [ ] `staff` ohne Admin-Rolle kann Profile nicht anlegen, ändern oder löschen und keine Rolle ändern
+- [ ] der letzte aktive Admin kann nicht herabgestuft, deaktiviert oder gelöscht werden
+- [ ] `rls_audit()` liefert keine Zeilen
+- [ ] bestehende DB-Tests grün, neue Tests unter `supabase/tests`
+- [ ] `database.types.ts` neu generiert, `pnpm build` und `pnpm lint` fehlerfrei
 
 ---
 
@@ -665,7 +867,9 @@ Reihenfolge nach Nutzen, jeweils mit der Entscheidung, die den Weg offen gehalte
 | Erweiterung | Kosten | Seam aus |
 | --- | --- | --- |
 | Kundenkonten (Login, „meine Buchungen") | `user_id` verknüpfen, Policies greifen bereits | E4, E13, E26 |
-| Mitarbeitende + Rollen | `is_staff()` **eine** Funktion ändern, `profiles.role` ergänzen | E13 |
+| ~~Mitarbeitende + Rollen~~ → **Phase 11** (`staff_members`, `staff_roles`) | `is_staff()` **eine** Funktion ändern | E13, E52–E54 |
+| Fähigkeitsfunktionen statt `is_staff()` (Abteilungsrollen) — **vor** der dritten Rolle | alle Policies auf Fähigkeiten umstellen | E53 |
+| Admin-Login, `/admin*`-Schutz, Benutzerverwaltung + Edge Function (`auth.admin.*`) | Frontend + eine Edge Function, die `is_admin()` prüft | E35, E52–E54 |
 | Admin-Live-Liste per Realtime **Broadcast** (nicht `postgres_changes`) | Trigger + Kanal | E6 |
 | Zahlungen | neue Tabellen + Edge Function für externe Effekte | E6, E11 (`pending`) |
 | Weitere Rate-Plans, Belegungspreise | Datenzeilen statt Schemaänderung | E5 |
