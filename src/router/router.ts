@@ -47,6 +47,8 @@ export class Router {
         if (window.location.pathname === path) return;
         history.pushState(null, '', path);
         await this.render();
+        // A new page starts at the top; back/forward (popstate) keeps the browser's position.
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }
 
     async render(): Promise<void> {
