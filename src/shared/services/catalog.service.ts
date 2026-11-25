@@ -9,8 +9,23 @@
 import { supabase } from './supabase';
 import { formatPrice } from '../format';
 import { isUnavailableReason } from '../types/booking.codes';
+import { isRoomFeatureCode } from '../types/catalog.codes';
 import type { ServiceRow } from '../types/booking.types';
-import type { AvailabilityNightRow, HotelRow, NightAvailability, NightStatus, RoomAvailability, RoomCard, RoomTypeDetail, RoomTypeImage } from '../types/catalog.types';
+import type {
+    AvailabilityNightRow,
+    HotelRow,
+    NightAvailability,
+    NightStatus,
+    RoomAvailability,
+    RoomCard,
+    RoomFeatureRow,
+    RoomRateRow,
+    RoomShowcaseRow,
+    RoomSlide,
+    RoomSlideFeature,
+    RoomTypeDetail,
+    RoomTypeImage,
+} from '../types/catalog.types';
 
 const ROOM_IMAGE_BUCKET = 'room-images';
 
@@ -145,6 +160,54 @@ export function buildRoomCards(details: readonly RoomTypeDetail[], availability:
                       },
         };
     });
+}
+
+/**
+ * Active room types for the homepage slider, sorted by name. Rates are limited to the
+ * default plan and to periods that still apply on or after `today` (`YYYY-MM-DD`).
+ */
+export async function fetchRoomShowcase(today: string): Promise<RoomShowcaseRow[]> {
+    const { data, error } = await supabase
+        .from('room_types')
+        .select(
+            'id, name, slug, description, room_type_images(storage_path, alt_text, sort_order), room_type_features(code, label, sort_order), room_type_rates(amount_cents, currency, valid_to, rate_plans!inner(is_default))',
+        )
+        .is('archived_at', null)
+        .gt('room_type_rates.valid_to', today)
+        .eq('room_type_rates.rate_plans.is_default', true)
+        .is('room_type_rates.rate_plans.archived_at', null)
+        .order('name');
+    if (error) throw new Error(error.message);
+    return data;
+}
+
+/** Maps the showcase rows to slides; repeats the rate filter so the mapping stands on its own. */
+export function buildRoomSlides(rows: readonly RoomShowcaseRow[], today: string): RoomSlide[] {
+    return rows.map((row: RoomShowcaseRow): RoomSlide => {
+        const image = pickImage(row.room_type_images);
+        const rate = pickLowestRate(row.room_type_rates, today);
+
+        return {
+            slug: row.slug,
+            name: row.name,
+            description: row.description,
+            imageUrl: image === null ? null : getRoomImageUrl(image.storage_path),
+            imageAlt: image === null || image.alt_text.trim() === '' ? row.name : image.alt_text,
+            priceLabel: rate === null ? null : formatPrice(rate.amount_cents, rate.currency),
+            features: [...row.room_type_features]
+                .sort((a: RoomFeatureRow, b: RoomFeatureRow): number => a.sort_order - b.sort_order)
+                .map((feature: RoomFeatureRow): RoomSlideFeature => ({ code: isRoomFeatureCode(feature.code) ? feature.code : null, label: feature.label })),
+        };
+    });
+}
+
+function pickLowestRate(rates: readonly RoomRateRow[], today: string): RoomRateRow | null {
+    // ISO dates compare correctly as strings.
+    const upcoming = rates.filter((rate: RoomRateRow): boolean => rate.rate_plans.is_default && rate.valid_to > today);
+    return upcoming.reduce<RoomRateRow | null>(
+        (lowest: RoomRateRow | null, rate: RoomRateRow): RoomRateRow => (lowest === null || rate.amount_cents < lowest.amount_cents ? rate : lowest),
+        null,
+    );
 }
 
 /** Öffentliche URL im Bucket – reine Zeichenkette, keine Anfrage. */

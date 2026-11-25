@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RoomAvailability, RoomTypeDetail } from '../types/catalog.types';
+import type { RoomAvailability, RoomRateRow, RoomShowcaseRow, RoomTypeDetail } from '../types/catalog.types';
 
 /** Antwort von PostgREST: `{ data, error }` – am Ende jeder Abfragekette. */
 type Response = { data: unknown; error: { message: string } | null };
@@ -11,12 +11,18 @@ const rpc = vi.fn((): Promise<Response> => Promise.resolve(response));
 type Query = {
     select: () => Query;
     limit: () => Query;
+    is: () => Query;
+    gt: () => Query;
+    eq: () => Query;
     order: () => Promise<Response>;
     maybeSingle: () => Promise<Response>;
 };
 const query: Query = {
     select: (): Query => query,
     limit: (): Query => query,
+    is: (): Query => query,
+    gt: (): Query => query,
+    eq: (): Query => query,
     order: (): Promise<Response> => Promise.resolve(response),
     maybeSingle: (): Promise<Response> => Promise.resolve(response),
 };
@@ -29,7 +35,8 @@ const storage = {
 };
 vi.mock('./supabase', () => ({ supabase: { rpc, from, storage } }));
 
-const { buildNightAvailability, buildRoomCards, fetchAvailabilityCalendar, fetchHotel, fetchRoomTypes, fetchServices, searchAvailability } = await import('./catalog.service');
+const { buildNightAvailability, buildRoomCards, buildRoomSlides, fetchAvailabilityCalendar, fetchHotel, fetchRoomShowcase, fetchRoomTypes, fetchServices, searchAvailability } =
+    await import('./catalog.service');
 
 function detail(id: string, slug: string, images: RoomTypeDetail['room_type_images'] = []): RoomTypeDetail {
     return { id, name: slug, slug, description: null, max_occupancy: 2, room_type_images: images };
@@ -72,6 +79,7 @@ describe('Lesezugriffe', () => {
         await expect(fetchRoomTypes()).rejects.toThrow('kaputt');
         await expect(fetchServices()).rejects.toThrow('kaputt');
         await expect(fetchHotel()).rejects.toThrow('kaputt');
+        await expect(fetchRoomShowcase('2026-11-25')).rejects.toThrow('kaputt');
         await expect(searchAvailability({ checkIn: '2026-06-12', checkOut: '2026-06-15', adults: 2, children: 0 })).rejects.toThrow('kaputt');
     });
 
@@ -167,5 +175,72 @@ describe('Kalender (E24, V14)', () => {
         ]);
         expect(nights.get('2026-10-21')?.reason).toBe('nicht_buchbar');
         expect(nights.get('2026-10-22')?.reason).toBe('nicht_buchbar');
+    });
+});
+
+const TODAY = '2026-11-25';
+
+function rate(amountCents: number, validTo: string, isDefault = true): RoomRateRow {
+    return { amount_cents: amountCents, currency: 'EUR', valid_to: validTo, rate_plans: { is_default: isDefault } };
+}
+
+function showcase(overrides: Partial<RoomShowcaseRow> = {}): RoomShowcaseRow {
+    return { id: 'rt-1', name: 'Double Suite', slug: 'double-suite', description: 'Mit Blick', room_type_images: [], room_type_features: [], room_type_rates: [], ...overrides };
+}
+
+describe('buildRoomSlides', () => {
+    it('liest die Kategorien über room_types', async () => {
+        response = { data: [showcase()], error: null };
+        await expect(fetchRoomShowcase(TODAY)).resolves.toEqual([showcase()]);
+        expect(from).toHaveBeenCalledWith('room_types');
+    });
+
+    it('behält die Reihenfolge der Abfrage', () => {
+        const slides = buildRoomSlides([showcase({ slug: 'b' }), showcase({ slug: 'a' })], TODAY);
+        expect(slides.map((slide) => slide.slug)).toEqual(['b', 'a']);
+    });
+
+    it('nimmt das erste Bild nach sort_order samt alt_text', () => {
+        const images = [
+            { storage_path: 'b.jpg', alt_text: 'B', sort_order: 2 },
+            { storage_path: 'a.jpg', alt_text: 'A', sort_order: 1 },
+        ];
+        const [slide] = buildRoomSlides([showcase({ room_type_images: images })], TODAY);
+        expect(slide).toMatchObject({ imageUrl: 'https://cdn.test/room-images/a.jpg', imageAlt: 'A' });
+    });
+
+    it('fällt beim alt-Text auf den Zimmernamen zurück', () => {
+        const [slide] = buildRoomSlides([showcase({ room_type_images: [{ storage_path: 'a.jpg', alt_text: ' ', sort_order: 0 }] })], TODAY);
+        expect(slide?.imageAlt).toBe('Double Suite');
+    });
+
+    it('kommt ohne Bild aus', () => {
+        const [slide] = buildRoomSlides([showcase()], TODAY);
+        expect(slide).toMatchObject({ imageUrl: null, imageAlt: 'Double Suite' });
+    });
+
+    it('zeigt den günstigsten noch gültigen Preis des Standardtarifs', () => {
+        const rates = [rate(30000, '2027-01-01'), rate(24000, '2026-12-01'), rate(10000, TODAY), rate(9000, '2027-02-01', false)];
+        const [slide] = buildRoomSlides([showcase({ room_type_rates: rates })], TODAY);
+        expect(slide?.priceLabel).toBe('240€');
+    });
+
+    it('lässt den Preis ohne gültige Zeile weg', () => {
+        const [slide] = buildRoomSlides([showcase({ room_type_rates: [rate(24000, '2026-01-01')] })], TODAY);
+        expect(slide?.priceLabel).toBeNull();
+    });
+
+    it('sortiert die Merkmale nach sort_order und markiert unbekannte Codes', () => {
+        const features = [
+            { code: 'GYM', label: 'Gym Zugang', sort_order: 40 },
+            { code: 'SAUNA', label: 'Sauna', sort_order: 30 },
+            { code: 'BED', label: 'King-size Bett', sort_order: 10 },
+        ];
+        const [slide] = buildRoomSlides([showcase({ room_type_features: features })], TODAY);
+        expect(slide?.features).toEqual([
+            { code: 'BED', label: 'King-size Bett' },
+            { code: null, label: 'Sauna' },
+            { code: 'GYM', label: 'Gym Zugang' },
+        ]);
     });
 });

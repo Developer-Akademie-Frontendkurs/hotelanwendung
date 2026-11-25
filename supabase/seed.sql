@@ -86,7 +86,29 @@ values
         'double-premium.jpg',
         'Doppelzimmer Premium mit Doppelbett und Balkontuer',
         0
+    ),
+    (
+        '00000000-0000-4000-8000-000000000103',
+        'einzel-alpin.jpg',
+        'Geräumiges Einzelzimmer mit alpinem Ausblick',
+        0
     );
+
+-- Amenities for the homepage slider; the order fills the two-column grid row by row.
+insert into public.room_type_features (room_type_id, code, label, sort_order)
+values
+    ('00000000-0000-4000-8000-000000000101', 'BED', 'King-size Bett', 10),
+    ('00000000-0000-4000-8000-000000000101', 'AIR_CONDITIONING', 'Klimaanlage & TV', 20),
+    ('00000000-0000-4000-8000-000000000101', 'BATHROOM', 'Badewanne, Föhn & eigenes WC', 30),
+    ('00000000-0000-4000-8000-000000000101', 'GYM', 'Gym Zugang', 40),
+    ('00000000-0000-4000-8000-000000000102', 'BED', 'Queen-size Bett', 10),
+    ('00000000-0000-4000-8000-000000000102', 'AIR_CONDITIONING', 'Klimaanlage & TV', 20),
+    ('00000000-0000-4000-8000-000000000102', 'BATHROOM', 'Dusche, Föhn & eigenes WC', 30),
+    ('00000000-0000-4000-8000-000000000102', 'GYM', 'Gym Zugang', 40),
+    ('00000000-0000-4000-8000-000000000103', 'BED', 'Komfort-Einzelbett', 10),
+    ('00000000-0000-4000-8000-000000000103', 'AIR_CONDITIONING', 'Klimaanlage & TV', 20),
+    ('00000000-0000-4000-8000-000000000103', 'BATHROOM', 'Dusche, Föhn & eigenes WC', 30),
+    ('00000000-0000-4000-8000-000000000103', 'GYM', 'Gym Zugang', 40);
 
 -- ---------------------------------------------------------------------------
 -- Tarif und Saisonpreise (E5, V4)

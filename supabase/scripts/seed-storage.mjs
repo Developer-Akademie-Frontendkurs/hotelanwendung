@@ -23,6 +23,7 @@ const BUCKET = 'room-images';
 const IMAGES = [
     { file: 'src/assets/img/double-suite.jpg', storagePath: 'double-suite.jpg' },
     { file: 'src/assets/img/double-premium.jpg', storagePath: 'double-premium.jpg' },
+    { file: 'src/assets/img/einzel-alpin.jpg', storagePath: 'einzel-alpin.jpg' },
 ];
 
 /** Minimaler .env-Leser - das Repo hat bewusst keine dotenv-Abhaengigkeit. */

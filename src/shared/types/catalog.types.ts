@@ -9,6 +9,7 @@
  */
 
 import type { UnavailableReason } from './booking.codes';
+import type { RoomFeatureCode } from './catalog.codes';
 import type { Tables } from './database.types';
 
 /**
@@ -101,3 +102,33 @@ export interface RoomCard {
  * `booking_horizon_days` begrenzt den Kalender (E30).
  */
 export type HotelRow = Pick<Tables<'hotels'>, 'name' | 'address_line1' | 'postal_code' | 'city' | 'country_code' | 'check_in_time' | 'check_out_time' | 'booking_horizon_days'>;
+
+export type RoomFeatureRow = Pick<Tables<'room_type_features'>, 'code' | 'label' | 'sort_order'>;
+
+export type RoomRateRow = Pick<Tables<'room_type_rates'>, 'amount_cents' | 'currency' | 'valid_to'> & {
+    rate_plans: Pick<Tables<'rate_plans'>, 'is_default'>;
+};
+
+/** One room type for the homepage slider, with images, features and rates embedded. */
+export type RoomShowcaseRow = Pick<Tables<'room_types'>, 'id' | 'name' | 'slug' | 'description'> & {
+    room_type_images: RoomTypeImage[];
+    room_type_features: RoomFeatureRow[];
+    room_type_rates: RoomRateRow[];
+};
+
+export interface RoomSlideFeature {
+    /** `null` for a code the frontend does not know – rendered with the fallback icon. */
+    code: RoomFeatureCode | null;
+    label: string;
+}
+
+export interface RoomSlide {
+    slug: string;
+    name: string;
+    description: string | null;
+    imageUrl: string | null;
+    imageAlt: string;
+    /** Cheapest upcoming nightly room price of the default rate plan, formatted – `null` without one. */
+    priceLabel: string | null;
+    features: RoomSlideFeature[];
+}
