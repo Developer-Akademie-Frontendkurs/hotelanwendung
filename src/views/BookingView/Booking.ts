@@ -59,7 +59,9 @@ import {
 } from './domain/calendar';
 import { getCheckoutError } from './domain/validation';
 import { buildBookingDraft } from './domain/draft';
-import { ADULT_ICON, CHILD_ICON, ICON_AIR_CONDITIONING, ICON_BATH, ICON_BED, ICON_GYM, SERVICE_ICONS } from './templates/icons';
+import { ADULT_ICON, CHILD_ICON, SERVICE_ICONS } from './templates/icons';
+import { readPreselectedSlug, resolvePreselection } from './domain/preselection';
+import { ICON_AIR_CONDITIONING, ICON_BATH, ICON_BED, ICON_GYM } from '../../shared/ui/roomFeatureIcons';
 import * as calendarTemplate from './templates/calendar.template';
 import * as roomsTemplate from './templates/rooms.template';
 import * as checkoutTemplate from './templates/checkout.template';
@@ -148,6 +150,8 @@ export class BookingView extends AbstractView {
     private hotelLoaded: Promise<void> = Promise.resolve();
 
     private unsubscribeSummary: (() => void) | null = null;
+    // Room type chosen on the homepage slider – applied once dates and guests allow it.
+    private preselectedSlug: string | null = readPreselectedSlug(window.location.search);
     private destroyed = false;
     private submitting = false;
 
@@ -890,6 +894,7 @@ export class BookingView extends AbstractView {
 
             this.breakfastService = buildBreakfastService(serviceRows.find((row: ServiceRow): boolean => row.code === BREAKFAST) ?? null);
             this.quantityNotice = bookingState.applySearchResult(buildRoomCards(roomTypes, availability), buildExtraServices(serviceRows));
+            this.applyPreselection();
 
             this.roomsState = 'ready';
             this.roomsError = null;
@@ -900,6 +905,16 @@ export class BookingView extends AbstractView {
         }
 
         this.renderRooms();
+    }
+
+    private applyPreselection(): void {
+        if (this.preselectedSlug === null) return;
+
+        const result = resolvePreselection(this.preselectedSlug, bookingState.getRooms(), bookingState.getRoomQuantities(), getRoomLimit(bookingState.getGuests().adults));
+        if (result.status === 'pending') return;
+
+        this.preselectedSlug = null;
+        if (result.status === 'applied') bookingState.selectRoomQuantity(result.roomTypeId, result.quantity);
     }
 
     private renderCalendar(): void {

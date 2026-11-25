@@ -49,6 +49,17 @@ describe('RLS: Stammdaten', () => {
         await serviceClient.from('room_types').update({ archived_at: null }).eq('id', fixture.roomTypeId);
     });
 
+    it('Gast darf room_type_features lesen, aber nicht schreiben', async () => {
+        await serviceClient.from('room_type_features').insert({ room_type_id: fixture.roomTypeId, code: 'GYM', label: 'Gym Zugang' });
+
+        const { data, error } = await anonClient.from('room_type_features').select('code').eq('room_type_id', fixture.roomTypeId);
+        expect(error).toBeNull();
+        expect(data).toEqual([{ code: 'GYM' }]);
+
+        const insert = await anonClient.from('room_type_features').insert({ room_type_id: fixture.roomTypeId, code: 'BED', label: 'Bett' });
+        expect(insert.error?.code).toBe('42501');
+    });
+
     it('Gast bekommt bei rooms 0 Zeilen — keinen Fehler', async () => {
         // Der Unterschied ist wichtig: RLS filtert, es blockt nicht. Ein Fehler
         // wuerde verraten, dass die Tabelle existiert und Zeilen enthaelt.
